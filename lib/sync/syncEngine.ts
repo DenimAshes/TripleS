@@ -6,6 +6,7 @@ import type { NormalizedTrack, ServiceKey } from "./syncTypes";
 import { findMatch, rankCandidates } from "./matchEngine";
 import { findStoredDestinationMatch, upsertAutoTrackMatch } from "./trackMatchStore";
 import { nextRunAfterFailure } from "./failureClassifier";
+import { recordCooldownForRule } from "./serviceCooldown";
 import { releaseAllSessions } from "@/worker/sessionPool";
 
 const WRITE_THROTTLE_MIN_MS = Number(process.env.WORKER_WRITE_THROTTLE_MIN_MS ?? 4000);
@@ -478,6 +479,8 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         nextRunAt: nextRunAfterFailure(rule.intervalMinutes, error),
       },
     });
+    const destServices = rule.destinations.map((destination) => destination.service);
+    await recordCooldownForRule([rule.sourceService, ...destServices], error).catch(() => {});
     return failed;
   } finally {
     await releaseAllSessions().catch(() => {});

@@ -277,6 +277,7 @@ Extra worker env:
 | `WORKER_SESSION_REUSE` | `false` locally, `true` in CI | Reuse one browser context per service across all calls within a sync rule. Big behavioral win in CI. |
 | `WORKER_ACCOUNT_TIMEZONE` | `Europe/Riga` | IANA timezone for the active-hours check. |
 | `WORKER_ACTIVE_HOUR_START` / `WORKER_ACTIVE_HOUR_END` | `7` / `24` | Local-hour window in which the worker is allowed to run. Outside → exits 0. |
+| `WORKER_MAX_RULES_PER_RUN` | `2` in CI, `0` (no limit) locally | Cap on rules processed per cron tick. Smaller bursts run more often through a shorter cron interval. |
 | `CLOAKBROWSER_BINARY_PATH` | — | Skip download, point at a local stealth binary. |
 | `CLOAKBROWSER_AUTO_UPDATE` | `true` | Set `false` in CI to pin the binary to the bundled version. |
 
@@ -305,7 +306,7 @@ CloakBrowser prevents captchas; it does not solve them. The setup minimizes the 
 4. **Burst + long-pause write rhythm.** Short throttle 4–12s between writes (`WORKER_WRITE_THROTTLE_MIN_MS` / `..._SPREAD_MS`), then a longer 60–180s pause every 2–4 writes (`WORKER_WRITE_LONG_PAUSE_MIN_MS` / `..._SPREAD_MS`). Imitates a user adding tracks in bursts, not on a fixed cadence.
 5. **Cron jitter.** The GitHub Action sleeps 0–30 min randomly before running, so syncs do not land at the same minute every time.
 6. **Native sleep, not `page.waitForTimeout`.** Internal pauses use Node's `setTimeout`, which sends no CDP traffic that reCAPTCHA could detect.
-7. **Captcha-class errors trigger a 24h cooldown.** A blocked rule stops retrying every 6h; it sleeps long enough that you can intervene.
+7. **Service-wide 24h cooldown on captcha-class errors.** A captcha on YouTube halts **every** YouTube-touching rule for 24h, not just the one that hit. The cooldown is stored in `ServiceCooldown` and checked at the top of every sync-worker run.
 8. **Session continuity per rule.** With `WORKER_SESSION_REUSE=true` (on in CI), all read/write calls for a sync rule reuse one browser context per service. Without it, each call would re-launch the browser — a strong "fresh script" signal.
 9. **Active-hours window.** `WORKER_ACCOUNT_TIMEZONE` (default `Europe/Riga`) plus `WORKER_ACTIVE_HOUR_START` / `WORKER_ACTIVE_HOUR_END` (default `7` / `24`). Scheduled runs that fall outside the local waking window exit immediately. Real users do not log in at 3 a.m.
 10. **Pre-action hover + dwell.** Before write-clicks the runner hovers the target and waits 300–1600 ms — matches how a real user reads a menu before tapping. Combined with `humanize` Bézier mouse paths from CloakBrowser.

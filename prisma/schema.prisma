@@ -247,6 +247,13 @@ model WorkerSessionState {
   updatedBy       String?
 }
 
+model ServiceCooldown {
+  service   String   @id
+  until     DateTime
+  reason    String?
+  updatedAt DateTime @updatedAt
+}
+
 model ManualMatchCandidate {
   id                      String            @id @default(cuid())
   userId                  String

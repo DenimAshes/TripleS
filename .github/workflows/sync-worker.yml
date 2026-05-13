@@ -3,7 +3,7 @@ name: TripleS remote sync worker
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 */6 * * *"
+    - cron: "37 */2 * * *"
 
 concurrency:
   group: triples-sync-worker
@@ -29,6 +29,7 @@ jobs:
       WORKER_ACTIVE_HOUR_START: "7"
       WORKER_ACTIVE_HOUR_END: "24"
       WORKER_SESSION_REUSE: "true"
+      WORKER_MAX_RULES_PER_RUN: "2"
       YOUTUBE_STATE_GZIP_BASE64: ${{ secrets.YOUTUBE_STATE_GZIP_BASE64 }}
       SOUNDCLOUD_STATE_GZIP_BASE64: ${{ secrets.SOUNDCLOUD_STATE_GZIP_BASE64 }}
       YOUTUBE_STATE_JSON_BASE64: ${{ secrets.YOUTUBE_STATE_JSON_BASE64 }}

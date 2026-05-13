@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { runSync } from "@/lib/sync/syncEngine";
+import { getServicesInCooldown } from "@/lib/sync/serviceCooldown";
 
 function shuffleInPlace<T>(items: T[]): T[] {
   for (let i = items.length - 1; i > 0; i -= 1) {
@@ -46,16 +47,38 @@ async function main() {
       isEnabled: true,
       OR: [{ nextRunAt: null }, { nextRunAt: { lte: new Date() } }],
     },
+    include: { destinations: { where: { isEnabled: true } } },
   });
 
-  shuffleInPlace(dueRules);
+  const cooled = await getServicesInCooldown();
+  if (cooled.size > 0) {
+    console.log(`[sync-worker] Services in cooldown: ${Array.from(cooled).join(", ")}`);
+  }
 
-  for (const rule of dueRules) {
+  const runnable = dueRules.filter((rule) => {
+    const services = [rule.sourceService, ...rule.destinations.map((d) => d.service)].map((s) => s.toLowerCase());
+    const blocked = services.find((s) => cooled.has(s));
+    if (blocked) {
+      console.log(`[sync-worker] Skipping ${rule.name} (${rule.id}) — service ${blocked} is in cooldown.`);
+      return false;
+    }
+    return true;
+  });
+
+  shuffleInPlace(runnable);
+
+  const maxPerRun = Number(process.env.WORKER_MAX_RULES_PER_RUN ?? 0);
+  const slice = Number.isFinite(maxPerRun) && maxPerRun > 0 ? runnable.slice(0, maxPerRun) : runnable;
+  if (slice.length < runnable.length) {
+    console.log(`[sync-worker] Limiting to ${slice.length}/${runnable.length} rules this tick (WORKER_MAX_RULES_PER_RUN=${maxPerRun}).`);
+  }
+
+  for (const rule of slice) {
     console.log(`Running sync rule ${rule.name} (${rule.id})`);
     await runSync(rule.id);
   }
 
-  console.log(`Processed ${dueRules.length} sync rule(s).`);
+  console.log(`Processed ${slice.length} sync rule(s) (out of ${dueRules.length} due, ${runnable.length} runnable).`);
 }
 
 main()

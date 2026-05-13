@@ -469,6 +469,7 @@ export async function addFirstSearchResultToPlaylist(query: string, playlistName
     await settle(page);
     await assertLoggedIn(page);
     await maybeDebug(page, "yt-search");
+    await humanDwell(3000, 5000);
 
     await runUiAction(page, "yt-open-add-to-playlist", () => openAddToPlaylistForFirstResult(page));
     if ((await page.getByRole("menuitem").count()) > 0) {
