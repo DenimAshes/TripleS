@@ -35,20 +35,8 @@ ADMIN_PASSWORD
 JWT_SECRET
 ENCRYPTION_KEY
 CRON_SECRET
-SPOTIFY_CLIENT_ID
-SPOTIFY_CLIENT_SECRET
-SPOTIFY_REDIRECT_URI
-SPOTIFY_SCOPES
-SPOTIFY_ENABLE_PLAYLIST_SCOPES
-SPOTIFY_ENABLE_WRITE_SCOPES
 YOUTUBE_BROWSER_AUTOMATION=true
 SOUNDCLOUD_BROWSER_AUTOMATION=true
-```
-
-Use the production domain in OAuth redirect URLs after deployment:
-
-```txt
-https://YOUR_DOMAIN/api/oauth/spotify/callback
 ```
 
 ## GitHub Actions Secrets
@@ -60,24 +48,18 @@ DATABASE_URL
 JWT_SECRET
 ENCRYPTION_KEY
 CRON_SECRET
-SPOTIFY_CLIENT_ID
-SPOTIFY_CLIENT_SECRET
-SPOTIFY_REDIRECT_URI
-SPOTIFY_SCOPES
-SPOTIFY_ENABLE_PLAYLIST_SCOPES
-SPOTIFY_ENABLE_WRITE_SCOPES
-YOUTUBE_STATE_JSON_BASE64
-SOUNDCLOUD_STATE_JSON_BASE64
+YOUTUBE_STATE_GZIP_BASE64
+SOUNDCLOUD_STATE_GZIP_BASE64
 ```
 
-Generate browser state secrets from an already logged-in local session:
+Generate compressed browser state secrets from an already logged-in local session:
 
 ```powershell
-npm run state:encode -- youtube
-npm run state:encode -- soundcloud
+npm run --silent state:encode -- youtube
+npm run --silent state:encode -- soundcloud
 ```
 
-Paste each output into the matching GitHub secret. After that, the scheduled worker restores `worker/state/*.json` in the GitHub runner and your computer does not need to keep those files for normal operation.
+Paste each output into the matching GitHub secret. The older `YOUTUBE_STATE_JSON_BASE64` and `SOUNDCLOUD_STATE_JSON_BASE64` names still work, but the compressed `*_GZIP_BASE64` values are much smaller and fit GitHub's secret size limit more reliably. After that, the scheduled worker restores `worker/state/*.json` in the GitHub runner and your computer does not need to keep those files for normal operation.
 
 ## Database Setup
 
@@ -134,15 +116,15 @@ Copy the project there, then create `.env.production` from `.env.production.exam
 Generate browser-state secrets before deleting local state:
 
 ```powershell
-npm run state:encode -- youtube
-npm run state:encode -- soundcloud
+npm run --silent state:encode -- youtube
+npm run --silent state:encode -- soundcloud
 ```
 
 Put the outputs into `.env.production` as:
 
 ```txt
-YOUTUBE_STATE_JSON_BASE64="..."
-SOUNDCLOUD_STATE_JSON_BASE64="..."
+YOUTUBE_STATE_GZIP_BASE64="..."
+SOUNDCLOUD_STATE_GZIP_BASE64="..."
 ```
 
 Build and start the web app on the VM:
