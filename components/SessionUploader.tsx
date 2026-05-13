@@ -25,6 +25,23 @@ function formatRelative(iso: string | null): string {
   return `${Math.floor(diff / 86_400_000)} d ago`;
 }
 
+type StaleLevel = "fresh" | "warn" | "stale" | "missing";
+
+function staleLevel(exists: boolean, iso: string | null): StaleLevel {
+  if (!exists || !iso) return "missing";
+  const days = (Date.now() - new Date(iso).getTime()) / 86_400_000;
+  if (days >= 14) return "stale";
+  if (days >= 7) return "warn";
+  return "fresh";
+}
+
+const STALE_BADGE: Record<StaleLevel, { label: string; classes: string }> = {
+  fresh: { label: "fresh", classes: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300" },
+  warn: { label: "ageing", classes: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" },
+  stale: { label: "stale", classes: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" },
+  missing: { label: "missing", classes: "bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400" },
+};
+
 export function SessionUploader({ initial }: { initial: SessionInfo }) {
   const [info, setInfo] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -98,15 +115,11 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
     >
       <div className="flex items-center justify-between">
         <h3 className="font-medium capitalize text-neutral-900 dark:text-neutral-100">{info.service}</h3>
-        <span
-          className={`rounded-full px-2 py-0.5 text-xs ${
-            info.exists
-              ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300"
-              : "bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400"
-          }`}
-        >
-          {info.exists ? "active" : "missing"}
-        </span>
+        {(() => {
+          const level = staleLevel(info.exists, info.updatedAt);
+          const badge = STALE_BADGE[level];
+          return <span className={`rounded-full px-2 py-0.5 text-xs ${badge.classes}`}>{badge.label}</span>;
+        })()}
       </div>
       <dl className="mt-3 space-y-1 text-xs text-neutral-600 dark:text-neutral-400">
         <div className="flex justify-between">

@@ -1,19 +1,31 @@
 import { AppShell } from "@/components/AppShell";
 import { PlaylistsAutoRefresh } from "@/components/PlaylistsAutoRefresh";
 import { ServiceCard } from "@/components/ServiceCard";
+import { SessionStalenessBanner, classifySession, type SessionStaleness } from "@/components/SessionStalenessBanner";
 import { SyncRuleCard } from "@/components/SyncRuleCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 
+const WORKER_SERVICES = ["youtube", "spotify", "soundcloud"] as const;
+
 export default async function DashboardPage() {
   const session = await getSession();
-  const [accounts, rules, lastJob, playlists] = await Promise.all([
+  const [accounts, rules, lastJob, playlists, sessionRows] = await Promise.all([
     prisma.connectedAccount.findMany({ where: { userId: session!.userId }, orderBy: { service: "asc" } }),
     prisma.syncRule.findMany({ where: { userId: session!.userId }, include: { destinations: true }, orderBy: { createdAt: "asc" } }),
     prisma.syncJob.findFirst({ where: { syncRule: { userId: session!.userId } }, orderBy: { startedAt: "desc" } }),
     prisma.playlist.findMany({ where: { userId: session!.userId }, select: { updatedAt: true } }),
+    prisma.workerSessionState.findMany({ where: { service: { in: WORKER_SERVICES as unknown as string[] } } }),
   ]);
+  const sessionByService = new Map(sessionRows.map((row) => [row.service, row]));
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
+  const staleSessions: SessionStaleness[] = WORKER_SERVICES.flatMap((service) => {
+    const row = sessionByService.get(service);
+    const classified = classifySession({ service, exists: !!row, updatedAt: row?.updatedAt ?? null }, now);
+    return classified ? [classified] : [];
+  });
   const stats = lastJob ? JSON.parse(lastJob.statsJson) : { synced: 0, alreadySynced: 0, notFound: 0, manualRequired: 0 };
   const lastChangedAt = playlists.reduce<Date | null>(
     (latest, playlist) => (!latest || playlist.updatedAt > latest ? playlist.updatedAt : latest),
@@ -23,6 +35,7 @@ export default async function DashboardPage() {
   return (
     <AppShell title="Home">
       <PlaylistsAutoRefresh hasPlaylists={playlists.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
+      <SessionStalenessBanner items={staleSessions} />
       <div className="grid gap-4 md:grid-cols-3">
         {["SPOTIFY", "YOUTUBE", "SOUNDCLOUD"].map((service) => {
           const account = accounts.find((item) => item.service === service);
