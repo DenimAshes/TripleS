@@ -1,0 +1,33 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3000:3000"
+    volumes:
+      - triples_state:/app/worker/state
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      WORKER_BROWSER: state
+      HEADLESS: "true"
+    volumes:
+      - triples_state:/app/worker/state
+    profiles:
+      - worker
+
+volumes:
+  triples_state:

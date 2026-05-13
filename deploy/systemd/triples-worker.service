@@ -1,0 +1,10 @@
+[Unit]
+Description=TripleS one-shot sync worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/triples
+ExecStart=/usr/bin/docker compose -f docker-compose.vm.yml run --rm worker
+TimeoutStartSec=45min

@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String                 @id @default(cuid())
+  email             String                 @unique
+  passwordHash      String
+  name              String
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  connectedAccounts ConnectedAccount[]
+  playlists         Playlist[]
+  playlistGroups    PlaylistGroup[]
+  syncRules         SyncRule[]
+  manualCandidates  ManualMatchCandidate[]
+}
+
+model ConnectedAccount {
+  id                    String       @id @default(cuid())
+  userId                String
+  service               String
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String
+  expiresAt             DateTime?
+  serviceUserId         String
+  serviceUsername       String
+  isMock                Boolean      @default(false)
+  connectionStatus      String       @default("CONNECTED")
+  lastError             String?
+  webCookieEncrypted    String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, service])
+}
+
+model Playlist {
+  id                String               @id @default(cuid())
+  userId            String
+  service           String
+  servicePlaylistId String
+  name              String
+  description       String?
+  imageUrl          String?
+  trackCount        Int
+  isWritable        Boolean
+  lastFetchedAt     DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackStates       PlaylistTrackState[]
+  groupMembers      PlaylistGroupMember[]
+
+  @@unique([service, servicePlaylistId])
+}
+
+model PlaylistGroup {
+  id          String                @id @default(cuid())
+  userId      String
+  name        String
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members     PlaylistGroupMember[]
+  overrides   TrackOverride[]
+  exclusions  ExcludedTrack[]
+  trackExclusions SyncTrackExclusion[]
+
+  @@index([userId])
+}
+
+model PlaylistGroupMember {
+  id          String        @id @default(cuid())
+  groupId     String
+  playlistId  String
+  service     String
+  createdAt   DateTime      @default(now())
+  group       PlaylistGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  playlist    Playlist      @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistId])
+  @@unique([groupId, service])
+}
+
+model TrackOverride {
+  id             String        @id @default(cuid())
+  groupId        String
+  sourceTrackId  String
+  targetService  String
+  targetTrackId  String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  group          PlaylistGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, sourceTrackId, targetService])
+}
+
+model ExcludedTrack {
+  id             String        @id @default(cuid())
+  groupId        String
+  playlistId     String
+  serviceTrackId String
+  reason         String?
+  createdAt      DateTime      @default(now())
+  group          PlaylistGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, playlistId, serviceTrackId])
+}
+
+model SyncTrackExclusion {
+  id            String        @id @default(cuid())
+  groupId       String
+  sourceTrackId String
+  targetService String
+  reason        String?
+  createdAt     DateTime      @default(now())
+  group         PlaylistGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, sourceTrackId, targetService])
+}
+
+model SyncRule {
+  id                String            @id @default(cuid())
+  userId            String
+  name              String
+  sourceService     String
+  sourcePlaylistId  String
+  mode              String
+  direction         String
+  intervalMinutes   Int
+  isEnabled         Boolean
+  lastRunAt         DateTime?
+  nextRunAt         DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  destinations      SyncDestination[]
+  jobs              SyncJob[]
+}
+
+model SyncDestination {
+  id         String       @id @default(cuid())
+  syncRuleId String
+  service    String
+  playlistId String
+  isEnabled  Boolean
+  syncRule   SyncRule     @relation(fields: [syncRuleId], references: [id], onDelete: Cascade)
+}
+
+model InternalTrack {
+  id               String         @id @default(cuid())
+  canonicalTitle   String
+  canonicalArtists String
+  canonicalAlbum   String?
+  durationMs       Int?
+  isrc             String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  serviceTracks    ServiceTrack[]
+  trackMatches     TrackMatch[]
+}
+
+model ServiceTrack {
+  id              String        @id @default(cuid())
+  internalTrackId String
+  service         String
+  serviceTrackId  String
+  title           String
+  artistsJson     String
+  album           String?
+  durationMs      Int?
+  isrc            String?
+  url             String?
+  imageUrl        String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  internalTrack   InternalTrack @relation(fields: [internalTrackId], references: [id], onDelete: Cascade)
+  playlistStates  PlaylistTrackState[]
+
+  @@unique([service, serviceTrackId])
+}
+
+model TrackMatch {
+  id                       String       @id @default(cuid())
+  internalTrackId           String
+  spotifyServiceTrackId     String?
+  youtubeServiceTrackId     String?
+  soundcloudServiceTrackId  String?
+  confidence               Float
+  status                   String
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+  internalTrack            InternalTrack @relation(fields: [internalTrackId], references: [id], onDelete: Cascade)
+}
+
+model PlaylistTrackState {
+  id             String       @id @default(cuid())
+  playlistId     String
+  serviceTrackId String
+  position       Int
+  addedBySystem  Boolean
+  firstSeenAt    DateTime
+  lastSeenAt     DateTime
+  removedAt      DateTime?
+  playlist       Playlist     @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  serviceTrack   ServiceTrack @relation(fields: [serviceTrackId], references: [id], onDelete: Cascade)
+}
+
+model SyncJob {
+  id           String        @id @default(cuid())
+  syncRuleId   String
+  status       String
+  startedAt    DateTime
+  finishedAt   DateTime?
+  statsJson    String
+  errorMessage String?
+  syncRule     SyncRule      @relation(fields: [syncRuleId], references: [id], onDelete: Cascade)
+  logs         SyncLog[]
+}
+
+model SyncLog {
+  id           String       @id @default(cuid())
+  syncJobId    String
+  level        String
+  action       String
+  service      String
+  playlistId   String
+  trackTitle   String
+  message      String
+  metadataJson String
+  createdAt    DateTime     @default(now())
+  syncJob      SyncJob      @relation(fields: [syncJobId], references: [id], onDelete: Cascade)
+}
+
+model ManualMatchCandidate {
+  id                      String            @id @default(cuid())
+  userId                  String
+  sourceServiceTrackId    String
+  targetService           String
+  candidateServiceTrackId String
+  confidence              Float
+  alternativesJson        String?
+  status                  String
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  user                    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

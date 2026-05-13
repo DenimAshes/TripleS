@@ -1,0 +1,189 @@
+# TripleS Hosted Deployment
+
+Target architecture:
+
+- Vercel Hobby: Next.js web app and custom domain.
+- Neon Free: shared PostgreSQL database.
+- GitHub Actions or a free VM: remote Playwright worker for scheduled sync jobs.
+- GitHub Secrets / Vercel Environment Variables: credentials and browser session state.
+
+This keeps the app usable from a domain while avoiding local files on your computer after setup. Browser automation should not run as the main scheduled worker inside Vercel functions because free Hobby functions have short execution limits and no persistent browser profile.
+
+If you do not want GitHub Actions, use the VM path below. The clean free-server target is:
+
+- Vercel for the public web app, or the VM web container if you want one machine to host everything.
+- Neon for Postgres.
+- A free Linux VM for Playwright worker scheduling.
+
+## Required Services
+
+1. Create a GitHub repository for this project.
+2. Create a Neon Postgres project and keep its pooled `DATABASE_URL`.
+3. Create a Vercel project connected to the GitHub repository.
+4. Add your domain in Vercel project settings.
+
+Use Node.js 20 or 22 LTS for deployment tooling. Node 25 can trip package engine checks in current Vercel CLI dependency trees.
+
+## Vercel Environment Variables
+
+Set these in Vercel for Production and Preview:
+
+```txt
+DATABASE_URL
+ADMIN_EMAIL
+ADMIN_PASSWORD
+JWT_SECRET
+ENCRYPTION_KEY
+CRON_SECRET
+SPOTIFY_CLIENT_ID
+SPOTIFY_CLIENT_SECRET
+SPOTIFY_REDIRECT_URI
+SPOTIFY_SCOPES
+SPOTIFY_ENABLE_PLAYLIST_SCOPES
+SPOTIFY_ENABLE_WRITE_SCOPES
+YOUTUBE_BROWSER_AUTOMATION=true
+SOUNDCLOUD_BROWSER_AUTOMATION=true
+```
+
+Use the production domain in OAuth redirect URLs after deployment:
+
+```txt
+https://YOUR_DOMAIN/api/oauth/spotify/callback
+```
+
+## GitHub Actions Secrets
+
+Set the same server secrets in GitHub Actions, plus browser state:
+
+```txt
+DATABASE_URL
+JWT_SECRET
+ENCRYPTION_KEY
+CRON_SECRET
+SPOTIFY_CLIENT_ID
+SPOTIFY_CLIENT_SECRET
+SPOTIFY_REDIRECT_URI
+SPOTIFY_SCOPES
+SPOTIFY_ENABLE_PLAYLIST_SCOPES
+SPOTIFY_ENABLE_WRITE_SCOPES
+YOUTUBE_STATE_JSON_BASE64
+SOUNDCLOUD_STATE_JSON_BASE64
+```
+
+Generate browser state secrets from an already logged-in local session:
+
+```powershell
+npm run state:encode -- youtube
+npm run state:encode -- soundcloud
+```
+
+Paste each output into the matching GitHub secret. After that, the scheduled worker restores `worker/state/*.json` in the GitHub runner and your computer does not need to keep those files for normal operation.
+
+## Database Setup
+
+Run migrations against the hosted Neon database:
+
+```powershell
+$env:DATABASE_URL="postgresql://..."
+npx prisma migrate deploy
+npx prisma db seed
+npm run db:health
+```
+
+For production, replace the default admin password immediately through a safer account flow before sharing the domain.
+
+`npm run db:health` should print counts for users, playlists and sync rules. The app also retries transient Prisma connection errors a few times, which helps with Neon cold starts and short network hiccups. Tune with:
+
+```txt
+PRISMA_TRANSIENT_RETRIES=2
+```
+
+## Scheduled Sync
+
+The workflow at `.github/workflows/sync-worker.yml` runs every 6 hours and can also be started manually from GitHub Actions. It:
+
+1. Installs dependencies.
+2. Installs Playwright Chromium.
+3. Restores YouTube/SoundCloud session state from secrets.
+4. Runs `npm run sync-worker`.
+
+## VM Worker Without GitHub Actions
+
+The repo includes Docker and systemd files for a Linux VM:
+
+```txt
+Dockerfile
+Dockerfile.worker
+docker-compose.vm.yml
+deploy/systemd/triples-worker.service
+deploy/systemd/triples-worker.timer
+deploy/caddy/Caddyfile
+.env.production.example
+```
+
+On the VM:
+
+```bash
+sudo mkdir -p /opt/triples
+sudo chown "$USER:$USER" /opt/triples
+cd /opt/triples
+```
+
+Copy the project there, then create `.env.production` from `.env.production.example`.
+
+Generate browser-state secrets before deleting local state:
+
+```powershell
+npm run state:encode -- youtube
+npm run state:encode -- soundcloud
+```
+
+Put the outputs into `.env.production` as:
+
+```txt
+YOUTUBE_STATE_JSON_BASE64="..."
+SOUNDCLOUD_STATE_JSON_BASE64="..."
+```
+
+Build and start the web app on the VM:
+
+```bash
+docker compose -f docker-compose.vm.yml up -d --build web
+docker compose -f docker-compose.vm.yml run --rm worker
+```
+
+Install the timer:
+
+```bash
+sudo cp deploy/systemd/triples-worker.service /etc/systemd/system/
+sudo cp deploy/systemd/triples-worker.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now triples-worker.timer
+systemctl list-timers triples-worker.timer
+```
+
+If the VM also hosts the domain, install Caddy and copy `deploy/caddy/Caddyfile` to `/etc/caddy/Caddyfile`, replacing `YOUR_DOMAIN`. Vercel remains simpler for the public web app, but the VM path works when you want everything outside your computer without relying on GitHub Actions.
+
+## Health Checks
+
+Public app health:
+
+```txt
+GET /api/health
+```
+
+Database health:
+
+```txt
+GET /api/health/db
+```
+
+Local CLI:
+
+```bash
+npm run db:health
+```
+
+## Current Limitation
+
+SoundCloud read operations work remotely with saved state. SoundCloud add/remove currently hit SoundCloud captcha/403 in the tested session when using the internal web API. Full remote sync into SoundCloud requires either a UI-click fallback or a way to refresh/pass SoundCloud's captcha challenge.

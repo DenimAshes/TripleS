@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.production.example
+worker/state/*.json
+worker/state/*.tmp
+worker/chrome-profile
+.playwright-mcp
+coverage
+npm-debug.log*
+*.tsbuildinfo
+dashboard.png

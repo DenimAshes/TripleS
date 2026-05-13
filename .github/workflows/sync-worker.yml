@@ -1,0 +1,53 @@
+name: TripleS remote sync worker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+concurrency:
+  group: triples-sync-worker
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+      SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+      SPOTIFY_REDIRECT_URI: ${{ secrets.SPOTIFY_REDIRECT_URI }}
+      SPOTIFY_SCOPES: ${{ secrets.SPOTIFY_SCOPES }}
+      SPOTIFY_ENABLE_PLAYLIST_SCOPES: ${{ secrets.SPOTIFY_ENABLE_PLAYLIST_SCOPES }}
+      SPOTIFY_ENABLE_WRITE_SCOPES: ${{ secrets.SPOTIFY_ENABLE_WRITE_SCOPES }}
+      YOUTUBE_BROWSER_AUTOMATION: "true"
+      SOUNDCLOUD_BROWSER_AUTOMATION: "true"
+      WORKER_BROWSER: "state"
+      HEADLESS: "true"
+      YOUTUBE_STATE_JSON_BASE64: ${{ secrets.YOUTUBE_STATE_JSON_BASE64 }}
+      SOUNDCLOUD_STATE_JSON_BASE64: ${{ secrets.SOUNDCLOUD_STATE_JSON_BASE64 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Restore browser sessions from secrets
+        run: npm run state:restore
+
+      - name: Run due sync rules
+        run: npm run sync-worker
