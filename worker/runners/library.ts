@@ -4,6 +4,7 @@ import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, parseService, SERVICE_URLS, SERVICES, type ServiceId } from "../config";
 import { sleep } from "../sleep";
 import { acquireSession, sessionReuseEnabled } from "../sessionPool";
+import { pathToFileURL } from "node:url";
 
 export type BrowserPlaylist = {
   id: string;
@@ -81,7 +82,7 @@ async function main() {
   console.log(`\nFound ${items.length} ${service} playlists.`);
 }
 
-if (require.main === module) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);

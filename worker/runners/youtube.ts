@@ -6,6 +6,7 @@ import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
 import { humanDwell, humanHoverClick, sleep } from "../sleep";
 import { acquireSession, sessionReuseEnabled } from "../sessionPool";
+import { pathToFileURL } from "node:url";
 
 export type YtPlaylist = {
   id: string;
@@ -600,7 +601,7 @@ async function main() {
   throw new Error("Usage: npm run yt -- list | tracks | search | add | remove");
 }
 
-if (typeof require !== "undefined" && require.main === module) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);
