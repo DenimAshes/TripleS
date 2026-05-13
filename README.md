@@ -214,6 +214,14 @@ Local worker:
 npm run sync-worker
 ```
 
+Worker diagnostics:
+
+```bash
+npm run worker:check
+```
+
+This checks database reachability, browser mode, saved state/profile paths, YouTube Music playlist reads and SoundCloud playlist reads. It does not perform write actions, so it will not create playlists or modify accounts.
+
 There is no `while(true)` loop inside Next.js route handlers.
 
 ## Playwright Worker Login

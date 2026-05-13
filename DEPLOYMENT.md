@@ -187,6 +187,7 @@ Local CLI:
 
 ```bash
 npm run db:health
+npm run worker:check
 ```
 
 ## Current Limitation
