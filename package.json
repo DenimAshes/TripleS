@@ -26,7 +26,7 @@
     "yt:playlists": "tsx worker/runners/youtube.ts list",
     "sc": "tsx worker/runners/soundcloud.ts",
     "sc:playlists": "tsx worker/runners/soundcloud.ts list",
-    "cloak:install": "node -e \"require('cloakbrowser').ensureBinary().then(p => console.log('cloakbrowser binary:', p))\"",
+    "cloak:install": "node scripts/cloak-install.mjs",
     "stealth:test": "tsx scripts/stealth-test.ts"
   },
   "prisma": {

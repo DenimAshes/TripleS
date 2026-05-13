@@ -20,7 +20,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-RUN node -e "require('cloakbrowser').ensureBinary().then(p => console.log('cloakbrowser binary:', p))"
+COPY scripts/cloak-install.mjs ./scripts/cloak-install.mjs
+RUN node scripts/cloak-install.mjs
 
 COPY . .
 
