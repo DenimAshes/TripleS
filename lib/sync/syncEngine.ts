@@ -57,6 +57,10 @@ function normalizedFromServiceTrack(track: ServiceTrack): NormalizedTrack {
   };
 }
 
+function nextScheduledRun(intervalMinutes: number) {
+  return intervalMinutes > 0 ? new Date(Date.now() + intervalMinutes * 60_000) : null;
+}
+
 async function getDestinationPlaylist(service: string, servicePlaylistId: string) {
   return prisma.playlist.findUnique({
     where: {
@@ -424,7 +428,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       where: { id: syncRuleId },
       data: {
         lastRunAt: new Date(),
-        nextRunAt: new Date(Date.now() + rule.intervalMinutes * 60_000),
+        nextRunAt: nextScheduledRun(rule.intervalMinutes),
       },
     });
     return finished;

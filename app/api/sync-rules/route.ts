@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
 
-function nextRunAt(intervalMinutes: number) {
-  return intervalMinutes > 0 ? new Date(Date.now() + intervalMinutes * 60_000) : null;
-}
-
 export async function GET(request: Request) {
   const session = await requireAuth(request);
   const rules = await prisma.syncRule.findMany({
@@ -29,7 +25,7 @@ export async function POST(request: Request) {
       direction: "ONE_WAY",
       intervalMinutes,
       isEnabled: Boolean(body.isEnabled ?? true),
-      nextRunAt: nextRunAt(intervalMinutes),
+      nextRunAt: null,
       destinations: {
         create: (body.destinations || []).map((destination: { service: string; playlistId: string }) => ({
           service: String(destination.service),

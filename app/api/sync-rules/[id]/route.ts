@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
 
-function nextRunAt(intervalMinutes: number, isEnabled: boolean) {
-  return isEnabled && intervalMinutes > 0 ? new Date(Date.now() + intervalMinutes * 60_000) : null;
-}
-
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await requireAuth(request);
   const { id } = await context.params;
@@ -25,7 +21,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         mode: String(body.mode || "ADD_ONLY"),
         intervalMinutes,
         isEnabled,
-        nextRunAt: nextRunAt(intervalMinutes, isEnabled),
+        nextRunAt: isEnabled ? null : existing.nextRunAt,
         destinations: {
           create: (body.destinations || []).map((destination: { service: string; playlistId: string }) => ({
             service: String(destination.service),

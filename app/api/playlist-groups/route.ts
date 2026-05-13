@@ -3,10 +3,6 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
 import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
 
-function nextRunAt(intervalMinutes: number) {
-  return intervalMinutes > 0 ? new Date(Date.now() + intervalMinutes * 60_000) : null;
-}
-
 export async function GET(request: Request) {
   const session = await requireAuth(request);
   const groups = await prisma.playlistGroup.findMany({
@@ -165,7 +161,7 @@ export async function POST(request: Request) {
           mode: String(body.mode || existingRule.mode || "ADD_ONLY"),
           intervalMinutes,
           isEnabled: Boolean(body.isEnabled ?? true),
-          nextRunAt: nextRunAt(intervalMinutes),
+          nextRunAt: Boolean(body.isEnabled ?? true) ? null : existingRule.nextRunAt,
           destinations: {
             create: ruleDestinations.map((playlist) => ({
               service: playlist.service,
@@ -186,7 +182,7 @@ export async function POST(request: Request) {
           direction: "ONE_WAY",
           intervalMinutes,
           isEnabled: Boolean(body.isEnabled ?? true),
-          nextRunAt: nextRunAt(intervalMinutes),
+          nextRunAt: null,
           destinations: {
             create: ruleDestinations.map((playlist) => ({
               service: playlist.service,
