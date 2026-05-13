@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
 import { syncPlaylistTracksToDb } from "@/lib/services/playlistTracksStore";
 import type { NormalizedTrack, ServiceKey } from "./syncTypes";
-import { findMatch, rankCandidates } from "./matchEngine";
+import { findMatch } from "./matchEngine";
 import { findStoredDestinationMatch, upsertAutoTrackMatch } from "./trackMatchStore";
 import { nextRunAfterFailure } from "./failureClassifier";
 import { recordCooldownForRule, recordSuccessForRule } from "./serviceCooldown";
@@ -15,6 +15,7 @@ const WRITE_BURST_LONG_PAUSE_MIN_MS = Number(process.env.WORKER_WRITE_LONG_PAUSE
 const WRITE_BURST_LONG_PAUSE_SPREAD_MS = Number(process.env.WORKER_WRITE_LONG_PAUSE_SPREAD_MS ?? 120_000);
 const MAX_TRACKS_PER_RUN = Number(process.env.WORKER_MAX_TRACKS_PER_RUN ?? 10);
 const SKIP_PREVIOUSLY_LOGGED = process.env.WORKER_SKIP_PREVIOUSLY_LOGGED !== "false";
+const REFRESH_SOURCE_TRACKS = process.env.WORKER_REFRESH_SOURCE_TRACKS === "true";
 
 let writesSinceLongPause = 0;
 let writesBeforeNextLongPause = 2 + Math.floor(Math.random() * 3);
@@ -87,6 +88,48 @@ function normalizedFromServiceTrack(track: ServiceTrack): NormalizedTrack {
   };
 }
 
+async function getPlaylistTracksFromDb(playlistId: string): Promise<NormalizedTrack[]> {
+  const states = await prisma.playlistTrackState.findMany({
+    where: { playlistId, removedAt: null },
+    include: { serviceTrack: true },
+    orderBy: { position: "asc" },
+  });
+  return states.map((state) => normalizedFromServiceTrack(state.serviceTrack));
+}
+
+async function storePlaylistSnapshot(playlistId: string, tracks: NormalizedTrack[]): Promise<void> {
+  for (let index = 0; index < tracks.length; index += 1) {
+    const serviceTrack = await upsertServiceTrack(tracks[index]);
+    const existing = await prisma.playlistTrackState.findFirst({
+      where: {
+        playlistId,
+        serviceTrackId: serviceTrack.id,
+      },
+    });
+    if (existing) {
+      await prisma.playlistTrackState.update({
+        where: { id: existing.id },
+        data: {
+          position: index + 1,
+          lastSeenAt: new Date(),
+          removedAt: null,
+        },
+      });
+    } else {
+      await prisma.playlistTrackState.create({
+        data: {
+          playlistId,
+          serviceTrackId: serviceTrack.id,
+          position: index + 1,
+          addedBySystem: false,
+          firstSeenAt: new Date(),
+          lastSeenAt: new Date(),
+        },
+      });
+    }
+  }
+}
+
 function nextScheduledRun(intervalMinutes: number) {
   return intervalMinutes > 0 ? new Date(Date.now() + intervalMinutes * 60_000) : null;
 }
@@ -102,7 +145,7 @@ async function getPreviouslyLoggedTitles(syncRuleId: string, service: string, pl
       service,
       playlistId,
       action: {
-        in: ["synced", "already_synced", "manual_required", "not_found", "rejected_candidate"],
+        in: ["synced", "already_synced", "rejected_candidate"],
       },
       syncJob: {
         syncRuleId,
@@ -227,9 +270,15 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
 
   const stats = { synced: 0, alreadySynced: 0, notFound: 0, manualRequired: 0, removed: 0 };
   let deferredByBatchLimit = false;
-  const sourceAdapter = getAdapter(rule.sourceService, rule.userId);
-  const sourceTracks = await sourceAdapter.getPlaylistTracks(rule.sourcePlaylistId);
   const sourcePlaylist = await getDestinationPlaylist(rule.sourceService, rule.sourcePlaylistId);
+  const cachedSourceTracks = sourcePlaylist && !REFRESH_SOURCE_TRACKS ? await getPlaylistTracksFromDb(sourcePlaylist.id) : [];
+  const expectedSourceTracks = sourcePlaylist?.trackCount ?? 0;
+  const sourceCacheComplete = cachedSourceTracks.length > 0 && (expectedSourceTracks <= 0 || cachedSourceTracks.length >= expectedSourceTracks);
+  const sourceAdapter = sourceCacheComplete ? null : getAdapter(rule.sourceService, rule.userId);
+  const sourceTracks = sourceCacheComplete ? cachedSourceTracks : await sourceAdapter!.getPlaylistTracks(rule.sourcePlaylistId);
+  if (sourcePlaylist && !sourceCacheComplete) {
+    await storePlaylistSnapshot(sourcePlaylist.id, sourceTracks);
+  }
   const sourceGroupMember = sourcePlaylist
     ? await prisma.playlistGroupMember.findUnique({ where: { playlistId: sourcePlaylist.id } })
     : null;
@@ -369,11 +418,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
             },
           });
         } else if (match && match.confidence >= 0.65) {
-          const searchCandidates = await targetAdapter.searchTrack({
-            query: `${sourceTrack.artists.join(" ")} ${sourceTrack.title}`,
-            isrc: sourceTrack.isrc,
-          });
-          const ranked = rankCandidates(sourceTrack, searchCandidates).slice(0, 5);
+          const ranked = ("candidates" in match && match.candidates?.length ? match.candidates : [match]).slice(0, 5);
           const alternativeTracks = await Promise.all(
             ranked.map(async (candidate) => ({
               serviceTrack: await upsertServiceTrack(candidate.track),

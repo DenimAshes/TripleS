@@ -5,11 +5,21 @@ import type { NormalizedTrack, ServiceKey } from "./syncTypes";
 import { normalizeArtist, normalizeTitle } from "@/lib/utils/normalizeTrack";
 import { calculateSimilarity } from "@/lib/utils/similarity";
 
+export type RankedMatch = {
+  track: NormalizedTrack;
+  confidence: number;
+};
+
+export type MatchResult = RankedMatch & {
+  candidates?: RankedMatch[];
+  source?: string;
+};
+
 export async function findMatch(
   sourceTrack: NormalizedTrack,
   targetService: ServiceKey,
   adapter: MusicServiceAdapter,
-) {
+): Promise<MatchResult | null> {
   if (sourceTrack.isrc) {
     const dbMatch = await prisma.serviceTrack.findFirst({
       where: { service: serviceEnum(targetService), isrc: sourceTrack.isrc },
@@ -27,15 +37,17 @@ export async function findMatch(
           url: dbMatch.url || undefined,
         },
         confidence: 1,
+        candidates: [],
+        source: "isrc_db",
       };
     }
   }
 
-  const query = `${normalizeTitle(sourceTrack.title)} ${normalizeArtist(sourceTrack.artists[0] || "")}`;
+  const query = `${normalizeArtist(sourceTrack.artists[0] || "")} ${normalizeTitle(sourceTrack.title)}`.trim();
   const candidates = await adapter.searchTrack({ query, isrc: sourceTrack.isrc });
   const ranked = rankCandidates(sourceTrack, candidates);
   const best = ranked[0] || null;
-  return best;
+  return best ? { ...best, candidates: ranked, source: "search" } : null;
 }
 
 export function rankCandidates(sourceTrack: NormalizedTrack, candidates: NormalizedTrack[]) {

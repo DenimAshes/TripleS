@@ -20,3 +20,48 @@ export function normalizeArtist(artist: string) {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+const translit: Record<string, string> = {
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ё: "e",
+  ж: "zh",
+  з: "z",
+  и: "i",
+  й: "y",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "h",
+  ц: "ts",
+  ч: "ch",
+  ш: "sh",
+  щ: "sch",
+  ы: "y",
+  э: "e",
+  ю: "yu",
+  я: "ya",
+  ь: "",
+  ъ: "",
+};
+
+export function transliterateCyrillic(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[а-яёьъ]/g, (char) => translit[char] ?? char)
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
