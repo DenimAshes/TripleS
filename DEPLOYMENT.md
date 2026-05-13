@@ -182,6 +182,8 @@ Health check:
 
 ```bash
 CDP_URL_YOUTUBE=http://127.0.0.1:9222 CDP_URL_SOUNDCLOUD=http://127.0.0.1:9223 npm run browser:health
+npm run browser:recover -- all
+npm run browser:recover -- all --restart
 ```
 
 The browser services store long-lived profiles in the `triples_profiles` Docker volume. They run headless by default so they work on a plain VM without a desktop. Use this mode when SoundCloud or YouTube needs a stable browser profile. GitHub Actions should continue using `WORKER_BROWSER=state`.
@@ -231,6 +233,7 @@ npm run db:health
 npm run worker:check
 npm run worker:check:live
 npm run browser:health
+npm run browser:recover -- all
 ```
 
 ## Current Limitation

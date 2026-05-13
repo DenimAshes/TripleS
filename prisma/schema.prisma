@@ -248,10 +248,13 @@ model WorkerSessionState {
 }
 
 model ServiceCooldown {
-  service   String   @id
-  until     DateTime
-  reason    String?
-  updatedAt DateTime @updatedAt
+  service       String    @id
+  until         DateTime
+  reason        String?
+  failureCount  Int       @default(0)
+  lastFailureAt DateTime?
+  lastSuccessAt DateTime?
+  updatedAt     DateTime  @updatedAt
 }
 
 model ManualMatchCandidate {

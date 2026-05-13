@@ -1,0 +1,4 @@
+ALTER TABLE "ServiceCooldown"
+ADD COLUMN "failureCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "lastFailureAt" TIMESTAMP(3),
+ADD COLUMN "lastSuccessAt" TIMESTAMP(3);

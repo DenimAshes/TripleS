@@ -23,6 +23,7 @@
     "login": "tsx worker/login.ts",
     "browser:serve": "tsx worker/browser-service.ts",
     "browser:health": "tsx scripts/browser-health.ts",
+    "browser:recover": "tsx scripts/browser-recover.ts",
     "warmup": "tsx worker/warmup.ts",
     "captcha:solve": "tsx worker/captcha-solve.ts",
     "library": "tsx worker/runners/library.ts",

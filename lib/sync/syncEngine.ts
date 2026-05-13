@@ -6,7 +6,7 @@ import type { NormalizedTrack, ServiceKey } from "./syncTypes";
 import { findMatch, rankCandidates } from "./matchEngine";
 import { findStoredDestinationMatch, upsertAutoTrackMatch } from "./trackMatchStore";
 import { nextRunAfterFailure } from "./failureClassifier";
-import { recordCooldownForRule } from "./serviceCooldown";
+import { recordCooldownForRule, recordSuccessForRule } from "./serviceCooldown";
 import { releaseAllSessions } from "@/worker/sessionPool";
 
 const WRITE_THROTTLE_MIN_MS = Number(process.env.WORKER_WRITE_THROTTLE_MIN_MS ?? 4000);
@@ -461,6 +461,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         nextRunAt: nextScheduledRun(rule.intervalMinutes),
       },
     });
+    await recordSuccessForRule([rule.sourceService, ...rule.destinations.map((destination) => destination.service)]).catch(() => {});
     return finished;
   } catch (error) {
     const failed = await prisma.syncJob.update({

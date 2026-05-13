@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { runSync } from "@/lib/sync/syncEngine";
 import { getServicesInCooldown } from "@/lib/sync/serviceCooldown";
+import { preflightSyncRule } from "@/lib/sync/preflight";
 
 function shuffleInPlace<T>(items: T[]): T[] {
   for (let i = items.length - 1; i > 0; i -= 1) {
@@ -55,7 +56,7 @@ async function main() {
     console.log(`[sync-worker] Services in cooldown: ${Array.from(cooled).join(", ")}`);
   }
 
-  const runnable = dueRules.filter((rule) => {
+  const notCooled = dueRules.filter((rule) => {
     const services = [rule.sourceService, ...rule.destinations.map((d) => d.service)].map((s) => s.toLowerCase());
     const blocked = services.find((s) => cooled.has(s));
     if (blocked) {
@@ -64,6 +65,16 @@ async function main() {
     }
     return true;
   });
+
+  const runnable: typeof notCooled = [];
+  for (const rule of notCooled) {
+    const preflight = await preflightSyncRule(rule);
+    if (!preflight.ok) {
+      console.log(`[sync-worker] Preflight failed for ${rule.name} (${rule.id}): ${preflight.reasons.join("; ")}`);
+      continue;
+    }
+    runnable.push(rule);
+  }
 
   shuffleInPlace(runnable);
 

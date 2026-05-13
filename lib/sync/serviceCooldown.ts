@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { FAILURE_COOLDOWN_MS, isCooldownError } from "./failureClassifier";
+import { cooldownMsForFailureCount, isCooldownError } from "./failureClassifier";
 
 export type DestinationService = "SPOTIFY" | "YOUTUBE" | "SOUNDCLOUD";
 
@@ -14,11 +14,46 @@ export async function getServicesInCooldown(now: Date = new Date()): Promise<Set
 
 export async function setServiceCooldown(service: string, reason: string, now: Date = new Date()): Promise<void> {
   const key = toServiceKey(service);
-  const until = new Date(now.getTime() + FAILURE_COOLDOWN_MS);
+  await prisma.$transaction(async (tx) => {
+    const existing = await tx.serviceCooldown.findUnique({ where: { service: key } });
+    const failureCount = (existing?.failureCount ?? 0) + 1;
+    const until = new Date(now.getTime() + cooldownMsForFailureCount(failureCount));
+    await tx.serviceCooldown.upsert({
+      where: { service: key },
+      update: {
+        until,
+        reason,
+        failureCount,
+        lastFailureAt: now,
+      },
+      create: {
+        service: key,
+        until,
+        reason,
+        failureCount,
+        lastFailureAt: now,
+      },
+    });
+  });
+}
+
+export async function markServiceSuccess(service: string, now: Date = new Date()): Promise<void> {
+  const key = toServiceKey(service);
   await prisma.serviceCooldown.upsert({
     where: { service: key },
-    update: { until, reason },
-    create: { service: key, until, reason },
+    update: {
+      until: now,
+      reason: null,
+      failureCount: 0,
+      lastSuccessAt: now,
+    },
+    create: {
+      service: key,
+      until: now,
+      reason: null,
+      failureCount: 0,
+      lastSuccessAt: now,
+    },
   });
 }
 
@@ -33,4 +68,8 @@ export async function recordCooldownForRule(
       setServiceCooldown(service, message),
     ),
   );
+}
+
+export async function recordSuccessForRule(services: string[]): Promise<void> {
+  await Promise.all(Array.from(new Set(services.map(toServiceKey))).map((service) => markServiceSuccess(service)));
 }

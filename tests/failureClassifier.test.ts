@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FAILURE_COOLDOWN_MS, isCooldownError, nextRunAfterFailure } from "../lib/sync/failureClassifier";
+import { cooldownMsForFailureCount, isCooldownError, nextRunAfterFailure } from "../lib/sync/failureClassifier";
 
 describe("isCooldownError", () => {
   it("catches captcha block messages", () => {
@@ -16,14 +16,20 @@ describe("isCooldownError", () => {
     expect(isCooldownError(new Error("Timeout 30000ms exceeded"))).toBe(false);
     expect(isCooldownError(new Error("Element not found"))).toBe(false);
   });
+
+  it("uses progressive cooldown durations", () => {
+    expect(cooldownMsForFailureCount(1)).toBe(6 * 60 * 60 * 1000);
+    expect(cooldownMsForFailureCount(2)).toBe(24 * 60 * 60 * 1000);
+    expect(cooldownMsForFailureCount(3)).toBe(72 * 60 * 60 * 1000);
+  });
 });
 
 describe("nextRunAfterFailure", () => {
   const now = new Date("2026-05-13T12:00:00.000Z");
 
-  it("schedules 24h cooldown for captcha-class errors", () => {
+  it("schedules initial 6h cooldown for captcha-class errors", () => {
     const next = nextRunAfterFailure(60, new Error("captcha"), now);
-    expect(next?.getTime()).toBe(now.getTime() + FAILURE_COOLDOWN_MS);
+    expect(next?.getTime()).toBe(now.getTime() + cooldownMsForFailureCount(1));
   });
 
   it("uses normal interval for transient errors", () => {
@@ -35,8 +41,8 @@ describe("nextRunAfterFailure", () => {
     expect(nextRunAfterFailure(0, new Error("ECONNRESET"), now)).toBeNull();
   });
 
-  it("still cools down 24h when intervalMinutes is 0 but error is captcha-class", () => {
+  it("still cools down when intervalMinutes is 0 but error is captcha-class", () => {
     const next = nextRunAfterFailure(0, new Error("not logged in"), now);
-    expect(next?.getTime()).toBe(now.getTime() + FAILURE_COOLDOWN_MS);
+    expect(next?.getTime()).toBe(now.getTime() + cooldownMsForFailureCount(1));
   });
 });
