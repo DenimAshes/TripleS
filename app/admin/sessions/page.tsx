@@ -34,8 +34,8 @@ export default async function AdminSessionsPage() {
           <ol className="ml-5 list-decimal space-y-1">
             <li>In your personal browser (Chrome, Firefox), log in to the service (e.g. <code>music.youtube.com</code>).</li>
             <li>Install the free <a className="underline" href="https://cookie-editor.com/" target="_blank" rel="noreferrer">Cookie-Editor</a> extension (open source, MIT).</li>
-            <li>Open the extension on the logged-in tab → <strong>Export</strong> → <strong>Export as Playwright</strong>. A JSON file downloads.</li>
-            <li>Drop that JSON file into the matching service below.</li>
+            <li>Open the extension on the logged-in tab → <strong>Export</strong> → <strong>Export as Playwright</strong> if available, otherwise <strong>Export as JSON</strong> (bare cookie array also works).</li>
+            <li>Drop the downloaded JSON file into the matching service below, or expand <em>Or paste JSON</em> and Ctrl+V the contents.</li>
             <li>The next scheduled sync run will use the refreshed session.</li>
           </ol>
           <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
