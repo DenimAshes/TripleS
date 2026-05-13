@@ -2,6 +2,8 @@ import fs from "node:fs";
 import type { Page } from "playwright";
 import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, parseService, SERVICE_URLS, SERVICES, type ServiceId } from "../config";
+import { sleep } from "../sleep";
+import { acquireSession, sessionReuseEnabled } from "../sessionPool";
 
 export type BrowserPlaylist = {
   id: string;
@@ -12,7 +14,7 @@ export type BrowserPlaylist = {
 async function settle(page: Page): Promise<void> {
   await page.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => {});
   await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
-  await page.waitForTimeout(1500);
+  await sleep(1500);
 }
 
 async function maybeDebug(page: Page, service: ServiceId): Promise<void> {
@@ -28,7 +30,8 @@ function playlistPattern(service: ServiceId): RegExp {
 }
 
 export async function listServicePlaylists(service: ServiceId): Promise<BrowserPlaylist[]> {
-  const session = await openWorkerBrowser({ service });
+  const reused = sessionReuseEnabled();
+  const session = reused ? await acquireSession(service) : await openWorkerBrowser({ service });
   try {
     const url = SERVICE_URLS[service].playlists || SERVICE_URLS[service].home;
     await session.page.goto(url, { waitUntil: "domcontentloaded" });
@@ -63,7 +66,7 @@ export async function listServicePlaylists(service: ServiceId): Promise<BrowserP
 
     return items;
   } finally {
-    await session.close();
+    if (!reused) await session.close();
   }
 }
 

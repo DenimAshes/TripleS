@@ -2,10 +2,11 @@ import path from "node:path";
 import fs from "node:fs";
 
 export type ServiceId = "youtube" | "spotify" | "soundcloud";
-export type BrowserMode = "state" | "profile" | "firefox" | "chrome" | "cdp";
+export type BrowserMode = "state" | "profile" | "chrome" | "cdp";
 
 const STATE_DIR = path.resolve(process.cwd(), "worker", "state");
-const PROFILE_DIR = path.resolve(process.cwd(), "worker", "chrome-profile");
+const PROFILE_DIR = path.resolve(process.cwd(), "worker", "cloak-profile");
+const LEGACY_PROFILE_DIR = path.resolve(process.cwd(), "worker", "chrome-profile");
 
 export const SERVICES: ServiceId[] = ["youtube", "spotify", "soundcloud"];
 export const DEFAULT_CDP_URL = process.env.CDP_URL || "http://127.0.0.1:9222";
@@ -20,7 +21,12 @@ export function debugArtifactPath(fileName: string): string {
 
 export function chromeProfilePath(service?: ServiceId): string {
   if (process.env.CHROME_USER_DATA_DIR) return process.env.CHROME_USER_DATA_DIR;
-  return service ? path.join(PROFILE_DIR, service) : PROFILE_DIR;
+  const base = service ? path.join(PROFILE_DIR, service) : PROFILE_DIR;
+  if (!fs.existsSync(base) && service) {
+    const legacy = path.join(LEGACY_PROFILE_DIR, service);
+    if (fs.existsSync(legacy)) return legacy;
+  }
+  return base;
 }
 
 export function ensureStateDir(): void {

@@ -5,6 +5,33 @@ import { syncPlaylistTracksToDb } from "@/lib/services/playlistTracksStore";
 import type { NormalizedTrack, ServiceKey } from "./syncTypes";
 import { findMatch, rankCandidates } from "./matchEngine";
 import { findStoredDestinationMatch, upsertAutoTrackMatch } from "./trackMatchStore";
+import { nextRunAfterFailure } from "./failureClassifier";
+import { releaseAllSessions } from "@/worker/sessionPool";
+
+const WRITE_THROTTLE_MIN_MS = Number(process.env.WORKER_WRITE_THROTTLE_MIN_MS ?? 4000);
+const WRITE_THROTTLE_SPREAD_MS = Number(process.env.WORKER_WRITE_THROTTLE_SPREAD_MS ?? 8000);
+const WRITE_BURST_LONG_PAUSE_MIN_MS = Number(process.env.WORKER_WRITE_LONG_PAUSE_MIN_MS ?? 60_000);
+const WRITE_BURST_LONG_PAUSE_SPREAD_MS = Number(process.env.WORKER_WRITE_LONG_PAUSE_SPREAD_MS ?? 120_000);
+
+let writesSinceLongPause = 0;
+let writesBeforeNextLongPause = 2 + Math.floor(Math.random() * 3);
+
+function writeThrottle(): Promise<void> {
+  writesSinceLongPause += 1;
+  const useLong = writesSinceLongPause >= writesBeforeNextLongPause;
+  if (useLong) {
+    writesSinceLongPause = 0;
+    writesBeforeNextLongPause = 2 + Math.floor(Math.random() * 3);
+    const min = Math.max(0, WRITE_BURST_LONG_PAUSE_MIN_MS);
+    const spread = Math.max(0, WRITE_BURST_LONG_PAUSE_SPREAD_MS);
+    const ms = min + Math.floor(Math.random() * spread);
+    return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+  }
+  const min = Number.isFinite(WRITE_THROTTLE_MIN_MS) && WRITE_THROTTLE_MIN_MS > 0 ? WRITE_THROTTLE_MIN_MS : 0;
+  const spread = Number.isFinite(WRITE_THROTTLE_SPREAD_MS) && WRITE_THROTTLE_SPREAD_MS > 0 ? WRITE_THROTTLE_SPREAD_MS : 0;
+  const ms = min + Math.floor(Math.random() * spread);
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
 
 async function upsertServiceTrack(track: NormalizedTrack) {
   const internal = await prisma.internalTrack.upsert({
@@ -275,6 +302,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
           const alreadyPresent = Boolean(existing || state);
 
           if (!alreadyPresent) {
+            await writeThrottle();
             await targetAdapter.addTrackToPlaylist(destination.playlistId, match.track);
             destinationTracks.push(match.track);
           }
@@ -392,6 +420,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
               })
             : null;
           if (state) {
+            await writeThrottle();
             await targetAdapter.removeTrackFromPlaylist(destination.playlistId, track.sourceTrackId);
             await prisma.playlistTrackState.update({
               where: { id: state.id },
@@ -433,7 +462,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     });
     return finished;
   } catch (error) {
-    return prisma.syncJob.update({
+    const failed = await prisma.syncJob.update({
       where: { id: job.id },
       data: {
         status: "FAILED",
@@ -442,5 +471,15 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         errorMessage: error instanceof Error ? error.message : "Unknown sync error",
       },
     });
+    await prisma.syncRule.update({
+      where: { id: syncRuleId },
+      data: {
+        lastRunAt: new Date(),
+        nextRunAt: nextRunAfterFailure(rule.intervalMinutes, error),
+      },
+    });
+    return failed;
+  } finally {
+    await releaseAllSessions().catch(() => {});
   }
 }

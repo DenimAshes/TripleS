@@ -50,6 +50,7 @@ next-env.d.ts
 /worker/state/*.log
 !/worker/state/.gitkeep
 /worker/chrome-profile/
+/worker/cloak-profile/
 
 # local browser verification artifacts
 /.playwright-mcp/

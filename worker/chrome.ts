@@ -1,27 +1,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import path from "node:path";
+import { ensureBinary, getDefaultStealthArgs } from "cloakbrowser";
 import { DEFAULT_CDP_URL, chromeProfilePath, parseService, SERVICE_URLS, type ServiceId } from "./config";
-
-function findChromeExecutable(): string {
-  const candidates = [
-    process.env.CHROME_PATH,
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-    path.join(process.env.LOCALAPPDATA || "", "Google\\Chrome\\Application\\chrome.exe"),
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/usr/bin/google-chrome",
-    "/usr/bin/google-chrome-stable",
-    "/usr/bin/chromium",
-    "/usr/bin/chromium-browser",
-  ].filter(Boolean) as string[];
-
-  const executable = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!executable) {
-    throw new Error("Chrome executable not found. Set CHROME_PATH to chrome.exe / google-chrome.");
-  }
-  return executable;
-}
 
 function cdpPort(): string {
   const url = new URL(DEFAULT_CDP_URL);
@@ -33,8 +13,10 @@ async function main() {
   const profile = chromeProfilePath(service);
   fs.mkdirSync(profile, { recursive: true });
 
-  const chrome = findChromeExecutable();
+  const binary = process.env.CLOAKBROWSER_BINARY_PATH || (await ensureBinary());
+  const stealthArgs = getDefaultStealthArgs();
   const args = [
+    ...stealthArgs,
     `--remote-debugging-port=${cdpPort()}`,
     `--user-data-dir=${profile}`,
     "--no-first-run",
@@ -42,13 +24,13 @@ async function main() {
     SERVICE_URLS[service].home,
   ];
 
-  console.log(`[chrome] Starting ${chrome}`);
+  console.log(`[chrome] Starting cloakbrowser binary: ${binary}`);
   console.log(`[chrome] Profile: ${profile}`);
   console.log(`[chrome] CDP: ${DEFAULT_CDP_URL}`);
   console.log(`[chrome] Opened: ${serviceLabel(service)}`);
   console.log(`[chrome] Keep this window open while running npm run login -- ${service} cdp`);
 
-  const child = spawn(chrome, args, {
+  const child = spawn(binary, args, {
     detached: true,
     stdio: "ignore",
     windowsHide: false,

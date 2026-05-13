@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Clock3, Gauge, ListMusic, Settings, Shuffle } from "lucide-react";
+import { Clock3, Gauge, KeyRound, ListMusic, Settings, Shuffle } from "lucide-react";
 
 const items = [
   { href: "/dashboard", label: "Home", icon: Gauge },
@@ -7,6 +7,7 @@ const items = [
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/history", label: "History", icon: Clock3 },
   { href: "/manual-match", label: "Review songs", icon: Shuffle },
+  { href: "/admin/sessions", label: "Worker sessions", icon: KeyRound },
 ];
 
 export function AppSidebar() {

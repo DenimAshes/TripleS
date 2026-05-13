@@ -1,9 +1,28 @@
-FROM mcr.microsoft.com/playwright:v1.59.1-noble
+FROM node:20-slim
+
+ENV NODE_ENV=production \
+    WORKER_BROWSER=state \
+    HEADLESS=true \
+    CLOAKBROWSER_AUTO_UPDATE=false \
+    CLOAKBROWSER_CACHE_DIR=/root/.cloakbrowser
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl tini \
+      libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdbus-1-3 \
+      libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+      libgbm1 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0 libgtk-3-0 \
+      fonts-noto-color-emoji fonts-freefont-ttf fonts-unifont \
+      fonts-ipafont-gothic fonts-wqy-zenhei fonts-tlwg-loma-otf \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-ENV NODE_ENV=production
-ENV WORKER_BROWSER=state
-ENV HEADLESS=true
+
 COPY package*.json ./
 RUN npm ci
+
+RUN node -e "require('cloakbrowser').ensureBinary().then(p => console.log('cloakbrowser binary:', p))"
+
 COPY . .
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["sh", "-lc", "npm run state:restore && npm run sync-worker"]

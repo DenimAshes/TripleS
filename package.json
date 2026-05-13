@@ -2,6 +2,9 @@
   "name": "triples",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20 <23"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -16,11 +19,15 @@
     "state:encode": "tsx scripts/encode-worker-state.ts",
     "chrome": "tsx worker/chrome.ts",
     "login": "tsx worker/login.ts",
+    "warmup": "tsx worker/warmup.ts",
+    "captcha:solve": "tsx worker/captcha-solve.ts",
     "library": "tsx worker/runners/library.ts",
     "yt": "tsx worker/runners/youtube.ts",
     "yt:playlists": "tsx worker/runners/youtube.ts list",
     "sc": "tsx worker/runners/soundcloud.ts",
-    "sc:playlists": "tsx worker/runners/soundcloud.ts list"
+    "sc:playlists": "tsx worker/runners/soundcloud.ts list",
+    "cloak:install": "node -e \"require('cloakbrowser').ensureBinary().then(p => console.log('cloakbrowser binary:', p))\"",
+    "stealth:test": "tsx scripts/stealth-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -36,6 +43,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
+    "cloakbrowser": "0.3.28",
     "clsx": "^2.1.1",
     "jose": "^6.2.3",
     "lucide-react": "^1.14.0",
@@ -54,8 +62,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "playwright": "^1.59.1",
-    "playwright-extra": "^4.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.5"

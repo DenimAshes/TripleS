@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { binaryInfo } from "cloakbrowser";
 import { prisma } from "@/lib/db/prisma";
 import { listSoundCloudPlaylists } from "@/worker/runners/soundcloud";
 import { listYouTubePlaylists } from "@/worker/runners/youtube";
@@ -49,7 +50,7 @@ function sessionDetails(service: ServiceId) {
 
 async function checkEnvironment(): Promise<CheckResult> {
   const mode = browserMode();
-  const allowedModes = new Set(["state", "profile", "cdp", "chrome", "firefox"]);
+  const allowedModes = new Set(["state", "profile", "cdp", "chrome"]);
   if (!allowedModes.has(mode)) {
     return {
       service: "environment",
@@ -178,10 +179,49 @@ function printResult(result: CheckResult) {
   }
 }
 
+function jsonOutput(): boolean {
+  return process.argv.includes("--json");
+}
+
+async function checkCloakBinary(): Promise<CheckResult> {
+  try {
+    const info = binaryInfo();
+    return {
+      service: "environment",
+      status: info.installed ? "ok" : "warn",
+      message: info.installed
+        ? `CloakBrowser binary installed (${info.version}).`
+        : "CloakBrowser binary not yet downloaded. Run: npm run cloak:install",
+      details: {
+        version: info.version,
+        platform: info.platform,
+        binaryPath: info.binaryPath,
+        installed: info.installed,
+        override: process.env.CLOAKBROWSER_BINARY_PATH ?? null,
+      },
+    };
+  } catch (error) {
+    return {
+      service: "environment",
+      status: "warn",
+      message: "Could not read CloakBrowser binary info.",
+      details: { error: error instanceof Error ? error.message : String(error) },
+    };
+  }
+}
+
 async function main() {
-  const checks = [await checkEnvironment(), await checkDatabase(), await checkYouTube(), await checkSoundCloud()];
-  for (const check of checks) {
-    printResult(check);
+  const checks = [await checkEnvironment(), await checkCloakBinary(), await checkDatabase(), await checkYouTube(), await checkSoundCloud()];
+
+  if (jsonOutput()) {
+    const overall: CheckStatus = checks.some((c) => c.status === "fail")
+      ? "fail"
+      : checks.some((c) => c.status === "warn")
+      ? "warn"
+      : "ok";
+    console.log(JSON.stringify({ status: overall, timestamp: new Date().toISOString(), checks }, null, 2));
+  } else {
+    for (const check of checks) printResult(check);
   }
 
   if (checks.some((check) => check.status === "fail")) {

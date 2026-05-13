@@ -22,11 +22,25 @@ jobs:
       SOUNDCLOUD_BROWSER_AUTOMATION: "true"
       WORKER_BROWSER: "state"
       HEADLESS: "true"
+      CLOAKBROWSER_AUTO_UPDATE: "false"
+      WORKER_HUMAN_PRESET: "careful"
+      WORKER_HUMAN_IDLE_BETWEEN: "true"
+      WORKER_ACCOUNT_TIMEZONE: "Europe/Riga"
+      WORKER_ACTIVE_HOUR_START: "7"
+      WORKER_ACTIVE_HOUR_END: "24"
+      WORKER_SESSION_REUSE: "true"
       YOUTUBE_STATE_GZIP_BASE64: ${{ secrets.YOUTUBE_STATE_GZIP_BASE64 }}
       SOUNDCLOUD_STATE_GZIP_BASE64: ${{ secrets.SOUNDCLOUD_STATE_GZIP_BASE64 }}
       YOUTUBE_STATE_JSON_BASE64: ${{ secrets.YOUTUBE_STATE_JSON_BASE64 }}
       SOUNDCLOUD_STATE_JSON_BASE64: ${{ secrets.SOUNDCLOUD_STATE_JSON_BASE64 }}
     steps:
+      - name: Random jitter (0–30 min) to break cron pattern
+        if: github.event_name == 'schedule'
+        run: |
+          JITTER=$((RANDOM % 1800))
+          echo "Sleeping ${JITTER}s before run."
+          sleep $JITTER
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -39,11 +53,47 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+      - name: Cache CloakBrowser binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cloakbrowser
+          key: cloakbrowser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            cloakbrowser-${{ runner.os }}-
+
+      - name: Install Playwright system deps
+        run: npx playwright install-deps chromium
+
+      - name: Install emoji + extended fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fonts-noto-color-emoji fonts-freefont-ttf fonts-unifont \
+            fonts-ipafont-gothic fonts-wqy-zenhei fonts-tlwg-loma-otf
+          sudo fc-cache -f
+
+      - name: Ensure CloakBrowser binary
+        run: npm run cloak:install
 
       - name: Restore browser sessions from secrets
         run: npm run state:restore
 
       - name: Run due sync rules
         run: npm run sync-worker
+
+      - name: Upload debug artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-debug-${{ github.run_id }}
+          path: |
+            worker/state/*.png
+            worker/state/*.html
+            worker/state/*.log
+            worker/state/yt-*.json
+            worker/state/soundcloud-*.json
+            !worker/state/youtube.json
+            !worker/state/spotify.json
+            !worker/state/soundcloud.json
+          if-no-files-found: ignore
+          retention-days: 7

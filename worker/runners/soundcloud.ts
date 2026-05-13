@@ -3,6 +3,8 @@ import { type BrowserContext, type Page } from "playwright";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
+import { sleep } from "../sleep";
+import { acquireSession, sessionReuseEnabled } from "../sessionPool";
 
 export type SoundCloudPlaylist = {
   id: string;
@@ -49,8 +51,19 @@ type SoundCloudApiCollection<T> = {
   next_href?: string | null;
 };
 
-async function withContext<T>(fn: (ctx: BrowserContext, page: Page) => Promise<T>): Promise<T> {
-  const session = await openWorkerBrowser({ service: SERVICE });
+async function withContext<T>(
+  fn: (ctx: BrowserContext, page: Page) => Promise<T>,
+  opts?: { humanize?: boolean },
+): Promise<T> {
+  if (sessionReuseEnabled()) {
+    const session = await acquireSession(SERVICE);
+    const result = await fn(session.context, session.page);
+    if (process.env.SAVE_STATE_AFTER_RUN === "true") {
+      await saveStorageState(SERVICE, session.context);
+    }
+    return result;
+  }
+  const session = await openWorkerBrowser({ service: SERVICE, humanize: opts?.humanize });
   try {
     const result = await fn(session.context, session.page);
     if (process.env.SAVE_STATE_AFTER_RUN === "true") {
@@ -65,7 +78,7 @@ async function withContext<T>(fn: (ctx: BrowserContext, page: Page) => Promise<T
 async function settle(page: Page): Promise<void> {
   await page.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => {});
   await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
-  await page.waitForTimeout(1500);
+  await sleep(1500);
 }
 
 async function maybeDebug(page: Page, label: string): Promise<void> {
@@ -206,7 +219,7 @@ async function collectWhileScrolling<T>(page: Page, extract: () => Promise<T[]>,
       byKey.set(key, item);
     }
     const moved = await scrollMainContent(page);
-    await page.waitForTimeout(600);
+    await sleep(600);
     if (!moved) break;
   }
   return Array.from(byKey.values());
@@ -511,7 +524,7 @@ export async function listSoundCloudPlaylists(): Promise<SoundCloudPlaylist[]> {
     const items = await collectWhileScrolling(page, () => extractVisiblePlaylists(page), 25);
     const byId = new Map(items.map((item) => [item.id, item]));
     return Array.from(byId.values());
-  });
+  }, { humanize: false });
 }
 
 export async function listSoundCloudPlaylistTracks(playlistIdOrUrl: string): Promise<NormalizedTrack[]> {
@@ -527,7 +540,7 @@ export async function listSoundCloudPlaylistTracks(playlistIdOrUrl: string): Pro
     const items = await collectWhileScrolling(page, () => extractVisibleTracks(page), 50);
     const byId = new Map(items.map((item) => [item.sourceTrackId, item]));
     return Array.from(byId.values());
-  });
+  }, { humanize: false });
 }
 
 export async function searchSoundCloudTracks(query: string): Promise<NormalizedTrack[]> {
@@ -542,7 +555,7 @@ export async function searchSoundCloudTracks(query: string): Promise<NormalizedT
     const items = await collectWhileScrolling(page, () => extractVisibleTracks(page), 10);
     const byId = new Map(items.map((item) => [item.sourceTrackId, item]));
     return Array.from(byId.values());
-  });
+  }, { humanize: false });
 }
 
 async function main() {

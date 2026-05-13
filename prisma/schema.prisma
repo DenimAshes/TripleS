@@ -239,6 +239,14 @@ model SyncLog {
   syncJob      SyncJob      @relation(fields: [syncJobId], references: [id], onDelete: Cascade)
 }
 
+model WorkerSessionState {
+  service         String   @id
+  stateGzipBase64 String
+  bytes           Int
+  updatedAt       DateTime @updatedAt
+  updatedBy       String?
+}
+
 model ManualMatchCandidate {
   id                      String            @id @default(cuid())
   userId                  String

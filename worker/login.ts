@@ -5,7 +5,7 @@ import { SERVICE_URLS, SERVICES, parseService, type BrowserMode, type ServiceId 
 function parseMode(service: ServiceId): BrowserMode {
   const idx = process.argv.indexOf("--mode");
   const value = idx >= 0 ? process.argv[idx + 1] : process.argv[3] || process.env.LOGIN_BROWSER || process.env.WORKER_BROWSER;
-  if (value === "firefox" || value === "chrome" || value === "cdp" || value === "state") return value;
+  if (value === "chrome" || value === "cdp" || value === "state" || value === "profile") return value;
   return service === "youtube" || service === "soundcloud" ? "cdp" : "chrome";
 }
 
@@ -49,7 +49,7 @@ function waitForEnter(): Promise<void> {
 async function main() {
   const service = parseService(process.argv[2]);
   if (!service) {
-    console.error(`Usage: npm run login -- <service> [firefox|chrome|cdp]\n  service: ${SERVICES.join(" | ")}`);
+    console.error(`Usage: npm run login -- <service> [chrome|cdp|profile|state]\n  service: ${SERVICES.join(" | ")}`);
     console.error("For Google/Youtube, recommended path:");
     console.error("  npm run chrome -- youtube");
     console.error("  npm run login -- youtube cdp");

@@ -4,6 +4,8 @@ import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import { normalizeArtist, normalizeTitle } from "@/lib/utils/normalizeTrack";
 import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
+import { humanDwell, humanHoverClick, sleep } from "../sleep";
+import { acquireSession, sessionReuseEnabled } from "../sessionPool";
 
 export type YtPlaylist = {
   id: string;
@@ -25,8 +27,19 @@ type YouTubeDebugInfo = {
   bodySample: string;
 };
 
-async function withContext<T>(fn: (ctx: BrowserContext, page: Page) => Promise<T>): Promise<T> {
-  const session = await openWorkerBrowser({ service: SERVICE });
+async function withContext<T>(
+  fn: (ctx: BrowserContext, page: Page) => Promise<T>,
+  opts?: { humanize?: boolean },
+): Promise<T> {
+  if (sessionReuseEnabled()) {
+    const session = await acquireSession(SERVICE);
+    const result = await fn(session.context, session.page);
+    if (process.env.SAVE_STATE_AFTER_RUN === "true") {
+      await saveStorageState(SERVICE, session.context);
+    }
+    return result;
+  }
+  const session = await openWorkerBrowser({ service: SERVICE, humanize: opts?.humanize });
   try {
     const result = await fn(session.context, session.page);
     if (process.env.SAVE_STATE_AFTER_RUN === "true") {
@@ -133,7 +146,7 @@ async function runUiAction<T>(page: Page, label: string, action: () => Promise<T
 async function settle(page: Page): Promise<void> {
   await page.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => {});
   await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
-  await page.waitForTimeout(1500);
+  await sleep(1500);
 }
 
 async function assertLoggedIn(page: Page): Promise<void> {
@@ -176,7 +189,7 @@ async function scrollToTop(page: Page): Promise<void> {
       el?.scrollTo({ top: 0, behavior: "auto" });
     }
   });
-  await page.waitForTimeout(500);
+  await sleep(500);
 }
 
 export async function listYouTubePlaylists(): Promise<YtPlaylist[]> {
@@ -193,12 +206,12 @@ export async function listYouTubePlaylists(): Promise<YtPlaylist[]> {
       const visible = await extractVisiblePlaylists(page);
       for (const item of visible) byId.set(item.id, item);
       const moved = await scrollMainContent(page);
-      await page.waitForTimeout(700);
+      await sleep(700);
       if (!moved) break;
     }
 
     return Array.from(byId.values());
-  });
+  }, { humanize: false });
 }
 
 async function extractVisiblePlaylists(page: Page): Promise<YtPlaylist[]> {
@@ -325,7 +338,7 @@ async function collectPlaylistTracks(page: Page): Promise<NormalizedTrack[]> {
     for (const track of visible) byId.set(track.sourceTrackId, track);
     if (expectedCount && byId.size >= expectedCount) break;
     const moved = await scrollMainContent(page);
-    await page.waitForTimeout(700);
+    await sleep(700);
     if (!moved) break;
   }
 
@@ -348,7 +361,7 @@ export async function listYouTubePlaylistTracks(playlistId: string): Promise<Nor
     await assertLoggedIn(page);
     await maybeDebug(page, "yt-playlist-tracks");
     return collectPlaylistTracks(page);
-  });
+  }, { humanize: false });
 }
 
 export async function searchYouTubeTracks(query: string): Promise<NormalizedTrack[]> {
@@ -358,7 +371,7 @@ export async function searchYouTubeTracks(query: string): Promise<NormalizedTrac
     await assertLoggedIn(page);
     await maybeDebug(page, "yt-search");
     return extractVisibleTracks(page);
-  });
+  }, { humanize: false });
 }
 
 async function openAddToPlaylistForFirstResult(page: Page): Promise<void> {
@@ -372,7 +385,7 @@ async function openAddToPlaylistForFirstResult(page: Page): Promise<void> {
   for (const selector of saveSelectors) {
     const locator = page.locator(selector).first();
     if ((await locator.count()) > 0) {
-      await locator.click({ timeout: 10_000 });
+      await humanHoverClick(page, locator);
       return;
     }
   }
@@ -390,7 +403,7 @@ async function openAddToPlaylistForFirstResult(page: Page): Promise<void> {
   for (const selector of menuSelectors) {
     const locator = page.locator(selector).first();
     if ((await locator.count()) > 0) {
-      await locator.click({ timeout: 10_000 });
+      await humanHoverClick(page, locator);
       return;
     }
   }
@@ -400,6 +413,7 @@ async function openAddToPlaylistForFirstResult(page: Page): Promise<void> {
 
 async function chooseMenuItem(page: Page, label: RegExp): Promise<void> {
   const item = page.getByRole("menuitem", { name: label }).first();
+  await humanDwell(250, 900);
   await runUiAction(page, "yt-menu-item-click", () => item.click({ timeout: 10_000 }));
 }
 
@@ -411,6 +425,7 @@ async function choosePlaylistInDialog(page: Page, playlistNameOrId: string): Pro
     .locator("ytmusic-playlist-add-to-option-renderer")
     .filter({ hasText: playlistNameOrId })
     .first();
+  await humanDwell(300, 1200);
   if ((await option.count()) > 0) {
     await runUiAction(page, "yt-playlist-option-click", () => option.click({ timeout: 15_000 }));
   } else {
@@ -434,7 +449,7 @@ async function findVisibleTrackRow(page: Page, trackText: string): Promise<Locat
     if ((await row.count()) > 0) return row;
 
     const moved = await scrollMainContent(page);
-    await page.waitForTimeout(500);
+    await sleep(500);
     if (!moved) break;
   }
 
@@ -460,7 +475,7 @@ export async function addFirstSearchResultToPlaylist(query: string, playlistName
       await chooseMenuItem(page, /save to playlist|add to playlist|saglabāt.*atskaņošanas sarakst|pievienot.*atskaņošanas sarakst/i);
     }
     await choosePlaylistInDialog(page, target);
-    await page.waitForTimeout(1000);
+    await sleep(1000);
   });
 }
 
@@ -509,6 +524,7 @@ export async function removeTrackFromPlaylist(playlistId: string, trackText: str
     const row = await runUiAction(page, "yt-remove-find-track-row", () => findVisibleTrackRow(page, trackText));
     await row.scrollIntoViewIfNeeded({ timeout: 10_000 });
     await row.hover({ timeout: 10_000 }).catch(() => {});
+    await humanDwell(400, 1600);
     await runUiAction(page, "yt-remove-open-action-menu", () =>
       row
         .locator(
@@ -518,7 +534,7 @@ export async function removeTrackFromPlaylist(playlistId: string, trackText: str
         .click({ timeout: 10_000, force: true }),
     );
     await chooseMenuItem(page, /remove from playlist|noņemt.*atskaņošanas sarakst|noņemt.*sarakst/i);
-    await page.waitForTimeout(1000);
+    await sleep(1000);
   });
 }
 

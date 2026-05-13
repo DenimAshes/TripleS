@@ -4,18 +4,18 @@ Target architecture:
 
 - Vercel Hobby: Next.js web app and custom domain.
 - Neon Free: shared PostgreSQL database.
-- GitHub Actions or a free VM: remote Playwright worker for scheduled sync jobs.
+- GitHub Actions or a free VM: remote stealth-browser worker (CloakBrowser) for scheduled sync jobs.
 - GitHub Secrets / Vercel Environment Variables: credentials and browser session state.
 
 This keeps the app usable from a domain while avoiding local files on your computer after setup. Browser automation should not run as the main scheduled worker inside Vercel functions because free Hobby functions have short execution limits and no persistent browser profile.
 
-Browser write actions are most reliable with a trusted persistent profile. GitHub Actions uses `WORKER_BROWSER=state`, which restores cookies/localStorage from secrets. A VM can use `WORKER_BROWSER=profile`, which keeps a full Chrome profile between runs and behaves closer to a normal browser session.
+Browser write actions are most reliable with a trusted persistent profile. GitHub Actions uses `WORKER_BROWSER=state`, which restores cookies/localStorage from secrets and runs through the CloakBrowser stealth binary. A VM can use `WORKER_BROWSER=profile`, which keeps a full persistent profile between runs and behaves closer to a normal browser session.
 
 If you do not want GitHub Actions, use the VM path below. The clean free-server target is:
 
 - Vercel for the public web app, or the VM web container if you want one machine to host everything.
 - Neon for Postgres.
-- A free Linux VM for Playwright worker scheduling.
+- A free Linux VM for stealth-browser worker scheduling.
 
 ## Required Services
 
@@ -136,9 +136,16 @@ For a VM that should keep a full trusted browser profile instead of only storage
 ```txt
 WORKER_BROWSER="profile"
 HEADLESS="false"
+CLOAKBROWSER_AUTO_UPDATE="false"
 ```
 
-Then start Chrome once with the same service profile, log in and pass any service checks:
+Pre-download the stealth Chromium binary once (~200 MB, cached in `~/.cloakbrowser`):
+
+```bash
+npm run cloak:install
+```
+
+Then start the stealth browser once with the same service profile, log in and pass any service checks:
 
 ```bash
 npm run chrome -- youtube
@@ -148,7 +155,9 @@ npm run chrome -- soundcloud
 npm run login -- soundcloud cdp
 ```
 
-After that, scheduled worker runs reuse `worker/chrome-profile/youtube` for YouTube Music and `worker/chrome-profile/soundcloud` for SoundCloud. This does not solve captcha automatically; it makes the worker use the same long-lived browser profiles after you pass checks manually.
+After that, scheduled worker runs reuse `worker/cloak-profile/youtube` for YouTube Music and `worker/cloak-profile/soundcloud` for SoundCloud (legacy `worker/chrome-profile/<service>` is also picked up automatically if it exists from earlier setups). This does not solve captcha automatically; it makes the worker use the same long-lived browser profiles after you pass checks manually.
+
+The deterministic per-service fingerprint seed makes each account look like the same returning device across runs. Override per-service with `WORKER_FP_SEED_YOUTUBE`, `WORKER_FP_SEED_SOUNDCLOUD`, etc. when rotating identity.
 
 Build and start the web app on the VM:
 

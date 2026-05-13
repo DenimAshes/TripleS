@@ -1,5 +1,7 @@
-FROM mcr.microsoft.com/playwright:v1.59.1-noble AS deps
+FROM node:20-slim AS deps
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl \
+ && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 RUN npm ci
 
@@ -8,10 +10,13 @@ WORKDIR /app
 COPY . .
 RUN npm run build
 
-FROM mcr.microsoft.com/playwright:v1.59.1-noble AS runner
+FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl tini \
+ && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app ./
 EXPOSE 3000
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["npm", "run", "start"]
