@@ -1,0 +1,15 @@
+[Unit]
+Description=TripleS persistent browser services
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/triples
+ExecStart=/usr/bin/docker compose -f docker-compose.vm.yml --profile browser up -d browser-youtube browser-soundcloud
+ExecStop=/usr/bin/docker compose -f docker-compose.vm.yml --profile browser stop browser-youtube browser-soundcloud
+RemainAfterExit=yes
+TimeoutStartSec=20min
+
+[Install]
+WantedBy=multi-user.target

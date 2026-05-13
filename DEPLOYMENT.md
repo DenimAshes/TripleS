@@ -77,7 +77,7 @@ npx prisma db seed
 npm run db:health
 ```
 
-`DATABASE_URL` should use the pooled Neon connection for the app. `DIRECT_URL` should use Neon's direct connection string for migrations. If `DIRECT_URL` is not set, the build script falls back to `DATABASE_URL`.
+`DATABASE_URL` should use the pooled Neon connection for the app. `DIRECT_URL` should use Neon's direct connection string for migrations. If `DIRECT_URL` is not set, the build script skips automatic migrations to avoid pooled-connection advisory lock timeouts.
 
 For production, replace the default admin password immediately through a safer account flow before sharing the domain.
 
@@ -171,6 +171,21 @@ docker compose -f docker-compose.vm.yml up -d --build web
 docker compose -f docker-compose.vm.yml run --rm worker
 ```
 
+For a persistent browser service mode, start long-lived CDP browsers and run the worker against them:
+
+```bash
+docker compose -f docker-compose.vm.yml --profile browser up -d browser-youtube browser-soundcloud
+docker compose -f docker-compose.vm.yml --profile browser-worker run --rm worker-cdp
+```
+
+Health check:
+
+```bash
+CDP_URL_YOUTUBE=http://127.0.0.1:9222 CDP_URL_SOUNDCLOUD=http://127.0.0.1:9223 npm run browser:health
+```
+
+The browser services store long-lived profiles in the `triples_profiles` Docker volume. They run headless by default so they work on a plain VM without a desktop. Use this mode when SoundCloud or YouTube needs a stable browser profile. GitHub Actions should continue using `WORKER_BROWSER=state`.
+
 Install the timer:
 
 ```bash
@@ -179,6 +194,18 @@ sudo cp deploy/systemd/triples-worker.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now triples-worker.timer
 systemctl list-timers triples-worker.timer
+```
+
+For persistent browser/CDP mode, install these instead:
+
+```bash
+sudo cp deploy/systemd/triples-browser.service /etc/systemd/system/
+sudo cp deploy/systemd/triples-worker-cdp.service /etc/systemd/system/
+sudo cp deploy/systemd/triples-worker-cdp.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now triples-browser.service
+sudo systemctl enable --now triples-worker-cdp.timer
+systemctl list-timers triples-worker-cdp.timer
 ```
 
 If the VM also hosts the domain, install Caddy and copy `deploy/caddy/Caddyfile` to `/etc/caddy/Caddyfile`, replacing `YOUR_DOMAIN`. Vercel remains simpler for the public web app, but the VM path works when you want everything outside your computer without relying on GitHub Actions.
@@ -202,6 +229,8 @@ Local CLI:
 ```bash
 npm run db:health
 npm run worker:check
+npm run worker:check:live
+npm run browser:health
 ```
 
 ## Current Limitation

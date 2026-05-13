@@ -221,11 +221,13 @@ Worker diagnostics:
 
 ```bash
 npm run worker:check
+npm run worker:check:live
+npm run browser:health
 npm run worker:check -- --json   # machine-readable for monitoring
 npm run stealth:test             # one-shot stealth verification (bot.sannysoft, BrowserScan, deviceandbrowserinfo)
 ```
 
-This checks database reachability, browser mode, CloakBrowser binary status, saved state/profile paths, YouTube Music playlist reads and SoundCloud playlist reads. It does not perform write actions, so it will not create playlists or modify accounts.
+`worker:check` is fast and does not open browser sessions. `worker:check:live` opens YouTube Music and SoundCloud to verify playlist reads. `browser:health` checks a running CDP browser service via `/json/version`. None of these commands perform write actions, so they will not create playlists or modify accounts.
 
 There is no `while(true)` loop inside Next.js route handlers.
 
@@ -255,7 +257,7 @@ npm run library -- spotify
 npm run library -- soundcloud
 ```
 
-By default runners use the saved state headlessly through the cloakbrowser binary. Set `WORKER_BROWSER=cdp` to operate against the already running stealth window, or `WORKER_BROWSER=profile` to reuse the full persistent profile for that service: `worker/cloak-profile/youtube` for YouTube Music and `worker/cloak-profile/soundcloud` for SoundCloud (legacy `worker/chrome-profile/<service>` is auto-detected if a newer profile does not exist yet). Set `HEADLESS=false` to debug visually, and `YT_DEBUG=true` to save screenshots/HTML under `worker/state`.
+By default runners use the saved state headlessly through the cloakbrowser binary. Set `WORKER_BROWSER=cdp` to operate against running browser services, using `CDP_URL_YOUTUBE` and `CDP_URL_SOUNDCLOUD` for per-service connections. Set `WORKER_BROWSER=profile` to reuse the full persistent profile for that service: `worker/cloak-profile/youtube` for YouTube Music and `worker/cloak-profile/soundcloud` for SoundCloud (legacy `worker/chrome-profile/<service>` is auto-detected if a newer profile does not exist yet). Set `HEADLESS=false` to debug visually, and `YT_DEBUG=true` to save screenshots/HTML under `worker/state`.
 
 Extra worker env:
 

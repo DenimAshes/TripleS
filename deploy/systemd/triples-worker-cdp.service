@@ -1,0 +1,10 @@
+[Unit]
+Description=TripleS one-shot sync worker using persistent CDP browsers
+Wants=network-online.target triples-browser.service
+After=network-online.target triples-browser.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/triples
+ExecStart=/usr/bin/docker compose -f docker-compose.vm.yml --profile browser-worker run --rm worker-cdp
+TimeoutStartSec=45min

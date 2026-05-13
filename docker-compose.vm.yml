@@ -29,5 +29,81 @@ services:
     profiles:
       - worker
 
+  browser-youtube:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      HEADLESS: "true"
+      CDP_PORT: "9222"
+    command: ["npm", "run", "browser:serve", "--", "youtube"]
+    ports:
+      - "127.0.0.1:9222:9222"
+    volumes:
+      - triples_state:/app/worker/state
+      - triples_profiles:/app/worker/cloak-profile
+    healthcheck:
+      test: ["CMD", "npm", "run", "browser:health", "--", "--url", "http://127.0.0.1:9222"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    profiles:
+      - browser
+
+  browser-soundcloud:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      HEADLESS: "true"
+      CDP_PORT: "9222"
+    command: ["npm", "run", "browser:serve", "--", "soundcloud"]
+    ports:
+      - "127.0.0.1:9223:9222"
+    volumes:
+      - triples_state:/app/worker/state
+      - triples_profiles:/app/worker/cloak-profile
+    healthcheck:
+      test: ["CMD", "npm", "run", "browser:health", "--", "--url", "http://127.0.0.1:9222"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    profiles:
+      - browser
+
+  worker-cdp:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      WORKER_BROWSER: cdp
+      CDP_URL_YOUTUBE: http://browser-youtube:9222
+      CDP_URL_SOUNDCLOUD: http://browser-soundcloud:9222
+      HEADLESS: "true"
+    depends_on:
+      browser-youtube:
+        condition: service_healthy
+      browser-soundcloud:
+        condition: service_healthy
+    volumes:
+      - triples_state:/app/worker/state
+      - triples_profiles:/app/worker/cloak-profile
+    profiles:
+      - browser-worker
+
 volumes:
   triples_state:
+  triples_profiles:

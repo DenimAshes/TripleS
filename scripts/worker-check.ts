@@ -218,6 +218,10 @@ function jsonOutput(): boolean {
   return process.argv.includes("--json");
 }
 
+function liveOutput(): boolean {
+  return process.argv.includes("--live") || process.env.WORKER_CHECK_LIVE === "true";
+}
+
 async function checkCloakBinary(): Promise<CheckResult> {
   try {
     const info = binaryInfo();
@@ -255,7 +259,22 @@ async function main() {
   const canSkipCloak = browserMode() === "cdp";
   const allowDownload = process.env.WORKER_CHECK_INSTALL_BINARY === "true";
 
-  if (!cloakInstalled && !canSkipCloak && !allowDownload) {
+  if (!liveOutput()) {
+    checks.push(
+      {
+        service: "youtube",
+        status: "warn",
+        message: "Skipped live browser check. Run npm run worker:check:live to open the service.",
+        details: sessionDetails("youtube"),
+      },
+      {
+        service: "soundcloud",
+        status: "warn",
+        message: "Skipped live browser check. Run npm run worker:check:live to open the service.",
+        details: sessionDetails("soundcloud"),
+      },
+    );
+  } else if (!cloakInstalled && !canSkipCloak && !allowDownload) {
     const details = {
       reason: "CloakBrowser binary is missing, and worker:check does not auto-download it by default.",
       recovery: "Run npm run cloak:install, or set WORKER_CHECK_INSTALL_BINARY=true for this check.",

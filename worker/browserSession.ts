@@ -31,6 +31,15 @@ function browserMode(): BrowserMode {
   return "state";
 }
 
+function cdpUrlForService(service: ServiceId, override?: string): string {
+  return (
+    override ||
+    process.env[`CDP_URL_${service.toUpperCase()}`] ||
+    process.env.CDP_URL ||
+    DEFAULT_CDP_URL
+  );
+}
+
 function resolveHumanize(service: ServiceId, override?: boolean): boolean {
   if (override !== undefined) return override;
   if (process.env.WORKER_HUMANIZE === "true") return true;
@@ -132,7 +141,7 @@ export async function openWorkerBrowser(options: WorkerBrowserOptions): Promise<
   const base = commonOptions(options.service, headless, humanize);
 
   if (mode === "cdp") {
-    const browser = await chromium.connectOverCDP(options.cdpUrl || DEFAULT_CDP_URL);
+    const browser = await chromium.connectOverCDP(cdpUrlForService(options.service, options.cdpUrl));
     const context = browser.contexts()[0] || (await browser.newContext());
     const page = context.pages()[0] || (await context.newPage());
     return {
