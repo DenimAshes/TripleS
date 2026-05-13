@@ -242,7 +242,7 @@ npm run library -- spotify
 npm run library -- soundcloud
 ```
 
-By default runners use the saved state headlessly. Set `WORKER_BROWSER=cdp` to operate against the already running Chrome window, or `WORKER_BROWSER=profile` to reuse the full persistent Chrome profile for that service. Set `HEADLESS=false` to debug visually, and `YT_DEBUG=true` to save screenshots/HTML under `worker/state`.
+By default runners use the saved state headlessly. Set `WORKER_BROWSER=cdp` to operate against the already running Chrome window, or `WORKER_BROWSER=profile` to reuse the full persistent Chrome profile for that service: `worker/chrome-profile/youtube` for YouTube Music and `worker/chrome-profile/soundcloud` for SoundCloud. Set `HEADLESS=false` to debug visually, and `YT_DEBUG=true` to save screenshots/HTML under `worker/state`.
 
 This keeps Spotify and SoundCloud behavior unchanged. YouTube browser mode is best used locally or in a controlled worker process; it depends on a valid `worker/state/youtube.json`.
 

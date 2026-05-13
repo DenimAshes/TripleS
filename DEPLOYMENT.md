@@ -138,14 +138,17 @@ WORKER_BROWSER="profile"
 HEADLESS="false"
 ```
 
-Then start Chrome once with the same profile, log in and pass any service checks:
+Then start Chrome once with the same service profile, log in and pass any service checks:
 
 ```bash
+npm run chrome -- youtube
+npm run login -- youtube cdp
+
 npm run chrome -- soundcloud
 npm run login -- soundcloud cdp
 ```
 
-After that, scheduled worker runs reuse `worker/chrome-profile/soundcloud`. This does not solve captcha automatically; it makes the worker use the same long-lived browser profile after you pass checks manually.
+After that, scheduled worker runs reuse `worker/chrome-profile/youtube` for YouTube Music and `worker/chrome-profile/soundcloud` for SoundCloud. This does not solve captcha automatically; it makes the worker use the same long-lived browser profiles after you pass checks manually.
 
 Build and start the web app on the VM:
 
