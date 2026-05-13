@@ -4,7 +4,7 @@ import { openWorkerBrowser, type WorkerBrowserSession } from "./browserSession";
 const pool = new Map<ServiceId, WorkerBrowserSession>();
 
 export function sessionReuseEnabled(): boolean {
-  return process.env.WORKER_SESSION_REUSE === "true";
+  return process.env.WORKER_SESSION_REUSE !== "false";
 }
 
 export async function acquireSession(service: ServiceId): Promise<WorkerBrowserSession> {

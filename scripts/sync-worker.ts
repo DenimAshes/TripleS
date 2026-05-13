@@ -85,6 +85,14 @@ async function main() {
   }
 
   for (const rule of slice) {
+    const runningJob = await prisma.syncJob.findFirst({
+      where: { syncRuleId: rule.id, status: "RUNNING" },
+      select: { id: true, startedAt: true },
+    });
+    if (runningJob) {
+      console.log(`[sync-worker] Skipping ${rule.name} (${rule.id}) because job ${runningJob.id} is already RUNNING since ${runningJob.startedAt.toISOString()}.`);
+      continue;
+    }
     console.log(`Running sync rule ${rule.name} (${rule.id})`);
     await runSync(rule.id);
   }

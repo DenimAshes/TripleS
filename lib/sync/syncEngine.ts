@@ -13,6 +13,8 @@ const WRITE_THROTTLE_MIN_MS = Number(process.env.WORKER_WRITE_THROTTLE_MIN_MS ??
 const WRITE_THROTTLE_SPREAD_MS = Number(process.env.WORKER_WRITE_THROTTLE_SPREAD_MS ?? 8000);
 const WRITE_BURST_LONG_PAUSE_MIN_MS = Number(process.env.WORKER_WRITE_LONG_PAUSE_MIN_MS ?? 60_000);
 const WRITE_BURST_LONG_PAUSE_SPREAD_MS = Number(process.env.WORKER_WRITE_LONG_PAUSE_SPREAD_MS ?? 120_000);
+const MAX_TRACKS_PER_RUN = Number(process.env.WORKER_MAX_TRACKS_PER_RUN ?? 10);
+const SKIP_PREVIOUSLY_LOGGED = process.env.WORKER_SKIP_PREVIOUSLY_LOGGED !== "false";
 
 let writesSinceLongPause = 0;
 let writesBeforeNextLongPause = 2 + Math.floor(Math.random() * 3);
@@ -87,6 +89,28 @@ function normalizedFromServiceTrack(track: ServiceTrack): NormalizedTrack {
 
 function nextScheduledRun(intervalMinutes: number) {
   return intervalMinutes > 0 ? new Date(Date.now() + intervalMinutes * 60_000) : null;
+}
+
+function boundedTrackCount(): number {
+  return Number.isFinite(MAX_TRACKS_PER_RUN) && MAX_TRACKS_PER_RUN > 0 ? Math.floor(MAX_TRACKS_PER_RUN) : 0;
+}
+
+async function getPreviouslyLoggedTitles(syncRuleId: string, service: string, playlistId: string): Promise<Set<string>> {
+  if (!SKIP_PREVIOUSLY_LOGGED) return new Set();
+  const logs = await prisma.syncLog.findMany({
+    where: {
+      service,
+      playlistId,
+      action: {
+        in: ["synced", "already_synced", "manual_required", "not_found", "rejected_candidate"],
+      },
+      syncJob: {
+        syncRuleId,
+      },
+    },
+    select: { trackTitle: true },
+  });
+  return new Set(logs.map((log) => log.trackTitle));
 }
 
 async function getDestinationPlaylist(service: string, servicePlaylistId: string) {
@@ -202,6 +226,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
   });
 
   const stats = { synced: 0, alreadySynced: 0, notFound: 0, manualRequired: 0, removed: 0 };
+  let deferredByBatchLimit = false;
   const sourceAdapter = getAdapter(rule.sourceService, rule.userId);
   const sourceTracks = await sourceAdapter.getPlaylistTracks(rule.sourcePlaylistId);
   const sourcePlaylist = await getDestinationPlaylist(rule.sourceService, rule.sourcePlaylistId);
@@ -252,8 +277,19 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
           : [],
       );
       const sourceIds = new Set(sourceTracks.map((track) => track.isrc || track.sourceTrackId));
+      const previouslyLoggedTitles = await getPreviouslyLoggedTitles(syncRuleId, destination.service, destination.playlistId);
+      const maxTracksThisRun = boundedTrackCount();
+      let processedThisRun = 0;
 
       for (const sourceTrack of sourceTracks) {
+        if (previouslyLoggedTitles.has(sourceTrack.title)) {
+          continue;
+        }
+        if (maxTracksThisRun > 0 && processedThisRun >= maxTracksThisRun) {
+          deferredByBatchLimit = true;
+          break;
+        }
+        processedThisRun += 1;
         const sourceServiceTrack = await upsertServiceTrack(sourceTrack);
         if (sourceExcludedTrackIds.has(sourceServiceTrack.id)) {
           continue;
@@ -458,7 +494,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       where: { id: syncRuleId },
       data: {
         lastRunAt: new Date(),
-        nextRunAt: nextScheduledRun(rule.intervalMinutes),
+        nextRunAt: deferredByBatchLimit ? null : nextScheduledRun(rule.intervalMinutes),
       },
     });
     await recordSuccessForRule([rule.sourceService, ...rule.destinations.map((destination) => destination.service)]).catch(() => {});

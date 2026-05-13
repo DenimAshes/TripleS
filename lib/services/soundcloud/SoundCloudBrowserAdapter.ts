@@ -2,13 +2,13 @@ import type { MusicServiceAdapter } from "../MusicServiceAdapter";
 import type { NormalizedPlaylist, NormalizedTrack, TokenPair, TrackSearchQuery } from "@/lib/sync/syncTypes";
 import { cachedSearchTracks } from "@/lib/services/searchCache";
 import {
-  addSoundCloudTrackToPlaylistCli,
-  createSoundCloudPlaylistCli,
-  listSoundCloudPlaylistTracksCli,
-  listSoundCloudPlaylistsCli,
-  removeSoundCloudTrackFromPlaylistCli,
-  searchSoundCloudTracksCli,
-} from "./soundCloudBrowserCli";
+  addSoundCloudTrackToPlaylist,
+  createSoundCloudPlaylist,
+  listSoundCloudPlaylistTracks,
+  listSoundCloudPlaylists,
+  removeSoundCloudTrackFromPlaylist,
+  searchSoundCloudTracks,
+} from "@/worker/runners/soundcloud";
 
 export class SoundCloudBrowserAdapter implements MusicServiceAdapter {
   async getCurrentUser() {
@@ -16,7 +16,7 @@ export class SoundCloudBrowserAdapter implements MusicServiceAdapter {
   }
 
   async getPlaylists(): Promise<NormalizedPlaylist[]> {
-    const playlists = await listSoundCloudPlaylistsCli();
+    const playlists = await listSoundCloudPlaylists();
     return playlists.map((playlist) => ({
       id: playlist.id,
       name: playlist.name,
@@ -27,7 +27,7 @@ export class SoundCloudBrowserAdapter implements MusicServiceAdapter {
   }
 
   async createPlaylist(name: string): Promise<NormalizedPlaylist> {
-    const playlist = await createSoundCloudPlaylistCli(name);
+    const playlist = await createSoundCloudPlaylist(name);
     return {
       id: playlist.id,
       name: playlist.name,
@@ -38,20 +38,20 @@ export class SoundCloudBrowserAdapter implements MusicServiceAdapter {
   }
 
   async getPlaylistTracks(playlistId: string): Promise<NormalizedTrack[]> {
-    return listSoundCloudPlaylistTracksCli(playlistId);
+    return listSoundCloudPlaylistTracks(playlistId);
   }
 
   async searchTrack(query: TrackSearchQuery): Promise<NormalizedTrack[]> {
-    return cachedSearchTracks("soundcloud", query.query, () => searchSoundCloudTracksCli(query.query));
+    return cachedSearchTracks("soundcloud", query.query, () => searchSoundCloudTracks(query.query));
   }
 
   async addTrackToPlaylist(playlistId: string, track: NormalizedTrack): Promise<void> {
     const trackId = track.url || track.sourceTrackId;
-    await addSoundCloudTrackToPlaylistCli(playlistId, trackId);
+    await addSoundCloudTrackToPlaylist(playlistId, trackId);
   }
 
   async removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void> {
-    await removeSoundCloudTrackFromPlaylistCli(playlistId, trackId);
+    await removeSoundCloudTrackFromPlaylist(playlistId, trackId);
   }
 
   async refreshAccessToken(): Promise<TokenPair> {
