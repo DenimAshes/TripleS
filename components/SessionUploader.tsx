@@ -47,12 +47,12 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [pasted, setPasted] = useState("");
 
-  async function upload(file: File) {
+  async function uploadText(text: string) {
     setBusy(true);
     setError(null);
     try {
-      const text = await file.text();
       const res = await fetch(`/api/admin/sessions/${info.service}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -69,12 +69,27 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
           updatedAt: new Date().toISOString(),
           updatedBy: data.updatedBy ?? null,
         });
+        setPasted("");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function upload(file: File) {
+    const text = await file.text();
+    await uploadText(text);
+  }
+
+  async function submitPasted() {
+    const trimmed = pasted.trim();
+    if (!trimmed) {
+      setError("Paste JSON first.");
+      return;
+    }
+    await uploadText(trimmed);
   }
 
   async function clear() {
@@ -149,6 +164,45 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
         />
         {busy ? "Uploading…" : "Drop storageState.json or click"}
       </label>
+      <details className="mt-3 text-xs text-neutral-600 dark:text-neutral-400">
+        <summary className="cursor-pointer select-none hover:text-neutral-900 dark:hover:text-neutral-200">Or paste JSON</summary>
+        <textarea
+          value={pasted}
+          onChange={(e) => setPasted(e.target.value)}
+          onPaste={(e) => {
+            const text = e.clipboardData.getData("text");
+            if (text) {
+              e.preventDefault();
+              setPasted(text);
+            }
+          }}
+          placeholder='{ "cookies": [...], "origins": [...] }'
+          spellCheck={false}
+          rows={4}
+          disabled={busy}
+          className="mt-2 w-full rounded border border-neutral-300 bg-white p-2 font-mono text-xs text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={submitPasted}
+            disabled={busy || pasted.trim().length === 0}
+            className="rounded bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+          >
+            {busy ? "Uploading…" : "Upload pasted JSON"}
+          </button>
+          {pasted && (
+            <button
+              type="button"
+              onClick={() => setPasted("")}
+              disabled={busy}
+              className="text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </details>
       {error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
       {info.exists && (
         <button
