@@ -14,8 +14,43 @@ type CheckResult = {
   details?: Record<string, unknown>;
 };
 
+let forceExitAfterChecks = false;
+
 function browserMode() {
   return process.env.WORKER_BROWSER || process.env.BROWSER_MODE || "state";
+}
+
+function checkTimeoutMs(): number {
+  const value = Number(process.env.WORKER_CHECK_TIMEOUT_MS ?? 90_000);
+  return Number.isFinite(value) && value > 0 ? value : 90_000;
+}
+
+async function withTimeout<T extends CheckResult>(
+  service: CheckResult["service"],
+  task: Promise<T>,
+): Promise<T | CheckResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = checkTimeoutMs();
+  const timedOut = new Promise<CheckResult>((resolve) => {
+    timer = setTimeout(() => {
+      forceExitAfterChecks = true;
+      resolve({
+        service,
+        status: "fail",
+        message: `Check timed out after ${timeout}ms.`,
+        details: {
+          timeoutMs: timeout,
+          recovery: "Try WORKER_BROWSER=state, refresh the service session, or run the check again with WORKER_CHECK_TIMEOUT_MS=180000.",
+        },
+      });
+    }, timeout);
+  });
+
+  try {
+    return await Promise.race([task, timedOut]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function classifyError(error: unknown): { status: CheckStatus; message: string } {
@@ -211,7 +246,39 @@ async function checkCloakBinary(): Promise<CheckResult> {
 }
 
 async function main() {
-  const checks = [await checkEnvironment(), await checkCloakBinary(), await checkDatabase(), await checkYouTube(), await checkSoundCloud()];
+  const environment = await checkEnvironment();
+  const cloak = await checkCloakBinary();
+  const database = await checkDatabase();
+  const checks = [environment, cloak, database];
+
+  const cloakInstalled = cloak.details?.installed === true;
+  const canSkipCloak = browserMode() === "cdp";
+  const allowDownload = process.env.WORKER_CHECK_INSTALL_BINARY === "true";
+
+  if (!cloakInstalled && !canSkipCloak && !allowDownload) {
+    const details = {
+      reason: "CloakBrowser binary is missing, and worker:check does not auto-download it by default.",
+      recovery: "Run npm run cloak:install, or set WORKER_CHECK_INSTALL_BINARY=true for this check.",
+      ...sessionDetails("youtube"),
+    };
+    checks.push(
+      {
+        service: "youtube",
+        status: "warn",
+        message: "Skipped browser check because CloakBrowser binary is not installed.",
+        details,
+      },
+      {
+        service: "soundcloud",
+        status: "warn",
+        message: "Skipped browser check because CloakBrowser binary is not installed.",
+        details: { ...details, ...sessionDetails("soundcloud") },
+      },
+    );
+  } else {
+    checks.push(await withTimeout("youtube", checkYouTube()));
+    checks.push(await withTimeout("soundcloud", checkSoundCloud()));
+  }
 
   if (jsonOutput()) {
     const overall: CheckStatus = checks.some((c) => c.status === "fail")
@@ -236,4 +303,7 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    if (forceExitAfterChecks) {
+      process.exit(process.exitCode || 1);
+    }
   });

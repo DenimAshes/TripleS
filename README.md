@@ -81,6 +81,8 @@ url      = env("DATABASE_URL")
 
 Then set `DATABASE_URL` to the Supabase pooled or direct connection string and run a new migration. PostgreSQL also supports native Prisma enums, so the string enum-like fields can be converted back to Prisma `enum` blocks during that migration.
 
+For hosted Postgres, `DATABASE_URL` is the runtime connection string. `DIRECT_URL` is optional but recommended for migrations when the provider offers a direct non-pooled URL. The build script uses `DIRECT_URL` for `prisma migrate deploy` when it is present and falls back to `DATABASE_URL` otherwise.
+
 ## Spotify API
 
 Create a Spotify app in the Spotify Developer Dashboard and add this redirect URI:

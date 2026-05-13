@@ -32,6 +32,7 @@ Set these in Vercel for Production and Preview:
 
 ```txt
 DATABASE_URL
+DIRECT_URL
 ADMIN_EMAIL
 ADMIN_PASSWORD
 JWT_SECRET
@@ -47,6 +48,7 @@ Set the same server secrets in GitHub Actions, plus browser state:
 
 ```txt
 DATABASE_URL
+DIRECT_URL
 JWT_SECRET
 ENCRYPTION_KEY
 CRON_SECRET
@@ -69,10 +71,13 @@ Run migrations against the hosted Neon database:
 
 ```powershell
 $env:DATABASE_URL="postgresql://..."
+$env:DIRECT_URL="postgresql://..."
 npx prisma migrate deploy
 npx prisma db seed
 npm run db:health
 ```
+
+`DATABASE_URL` should use the pooled Neon connection for the app. `DIRECT_URL` should use Neon's direct connection string for migrations. If `DIRECT_URL` is not set, the build script falls back to `DATABASE_URL`.
 
 For production, replace the default admin password immediately through a safer account flow before sharing the domain.
 
