@@ -135,7 +135,7 @@ npm run login -- youtube cdp
 npm run yt -- list
 ```
 
-`npm run chrome` starts a normal Chrome process with a dedicated profile at `worker/chrome-profile` and a CDP port. Log in normally in that Chrome window, keep it open, then run the `login` command to verify the session and export `worker/state/youtube.json`. The saved state is ignored by git.
+`npm run chrome` starts a normal Chrome process with a dedicated service profile such as `worker/chrome-profile/youtube` and a CDP port. Log in normally in that Chrome window, keep it open, then run the `login` command to verify the session and export `worker/state/youtube.json`. The saved state and profile are ignored by git.
 
 Runner commands:
 
@@ -242,7 +242,7 @@ npm run library -- spotify
 npm run library -- soundcloud
 ```
 
-By default runners use the saved state headlessly. Set `WORKER_BROWSER=cdp` to operate against the already running Chrome window, `HEADLESS=false` to debug visually, and `YT_DEBUG=true` to save screenshots/HTML under `worker/state`.
+By default runners use the saved state headlessly. Set `WORKER_BROWSER=cdp` to operate against the already running Chrome window, or `WORKER_BROWSER=profile` to reuse the full persistent Chrome profile for that service. Set `HEADLESS=false` to debug visually, and `YT_DEBUG=true` to save screenshots/HTML under `worker/state`.
 
 This keeps Spotify and SoundCloud behavior unchanged. YouTube browser mode is best used locally or in a controlled worker process; it depends on a valid `worker/state/youtube.json`.
 

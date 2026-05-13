@@ -2,7 +2,7 @@ import path from "node:path";
 import fs from "node:fs";
 
 export type ServiceId = "youtube" | "spotify" | "soundcloud";
-export type BrowserMode = "state" | "firefox" | "chrome" | "cdp";
+export type BrowserMode = "state" | "profile" | "firefox" | "chrome" | "cdp";
 
 const STATE_DIR = path.resolve(process.cwd(), "worker", "state");
 const PROFILE_DIR = path.resolve(process.cwd(), "worker", "chrome-profile");
@@ -18,8 +18,9 @@ export function debugArtifactPath(fileName: string): string {
   return path.join(STATE_DIR, fileName);
 }
 
-export function chromeProfilePath(): string {
-  return process.env.CHROME_USER_DATA_DIR || PROFILE_DIR;
+export function chromeProfilePath(service?: ServiceId): string {
+  if (process.env.CHROME_USER_DATA_DIR) return process.env.CHROME_USER_DATA_DIR;
+  return service ? path.join(PROFILE_DIR, service) : PROFILE_DIR;
 }
 
 export function ensureStateDir(): void {

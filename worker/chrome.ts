@@ -30,7 +30,7 @@ function cdpPort(): string {
 
 async function main() {
   const service = parseService(process.argv[2]) || "youtube";
-  const profile = chromeProfilePath();
+  const profile = chromeProfilePath(service);
   fs.mkdirSync(profile, { recursive: true });
 
   const chrome = findChromeExecutable();

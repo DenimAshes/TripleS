@@ -1,6 +1,13 @@
 import fs from "node:fs";
 import { chromium, firefox, type Browser, type BrowserContext, type BrowserType, type Page } from "playwright";
-import { DEFAULT_CDP_URL, ensureStateDir, stateFilePath, type BrowserMode, type ServiceId } from "./config";
+import {
+  DEFAULT_CDP_URL,
+  chromeProfilePath,
+  ensureStateDir,
+  stateFilePath,
+  type BrowserMode,
+  type ServiceId,
+} from "./config";
 
 export type WorkerBrowserSession = {
   context: BrowserContext;
@@ -18,20 +25,29 @@ export type WorkerBrowserOptions = {
 
 function browserMode(): BrowserMode {
   const value = process.env.WORKER_BROWSER || process.env.BROWSER_MODE;
-  if (value === "firefox" || value === "chrome" || value === "cdp" || value === "state") return value;
+  if (value === "firefox" || value === "chrome" || value === "cdp" || value === "state" || value === "profile") return value;
   return "state";
 }
 
-function chromeUserAgent(browser: Browser): string {
-  const major = browser.version().split(".")[0] || "130";
+function chromeUserAgent(browser?: Browser): string {
+  const major = browser?.version().split(".")[0] || "130";
   return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`;
+}
+
+function trustedChromeArgs(): string[] {
+  return [
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-dev-shm-usage",
+    "--disable-features=Translate,MediaRouter",
+  ];
 }
 
 async function launchChrome(headless: boolean): Promise<Browser> {
   try {
-    return await chromium.launch({ channel: "chrome", headless });
+    return await chromium.launch({ channel: "chrome", headless, args: trustedChromeArgs() });
   } catch {
-    return chromium.launch({ headless });
+    return chromium.launch({ headless, args: trustedChromeArgs() });
   }
 }
 
@@ -89,6 +105,29 @@ export async function openWorkerBrowser(options: WorkerBrowserOptions): Promise<
       page,
       close: async () => {
         await browser.close();
+      },
+    };
+  }
+
+  if (mode === "profile") {
+    const profilePath = chromeProfilePath(options.service);
+    fs.mkdirSync(profilePath, { recursive: true });
+    const launchOptions = {
+      headless,
+      args: trustedChromeArgs(),
+      viewport: { width: 1280, height: 800 },
+      locale: "en-US",
+    };
+    const context = await chromium.launchPersistentContext(profilePath, {
+      ...launchOptions,
+      channel: "chrome",
+    }).catch(() => chromium.launchPersistentContext(profilePath, launchOptions));
+    const page = context.pages()[0] || (await context.newPage());
+    return {
+      context,
+      page,
+      close: async () => {
+        await context.close();
       },
     };
   }

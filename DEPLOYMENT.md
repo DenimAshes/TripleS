@@ -9,6 +9,8 @@ Target architecture:
 
 This keeps the app usable from a domain while avoiding local files on your computer after setup. Browser automation should not run as the main scheduled worker inside Vercel functions because free Hobby functions have short execution limits and no persistent browser profile.
 
+Browser write actions are most reliable with a trusted persistent profile. GitHub Actions uses `WORKER_BROWSER=state`, which restores cookies/localStorage from secrets. A VM can use `WORKER_BROWSER=profile`, which keeps a full Chrome profile between runs and behaves closer to a normal browser session.
+
 If you do not want GitHub Actions, use the VM path below. The clean free-server target is:
 
 - Vercel for the public web app, or the VM web container if you want one machine to host everything.
@@ -89,6 +91,8 @@ The workflow at `.github/workflows/sync-worker.yml` runs every 6 hours and can a
 3. Restores YouTube/SoundCloud session state from secrets.
 4. Runs `npm run sync-worker`.
 
+GitHub Actions is good for scheduled read-heavy sync. If a service asks for captcha or blocks write requests, refresh the browser session locally or use the VM profile mode below.
+
 ## VM Worker Without GitHub Actions
 
 The repo includes Docker and systemd files for a Linux VM:
@@ -126,6 +130,22 @@ Put the outputs into `.env.production` as:
 YOUTUBE_STATE_GZIP_BASE64="..."
 SOUNDCLOUD_STATE_GZIP_BASE64="..."
 ```
+
+For a VM that should keep a full trusted browser profile instead of only storage-state JSON, set:
+
+```txt
+WORKER_BROWSER="profile"
+HEADLESS="false"
+```
+
+Then start Chrome once with the same profile, log in and pass any service checks:
+
+```bash
+npm run chrome -- soundcloud
+npm run login -- soundcloud cdp
+```
+
+After that, scheduled worker runs reuse `worker/chrome-profile/soundcloud`. This does not solve captcha automatically; it makes the worker use the same long-lived browser profile after you pass checks manually.
 
 Build and start the web app on the VM:
 
