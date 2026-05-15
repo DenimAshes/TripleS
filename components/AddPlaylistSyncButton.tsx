@@ -3,6 +3,7 @@
 import { Link2, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { pollBrowserJob, startBrowserJob } from "./browserJobClient";
 
 export type SyncPlaylistOption = {
   id: string;
@@ -19,6 +20,10 @@ const SERVICE_LABELS: Record<string, string> = {
   SOUNDCLOUD: "SoundCloud",
 };
 
+function serviceKey(service: string) {
+  return service.toUpperCase();
+}
+
 export function AddPlaylistSyncButton({
   sourcePlaylistId,
   sourceService,
@@ -31,18 +36,19 @@ export function AddPlaylistSyncButton({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [activeService, setActiveService] = useState(
-    playlists.find((playlist) => playlist.service !== sourceService && playlist.isWritable && !playlist.isConnected)?.service || "",
+    serviceKey(playlists.find((playlist) => serviceKey(playlist.service) !== serviceKey(sourceService) && playlist.isWritable && !playlist.isConnected)?.service || ""),
   );
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const services = useMemo(
-    () => Array.from(new Set(playlists.filter((playlist) => playlist.service !== sourceService).map((playlist) => playlist.service))),
+    () => Array.from(new Set(playlists.filter((playlist) => serviceKey(playlist.service) !== serviceKey(sourceService)).map((playlist) => serviceKey(playlist.service)))),
     [playlists, sourceService],
   );
-  const activePlaylists = playlists.filter((playlist) => playlist.service === activeService && playlist.id !== sourcePlaylistId);
+  const activePlaylists = playlists.filter((playlist) => serviceKey(playlist.service) === activeService && playlist.id !== sourcePlaylistId);
 
   function toggle(id: string) {
     setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
@@ -50,37 +56,40 @@ export function AddPlaylistSyncButton({
 
   async function save() {
     setSaving(true);
+    setStatus("Queued");
     setError(null);
-    const response = await fetch("/api/playlist-groups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      const started = await startBrowserJob("playlistGroup.connect", {
         sourcePlaylistId,
         destinationPlaylistIds: selectedIds,
         mode: "ADD_ONLY",
         intervalMinutes: 0,
         isEnabled: true,
-      }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    setSaving(false);
-    if (!response.ok) {
-      setError(payload.error || "Could not connect playlists.");
-      return;
+      });
+      setStatus(started.currentStep);
+      const finished = await pollBrowserJob(started.id, (job) => setStatus(job.currentStep));
+      if (finished.status === "failed") {
+        setError(finished.error || "Could not connect playlists.");
+        return;
+      }
+      setOpen(false);
+      setSelectedIds([]);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not connect playlists.");
+    } finally {
+      setSaving(false);
+      setStatus(null);
     }
-    setOpen(false);
-    setSelectedIds([]);
-    router.refresh();
   }
 
   async function createAndConnect() {
     if (!activeService || !newPlaylistName.trim()) return;
     setSaving(true);
+    setStatus("Queued");
     setError(null);
-    const response = await fetch("/api/playlist-groups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    try {
+      const started = await startBrowserJob("playlistGroup.connect", {
         sourcePlaylistId,
         createDestination: {
           service: activeService,
@@ -89,18 +98,23 @@ export function AddPlaylistSyncButton({
         mode: "ADD_ONLY",
         intervalMinutes: 0,
         isEnabled: true,
-      }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    setSaving(false);
-    if (!response.ok) {
-      setError(payload.error || "Could not create playlist.");
-      return;
+      });
+      setStatus(started.currentStep);
+      const finished = await pollBrowserJob(started.id, (job) => setStatus(job.currentStep));
+      if (finished.status === "failed") {
+        setError(finished.error || "Could not create playlist.");
+        return;
+      }
+      setOpen(false);
+      setSelectedIds([]);
+      setNewPlaylistName("");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create playlist.");
+    } finally {
+      setSaving(false);
+      setStatus(null);
     }
-    setOpen(false);
-    setSelectedIds([]);
-    setNewPlaylistName("");
-    router.refresh();
   }
 
   return (
@@ -198,6 +212,7 @@ export function AddPlaylistSyncButton({
                 )}
               </div>
 
+              {status ? <div className="rounded-md border border-[#deded8] bg-[#f7f7f4] p-3 text-sm text-[#444852]">{status}</div> : null}
               {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
 
               <div className="flex justify-end gap-2 border-t border-[#deded8] pt-4">

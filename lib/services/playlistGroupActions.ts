@@ -1,6 +1,13 @@
 import { prisma } from "@/lib/db/prisma";
 import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
 
+export class PlaylistGroupError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = "PlaylistGroupError";
+  }
+}
+
 export type ConnectPlaylistsInput = {
   sourcePlaylistId: string;
   destinationPlaylistIds?: string[];
@@ -29,24 +36,24 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
   const intervalMinutes = Number(input.intervalMinutes || 0);
 
   if (!sourcePlaylistId || (destinationPlaylistIds.length === 0 && !createDestination)) {
-    throw new Error("Choose playlists to connect.");
+    throw new PlaylistGroupError(400, "Choose playlists to connect.");
   }
   if (createDestination && (!createDestination.service || !createDestination.name)) {
-    throw new Error("Name the new playlist.");
+    throw new PlaylistGroupError(400, "Name the new playlist.");
   }
 
   const source = await prisma.playlist.findUnique({ where: { id: sourcePlaylistId } });
   if (!source || source.userId !== userId) {
-    throw new Error("Main playlist not found.");
+    throw new PlaylistGroupError(404, "Main playlist not found.");
   }
 
   if (createDestination) {
     const service = serviceEnum(serviceKey(createDestination.service));
     if (service === source.service) {
-      throw new Error("Choose another platform for the new playlist.");
+      throw new PlaylistGroupError(409, "Choose another platform for the new playlist.");
     }
     if (service === "YOUTUBE") {
-      throw new Error("Create the YouTube Music playlist there first, then choose it here.");
+      throw new PlaylistGroupError(409, "Create the YouTube Music playlist there first, then choose it here.");
     }
     const adapter = getAdapter(service, userId);
     const created = await adapter.createPlaylist(createDestination.name);
@@ -85,18 +92,18 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
     where: { id: { in: playlistIds }, userId },
   });
   if (playlists.length !== playlistIds.length) {
-    throw new Error("Playlist not found.");
+    throw new PlaylistGroupError(404, "Playlist not found.");
   }
 
   const destinations = playlists.filter((playlist) => destinationPlaylistIds.includes(playlist.id));
   const notWritable = destinations.find((playlist) => !playlist.isWritable);
   if (notWritable) {
-    throw new Error(`${notWritable.name} cannot be changed from this app.`);
+    throw new PlaylistGroupError(409, `${notWritable.name} cannot be changed from this app.`);
   }
 
   const services = new Set(playlists.map((playlist) => playlist.service));
   if (services.size !== playlists.length) {
-    throw new Error("Choose only one playlist from each platform.");
+    throw new PlaylistGroupError(400, "Choose only one playlist from each platform.");
   }
 
   const existingMembers = await prisma.playlistGroupMember.findMany({
@@ -106,7 +113,7 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
   const sourceGroup = existingMembers.find((member) => member.playlistId === sourcePlaylistId)?.group;
   const blocked = existingMembers.find((member) => member.groupId !== sourceGroup?.id);
   if (blocked) {
-    throw new Error(`${blocked.playlist.name} is already connected to another group.`);
+    throw new PlaylistGroupError(409, `${blocked.playlist.name} is already connected to another group.`);
   }
   if (sourceGroup) {
     const groupMembers = await prisma.playlistGroupMember.findMany({ where: { groupId: sourceGroup.id } });
@@ -114,7 +121,7 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
     for (const destination of destinations) {
       const alreadyThisPlaylist = groupMembers.some((member) => member.playlistId === destination.id);
       if (!alreadyThisPlaylist && usedServices.has(destination.service)) {
-        throw new Error(`This connection already has a ${destination.service} playlist.`);
+        throw new PlaylistGroupError(409, `This connection already has a ${destination.service} playlist.`);
       }
     }
   }

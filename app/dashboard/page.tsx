@@ -27,6 +27,8 @@ export default async function DashboardPage() {
     return classified ? [classified] : [];
   });
   const stats = lastJob ? JSON.parse(lastJob.statsJson) : { synced: 0, alreadySynced: 0, notFound: 0, manualRequired: 0 };
+  const bySource: Record<string, number> = stats.bySource && typeof stats.bySource === "object" ? stats.bySource : {};
+  const bySourceEntries = Object.entries(bySource).sort((a, b) => b[1] - a[1]);
   const lastChangedAt = playlists.reduce<Date | null>(
     (latest, playlist) => (!latest || playlist.updatedAt > latest ? playlist.updatedAt : latest),
     null,
@@ -71,6 +73,19 @@ export default async function DashboardPage() {
           <div className="rounded-md bg-[#f0f0ec] p-3"><div className="text-2xl font-semibold">{stats.notFound}</div><div className="text-sm text-[#666a73]">not found</div></div>
           <div className="rounded-md bg-[#f0f0ec] p-3"><div className="text-2xl font-semibold">{stats.manualRequired}</div><div className="text-sm text-[#666a73]">review</div></div>
         </div>
+        {bySourceEntries.length ? (
+          <div className="mt-4">
+            <h3 className="mb-2 text-sm font-semibold text-[#666a73]">Match sources</h3>
+            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+              {bySourceEntries.map(([source, count]) => (
+                <div key={source} className="flex items-baseline justify-between rounded-md bg-[#f0f0ec] px-3 py-2">
+                  <div className="text-xs text-[#666a73]">{source}</div>
+                  <div className="text-lg font-semibold">{count}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
     </AppShell>
   );
