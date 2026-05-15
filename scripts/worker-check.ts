@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import { binaryInfo } from "cloakbrowser";
 import { prisma } from "@/lib/db/prisma";
-import { listSoundCloudPlaylists } from "@/worker/runners/soundcloud";
-import { listYouTubePlaylists } from "@/worker/runners/youtube";
+import { listSoundCloudPlaylistsCli } from "@/lib/services/soundcloud/soundCloudBrowserCli";
+import { listYouTubePlaylistsCli } from "@/lib/services/youtube/youtubeBrowserCli";
 import { chromeProfilePath, stateFilePath, type ServiceId } from "@/worker/config";
 
 type CheckStatus = "ok" | "warn" | "fail";
@@ -14,8 +14,6 @@ type CheckResult = {
   details?: Record<string, unknown>;
 };
 
-let forceExitAfterChecks = false;
-
 function browserMode() {
   return process.env.WORKER_BROWSER || process.env.BROWSER_MODE || "state";
 }
@@ -23,34 +21,6 @@ function browserMode() {
 function checkTimeoutMs(): number {
   const value = Number(process.env.WORKER_CHECK_TIMEOUT_MS ?? 90_000);
   return Number.isFinite(value) && value > 0 ? value : 90_000;
-}
-
-async function withTimeout<T extends CheckResult>(
-  service: CheckResult["service"],
-  task: Promise<T>,
-): Promise<T | CheckResult> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = checkTimeoutMs();
-  const timedOut = new Promise<CheckResult>((resolve) => {
-    timer = setTimeout(() => {
-      forceExitAfterChecks = true;
-      resolve({
-        service,
-        status: "fail",
-        message: `Check timed out after ${timeout}ms.`,
-        details: {
-          timeoutMs: timeout,
-          recovery: "Try WORKER_BROWSER=state, refresh the service session, or run the check again with WORKER_CHECK_TIMEOUT_MS=180000.",
-        },
-      });
-    }, timeout);
-  });
-
-  try {
-    return await Promise.race([task, timedOut]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
 }
 
 function classifyError(error: unknown): { status: CheckStatus; message: string } {
@@ -139,7 +109,7 @@ async function checkDatabase(): Promise<CheckResult> {
 
 async function checkYouTube(): Promise<CheckResult> {
   try {
-    const playlists = await listYouTubePlaylists();
+    const playlists = await listYouTubePlaylistsCli();
     return {
       service: "youtube",
       status: playlists.length > 0 ? "ok" : "warn",
@@ -172,7 +142,7 @@ async function checkYouTube(): Promise<CheckResult> {
 
 async function checkSoundCloud(): Promise<CheckResult> {
   try {
-    const playlists = await listSoundCloudPlaylists();
+    const playlists = await listSoundCloudPlaylistsCli();
     const writableCount = playlists.filter((playlist) => playlist.isWritable).length;
     return {
       service: "soundcloud",
@@ -222,6 +192,27 @@ function liveOutput(): boolean {
   return process.argv.includes("--live") || process.env.WORKER_CHECK_LIVE === "true";
 }
 
+function selectedService(): ServiceId | null {
+  const arg = process.argv.find((value) => value.startsWith("--service="));
+  if (!arg) return null;
+  const raw = arg.slice("--service=".length).toLowerCase();
+  if (raw === "youtube" || raw === "soundcloud" || raw === "library") return raw as ServiceId;
+  if (raw === "yt") return "youtube";
+  if (raw === "sc") return "soundcloud";
+  throw new Error(`Unknown --service=${raw}. Use youtube|soundcloud.`);
+}
+
+function alignCliTimeoutsForLiveCheck(): void {
+  const timeout = String(checkTimeoutMs());
+  if (process.env.WORKER_CHECK_TIMEOUT_MS) {
+    process.env.YOUTUBE_CLI_TIMEOUT_MS = timeout;
+    process.env.SOUNDCLOUD_CLI_TIMEOUT_MS = timeout;
+    return;
+  }
+  process.env.YOUTUBE_CLI_TIMEOUT_MS ||= timeout;
+  process.env.SOUNDCLOUD_CLI_TIMEOUT_MS ||= timeout;
+}
+
 async function checkCloakBinary(): Promise<CheckResult> {
   try {
     const info = binaryInfo();
@@ -254,49 +245,58 @@ async function main() {
   const cloak = await checkCloakBinary();
   const database = await checkDatabase();
   const checks = [environment, cloak, database];
+  if (liveOutput()) {
+    alignCliTimeoutsForLiveCheck();
+  }
 
   const cloakInstalled = cloak.details?.installed === true;
   const canSkipCloak = browserMode() === "cdp";
   const allowDownload = process.env.WORKER_CHECK_INSTALL_BINARY === "true";
 
+  const onlyService = selectedService();
+
   if (!liveOutput()) {
-    checks.push(
-      {
+    if (onlyService !== "soundcloud") {
+      checks.push({
         service: "youtube",
         status: "warn",
         message: "Skipped live browser check. Run npm run worker:check:live to open the service.",
         details: sessionDetails("youtube"),
-      },
-      {
+      });
+    }
+    if (onlyService !== "youtube") {
+      checks.push({
         service: "soundcloud",
         status: "warn",
         message: "Skipped live browser check. Run npm run worker:check:live to open the service.",
         details: sessionDetails("soundcloud"),
-      },
-    );
+      });
+    }
   } else if (!cloakInstalled && !canSkipCloak && !allowDownload) {
     const details = {
       reason: "CloakBrowser binary is missing, and worker:check does not auto-download it by default.",
       recovery: "Run npm run cloak:install, or set WORKER_CHECK_INSTALL_BINARY=true for this check.",
       ...sessionDetails("youtube"),
     };
-    checks.push(
-      {
+    if (onlyService !== "soundcloud") {
+      checks.push({
         service: "youtube",
         status: "warn",
         message: "Skipped browser check because CloakBrowser binary is not installed.",
         details,
-      },
-      {
+      });
+    }
+    if (onlyService !== "youtube") {
+      checks.push({
         service: "soundcloud",
         status: "warn",
         message: "Skipped browser check because CloakBrowser binary is not installed.",
         details: { ...details, ...sessionDetails("soundcloud") },
-      },
-    );
+      });
+    }
   } else {
-    checks.push(await withTimeout("youtube", checkYouTube()));
-    checks.push(await withTimeout("soundcloud", checkSoundCloud()));
+    if (onlyService !== "soundcloud") checks.push(await checkYouTube());
+    if (onlyService !== "youtube") checks.push(await checkSoundCloud());
   }
 
   if (jsonOutput()) {
@@ -322,7 +322,4 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
-    if (forceExitAfterChecks) {
-      process.exit(process.exitCode || 1);
-    }
   });
