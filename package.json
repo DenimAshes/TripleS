@@ -20,6 +20,7 @@
     "sync:doctor": "tsx scripts/sync-doctor.ts",
     "sync:dry": "tsx scripts/sync-dry-run.ts",
     "sync:cache:invalidate": "tsx scripts/sync-cache-invalidate.ts",
+    "cleanup:orphans": "tsx scripts/cleanup-orphaned-playlists.ts",
     "match:calibrate": "tsx scripts/match-calibration.ts",
     "sync-worker": "tsx scripts/sync-worker.ts",
     "browser-job-worker": "tsx scripts/browser-job-worker.ts",

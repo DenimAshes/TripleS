@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import {
   invokeSoundCloudAddTrack,
   invokeSoundCloudCreatePlaylist,
+  invokeSoundCloudDeletePlaylist,
   invokeSoundCloudListPlaylistTracks,
   invokeSoundCloudListPlaylists,
   invokeSoundCloudRemoveTrack,
@@ -73,6 +74,11 @@ export class SoundCloudBrowserAdapter implements MusicServiceAdapter {
   async removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void> {
     const writeId = await resolveSoundCloudWriteId(playlistId);
     await invokeSoundCloudRemoveTrack(writeId, trackId);
+  }
+
+  async deletePlaylist(playlistId: string): Promise<{ deleted: boolean }> {
+    const writeId = await resolveSoundCloudWriteId(playlistId);
+    return invokeSoundCloudDeletePlaylist(writeId);
   }
 
   async refreshAccessToken(): Promise<TokenPair> {

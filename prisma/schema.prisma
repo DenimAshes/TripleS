@@ -53,6 +53,7 @@ model Playlist {
   imageUrl          String?
   trackCount        Int
   isWritable        Boolean
+  createdBySystem   Boolean              @default(false)
   lastFetchedAt     DateTime?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt

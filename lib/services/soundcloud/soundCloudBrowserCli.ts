@@ -125,3 +125,7 @@ export async function createSoundCloudPlaylistCli(name: string): Promise<SoundCl
 export async function removeSoundCloudTrackFromPlaylistCli(playlistId: string, trackId: string): Promise<{ removed: boolean }> {
   return parseJsonObject<{ removed: boolean }>(await runSoundCloud(["remove", playlistId, trackId]));
 }
+
+export async function deleteSoundCloudPlaylistCli(playlistId: string): Promise<{ deleted: boolean }> {
+  return parseJsonObject<{ deleted: boolean }>(await runSoundCloud(["delete", playlistId]));
+}

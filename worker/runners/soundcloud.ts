@@ -233,6 +233,33 @@ async function apiPost<T>(page: Page, runtime: SoundCloudRuntime, url: string, b
   }, { requestUrl, body, timeoutMs: API_TIMEOUT_MS });
 }
 
+async function apiDelete(page: Page, runtime: SoundCloudRuntime, url: string): Promise<void> {
+  const requestUrl = withClientId(url, runtime.clientId);
+  await page.evaluate(async ({ requestUrl, timeoutMs }) => {
+    const cookies = Object.fromEntries(
+      document.cookie.split(";").map((item) => {
+        const [key, ...value] = item.trim().split("=");
+        return [decodeURIComponent(key), decodeURIComponent(value.join("="))];
+      }),
+    );
+    const oauthToken = cookies.oauth_token;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(requestUrl, {
+      method: "DELETE",
+      credentials: "include",
+      signal: controller.signal,
+      headers: {
+        ...(oauthToken ? { Authorization: `OAuth ${oauthToken}` } : {}),
+      },
+    }).finally(() => clearTimeout(timer));
+    if (!response.ok && response.status !== 404) {
+      const text = await response.text();
+      throw new Error(`SoundCloud API ${response.status}: ${text.slice(0, 300)}`);
+    }
+  }, { requestUrl, timeoutMs: API_TIMEOUT_MS });
+}
+
 async function apiGetCollection<T>(page: Page, runtime: SoundCloudRuntime, url: string, maxPages = 8): Promise<T[]> {
   const out: T[] = [];
   let nextUrl: string | null = url;
@@ -508,6 +535,19 @@ export async function createSoundCloudPlaylist(name: string): Promise<SoundCloud
   });
 }
 
+export async function deleteSoundCloudPlaylist(playlistIdOrUrl: string): Promise<{ deleted: boolean }> {
+  return withContext(async (_ctx, page) => {
+    const runtime = await getRuntime(page);
+    const playlist = await resolvePlaylistViaApi(page, runtime, playlistIdOrUrl);
+    if (!playlist?.id) return { deleted: false };
+    if (playlist.user_id !== runtime.userId) {
+      throw new Error("This SoundCloud playlist is not owned by the current user.");
+    }
+    await apiDelete(page, runtime, `/playlists/${playlist.id}`);
+    return { deleted: true };
+  });
+}
+
 export async function removeSoundCloudTrackFromPlaylist(playlistIdOrUrl: string, trackIdOrUrl: string): Promise<{ removed: boolean }> {
   return withContext(async (_ctx, page) => {
     const runtime = await getRuntime(page);
@@ -664,6 +704,14 @@ async function main() {
     const encoded = process.argv[3];
     if (!encoded) throw new Error('Usage: npm run sc -- create-b64 "<base64 playlist name>"');
     const result = await createSoundCloudPlaylist(Buffer.from(encoded, "base64").toString("utf8"));
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === "delete") {
+    const playlist = process.argv[3];
+    if (!playlist) throw new Error('Usage: npm run sc -- delete "<playlist id or url>"');
+    const result = await deleteSoundCloudPlaylist(playlist);
     console.log(JSON.stringify(result, null, 2));
     return;
   }

@@ -14,6 +14,7 @@ export interface MusicServiceAdapter {
   searchTrack(query: TrackSearchQuery): Promise<NormalizedTrack[]>;
   addTrackToPlaylist(playlistId: string, track: NormalizedTrack): Promise<void>;
   removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void>;
+  deletePlaylist?(playlistId: string): Promise<{ deleted: boolean }>;
   refreshAccessToken(): Promise<TokenPair>;
   isConnected(): boolean;
 }

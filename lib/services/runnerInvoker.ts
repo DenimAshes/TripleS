@@ -9,6 +9,7 @@ import {
 import {
   addSoundCloudTrackToPlaylistCli,
   createSoundCloudPlaylistCli,
+  deleteSoundCloudPlaylistCli,
   listSoundCloudPlaylistTracksCli,
   listSoundCloudPlaylistsCli,
   removeSoundCloudTrackFromPlaylistCli,
@@ -87,6 +88,11 @@ export async function invokeSoundCloudAddTrack(playlistId: string, trackId: stri
 export async function invokeSoundCloudRemoveTrack(playlistId: string, trackId: string): Promise<void> {
   browserRunnerMode("soundcloud");
   await removeSoundCloudTrackFromPlaylistCli(playlistId, trackId);
+}
+
+export async function invokeSoundCloudDeletePlaylist(playlistId: string): Promise<{ deleted: boolean }> {
+  browserRunnerMode("soundcloud");
+  return deleteSoundCloudPlaylistCli(playlistId);
 }
 
 function soundCloudPlaylistToNormalized(playlist: SoundCloudPlaylist): NormalizedPlaylist {

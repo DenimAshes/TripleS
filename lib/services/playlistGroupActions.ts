@@ -47,6 +47,12 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
     throw new PlaylistGroupError(404, "Main playlist not found.");
   }
 
+  // Track playlists we create on the remote service so we can roll them back
+  // if anything fails before the group/rule is fully committed. Without this,
+  // a transient DB error after createPlaylist would leave an empty playlist
+  // orphaned on SoundCloud.
+  const rollbackCreated: Array<{ service: string; servicePlaylistId: string; dbId: string }> = [];
+
   if (createDestination) {
     const service = serviceEnum(serviceKey(createDestination.service));
     if (service === source.service) {
@@ -68,6 +74,7 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
         isWritable: created.isWritable,
         apiId: created.apiId ?? null,
         permalink: created.permalink ?? null,
+        createdBySystem: true,
         lastFetchedAt: new Date(),
       },
       create: {
@@ -81,11 +88,31 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
         imageUrl: created.imageUrl,
         trackCount: created.trackCount,
         isWritable: created.isWritable,
+        createdBySystem: true,
         lastFetchedAt: new Date(),
       },
     });
     destinationPlaylistIds.push(playlist.id);
+    rollbackCreated.push({ service, servicePlaylistId: created.id, dbId: playlist.id });
   }
+
+  const rollback = async (cause: unknown) => {
+    for (const item of rollbackCreated) {
+      try {
+        const adapter = getAdapter(item.service, userId);
+        if (typeof adapter.deletePlaylist === "function") {
+          await adapter.deletePlaylist(item.servicePlaylistId);
+        }
+      } catch (deleteError) {
+        console.warn(
+          `[playlistGroupActions] failed to roll back ${item.service}:${item.servicePlaylistId} after error (${cause instanceof Error ? cause.message : String(cause)}): ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+        );
+      }
+      await prisma.playlist.delete({ where: { id: item.dbId } }).catch(() => undefined);
+    }
+  };
+
+  try {
 
   const playlistIds = [sourcePlaylistId, ...destinationPlaylistIds];
   const playlists = await prisma.playlist.findMany({
@@ -209,5 +236,9 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
       include: { members: { include: { playlist: true } } },
     });
   });
+  } catch (error) {
+    await rollback(error);
+    throw error;
+  }
 }
 
