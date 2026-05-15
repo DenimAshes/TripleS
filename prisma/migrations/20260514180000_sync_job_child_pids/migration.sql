@@ -1,0 +1,2 @@
+ALTER TABLE "SyncJob"
+  ADD COLUMN IF NOT EXISTS "childPidsJson" TEXT;
