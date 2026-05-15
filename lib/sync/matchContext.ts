@@ -230,6 +230,25 @@ export async function resolveInternalTrackId(track: NormalizedTrack): Promise<st
 }
 
 async function resolveInternalIdsForBatch(tracks: NormalizedTrack[]): Promise<Map<NormalizedTrack, string>> {
+  // First, see if any of these tracks already exist as ServiceTrack. If so,
+  // their existing internalTrackId is authoritative — using a different one
+  // (e.g. a fresh fingerprint-derived id) would leave the existing row
+  // orphaned because (service, serviceTrackId) is unique and createMany(skipDuplicates)
+  // silently keeps the old row.
+  const existing = await prisma.serviceTrack.findMany({
+    where: {
+      OR: tracks.map((track) => ({
+        service: serviceEnum(track.sourceService),
+        serviceTrackId: track.sourceTrackId,
+      })),
+    },
+    select: { service: true, serviceTrackId: true, internalTrackId: true },
+  });
+  const existingByKey = new Map<string, string>();
+  for (const row of existing) {
+    existingByKey.set(`${row.service}::${row.serviceTrackId}`, row.internalTrackId);
+  }
+
   const isrcs = Array.from(
     new Set(tracks.map((track) => track.isrc).filter((value): value is string => Boolean(value))),
   );
@@ -283,6 +302,11 @@ async function resolveInternalIdsForBatch(tracks: NormalizedTrack[]): Promise<Ma
   }
   const result = new Map<NormalizedTrack, string>();
   for (const track of tracks) {
+    const existingId = existingByKey.get(`${serviceEnum(track.sourceService)}::${track.sourceTrackId}`);
+    if (existingId) {
+      result.set(track, existingId);
+      continue;
+    }
     if (track.isrc && isrcToInternalId.has(track.isrc)) {
       result.set(track, isrcToInternalId.get(track.isrc)!);
     } else if (track.isrc) {

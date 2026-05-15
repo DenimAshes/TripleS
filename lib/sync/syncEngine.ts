@@ -50,7 +50,7 @@ export class PartialSourceReadError extends Error {
 }
 
 function isReadComplete(received: number, expected: number): boolean {
-  if (expected <= 0) return received > 0;
+  if (expected <= 0) return true;
   if (received === 0) return false;
   const dropRatio = (expected - received) / expected;
   return dropRatio <= SNAPSHOT_PARTIAL_TOLERANCE;
@@ -604,7 +604,6 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       if (maxTracksThisRun > 0 && candidatesForThisRun.length > pendingSourceTracks.length) {
         deferredByBatchLimit = true;
       }
-
       const sourceServiceTrackById = await bulkUpsertServiceTracks(pendingSourceTracks);
       const internalTrackIds = Array.from(
         new Set(Array.from(sourceServiceTrackById.values()).map((track) => track.internalTrackId)),

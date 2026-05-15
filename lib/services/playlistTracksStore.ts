@@ -47,7 +47,7 @@ const PARTIAL_TOLERANCE = Math.max(
 );
 
 function snapshotComplete(received: number, expected: number): boolean {
-  if (expected <= 0) return received > 0;
+  if (expected <= 0) return true;
   if (received === 0) return false;
   return (expected - received) / expected <= PARTIAL_TOLERANCE;
 }

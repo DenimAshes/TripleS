@@ -578,8 +578,12 @@ export async function listSoundCloudPlaylists(): Promise<SoundCloudPlaylist[]> {
 export async function listSoundCloudPlaylistTracks(playlistIdOrUrl: string): Promise<NormalizedTrack[]> {
   return withContext(async (_ctx, page) => {
     const runtime = await getRuntime(page);
-    const apiItems = await listTracksViaApi(page, runtime, playlistIdOrUrl);
-    if (apiItems.length) return apiItems;
+    // Resolve the playlist first so we can distinguish "API failed" from
+    // "playlist exists but is empty". For an empty playlist we must NOT
+    // fall back to DOM scraping — extractVisibleTracks otherwise grabs
+    // unrelated profile/navigation links from the page chrome.
+    const playlist = await resolvePlaylistViaApi(page, runtime, playlistIdOrUrl);
+    if (playlist) return listTracksViaApi(page, runtime, playlistIdOrUrl);
 
     const url = playlistIdOrUrl.startsWith("http") ? playlistIdOrUrl : `https://soundcloud.com/${playlistIdOrUrl}`;
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
