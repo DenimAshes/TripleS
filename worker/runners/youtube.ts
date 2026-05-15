@@ -316,7 +316,16 @@ function cleanArtist(value: string): string {
 
 async function extractVisibleTracks(page: Page): Promise<NormalizedTrack[]> {
   const raw = await page.evaluate(() => {
-    const rows = Array.from(document.querySelectorAll("ytmusic-responsive-list-item-renderer"));
+    // Scope to the playlist's own shelf when present so recommendations
+    // ("You might like…", "Похожие треки") that sit in sibling shelves do
+    // not get scraped as if they were playlist tracks. Without this the
+    // recommendation rows leak in and slice(0, expectedCount) ends up
+    // returning a mix of real tracks and recommendations.
+    const scope =
+      document.querySelector("ytmusic-playlist-shelf-renderer") ||
+      document.querySelector("ytmusic-section-list-renderer") ||
+      document;
+    const rows = Array.from(scope.querySelectorAll("ytmusic-responsive-list-item-renderer"));
     return rows
       .map((row) => {
         const titleEl =
@@ -385,13 +394,23 @@ async function collectPlaylistTracks(page: Page): Promise<NormalizedTrack[]> {
   const expectedCount = await getExpectedPlaylistTrackCount(page);
   await scrollToTop(page);
 
+  let stableRounds = 0;
   for (let i = 0; i < 80; i++) {
+    const before = byId.size;
     const visible = await extractVisibleTracks(page);
     for (const track of visible) byId.set(track.sourceTrackId, track);
     if (expectedCount && byId.size >= expectedCount) break;
     const moved = await scrollMainContent(page);
     await sleep(700);
-    if (!moved) break;
+    // Even when expectedCount is missing or wrong, keep scrolling until two
+    // consecutive scrolls yield no new tracks (lazy-rendered rows below the
+    // fold won't appear until they're scrolled into view).
+    if (byId.size === before) {
+      stableRounds += 1;
+      if (!moved && stableRounds >= 2) break;
+    } else {
+      stableRounds = 0;
+    }
   }
 
   const tracks = Array.from(byId.values());
