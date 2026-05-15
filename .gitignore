@@ -54,3 +54,7 @@ next-env.d.ts
 
 # local browser verification artifacts
 /.playwright-mcp/
+
+# local agent worktrees; Claude/Codex can use them, but the main project
+# should not commit or test these transient workspaces.
+/.claude/
