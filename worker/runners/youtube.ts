@@ -328,14 +328,24 @@ async function extractVisibleTracks(page: Page): Promise<NormalizedTrack[]> {
         const href = (titleEl as HTMLAnchorElement | null)?.href || row.querySelector<HTMLAnchorElement>('a[href*="watch?v="]')?.href || "";
         const videoId = href.match(/[?&]v=([A-Za-z0-9_-]+)/)?.[1] || row.getAttribute("data-video-id") || "";
 
-        const subtitleText = (
-          row.querySelector(".secondary-flex-columns")?.textContent ||
-          row.querySelector("yt-formatted-string.flex-column")?.textContent ||
-          row.querySelector(".subtitle")?.textContent ||
-          ""
+        // Each metadata field is rendered as its own flex-column element; the
+        // visual " • " separator is a CSS pseudo-element so it never appears
+        // in textContent. Collect each column and join with the bullet so the
+        // downstream split keeps artist / album / view-count separate.
+        const flexColumns = Array.from(
+          row.querySelectorAll("yt-formatted-string.flex-column, .flex-column"),
         )
-          .replace(/\s+/g, " ")
-          .trim();
+          .map((el) => (el.textContent || "").replace(/\s+/g, " ").trim())
+          .filter(Boolean);
+        const subtitleText = flexColumns.length
+          ? flexColumns.join(" • ")
+          : (
+              row.querySelector(".secondary-flex-columns")?.textContent ||
+              row.querySelector(".subtitle")?.textContent ||
+              ""
+            )
+              .replace(/\s+/g, " ")
+              .trim();
         const duration = (row.querySelector(".fixed-column")?.textContent || "").trim();
         const imgEl = row.querySelector("img") as HTMLImageElement | null;
         const imageUrl = imgEl?.src || "";

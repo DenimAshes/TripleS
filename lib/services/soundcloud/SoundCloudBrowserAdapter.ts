@@ -13,6 +13,12 @@ import {
 
 async function resolveSoundCloudWriteId(servicePlaylistId: string): Promise<string> {
   if (/^\d+$/.test(servicePlaylistId)) return servicePlaylistId;
+  // Private playlists are addressed as "user/sets/slug/s-secretToken". The
+  // numeric apiId alone hits a 404 because /playlists/{id} requires the
+  // secret_token query param for non-public playlists, but /resolve?url=...
+  // accepts the full permalink with embedded secret. Keep the permalink form
+  // whenever it carries a /s- segment so writes don't lose access.
+  if (servicePlaylistId.includes("/s-")) return servicePlaylistId;
   const row = await prisma.playlist
     .findUnique({
       where: { service_servicePlaylistId: { service: "SOUNDCLOUD", servicePlaylistId } },

@@ -431,6 +431,11 @@ async function listPlaylistsViaApi(page: Page, runtime: SoundCloudRuntime): Prom
 }
 
 async function resolvePlaylistViaApi(page: Page, runtime: SoundCloudRuntime, playlistIdOrUrl: string): Promise<SoundCloudApiPlaylist | undefined> {
+  // Numeric ids hit /playlists/{id} directly. The /resolve endpoint only
+  // understands canonical soundcloud.com URLs and silently 404s on bare ids.
+  if (/^\d+$/.test(playlistIdOrUrl)) {
+    return apiGet<SoundCloudApiPlaylist>(page, runtime, `/playlists/${playlistIdOrUrl}`).catch(() => undefined);
+  }
   const url = playlistIdOrUrl.startsWith("http") ? playlistIdOrUrl : `https://soundcloud.com/${playlistIdOrUrl}`;
   return apiGet<SoundCloudApiPlaylist>(page, runtime, `/resolve?url=${encodeURIComponent(url)}`).catch(() => undefined);
 }
