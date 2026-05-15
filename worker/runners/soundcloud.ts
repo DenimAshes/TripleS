@@ -1,10 +1,11 @@
+import "./_runnerGuard";
 import fs from "node:fs";
 import { type BrowserContext, type Page } from "playwright";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
 import { sleep } from "../sleep";
-import { acquireSession, sessionReuseEnabled } from "../sessionPool";
+import { acquireSession, evictSession, sessionReuseEnabled } from "../sessionPool";
 import { pathToFileURL } from "node:url";
 
 export type SoundCloudPlaylist = {
@@ -14,10 +15,14 @@ export type SoundCloudPlaylist = {
   imageUrl?: string;
   url: string;
   isWritable?: boolean;
+  apiId?: string;
+  permalink?: string;
 };
 
 const SERVICE = "soundcloud";
 const API_BASE = "https://api-v2.soundcloud.com";
+const API_TIMEOUT_MS = Math.max(1, Number(process.env.SOUNDCLOUD_API_TIMEOUT_MS ?? 45_000));
+const RUNNER_TIMEOUT_MS = Math.max(1, Number(process.env.SOUNDCLOUD_RUNNER_TIMEOUT_MS ?? 600_000));
 
 type SoundCloudRuntime = {
   clientId: string;
@@ -56,24 +61,50 @@ async function withContext<T>(
   fn: (ctx: BrowserContext, page: Page) => Promise<T>,
   opts?: { humanize?: boolean },
 ): Promise<T> {
-  if (sessionReuseEnabled()) {
-    const session = await acquireSession(SERVICE);
-    const result = await fn(session.context, session.page);
-    if (process.env.SAVE_STATE_AFTER_RUN === "true") {
-      await saveStorageState(SERVICE, session.context);
+  let abortCleanup: (() => Promise<void>) | null = null;
+  let timedOut = false;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    const timer = setTimeout(async () => {
+      timedOut = true;
+      if (abortCleanup) await abortCleanup().catch(() => {});
+      reject(new Error(`SoundCloud runner timed out after ${RUNNER_TIMEOUT_MS}ms`));
+    }, RUNNER_TIMEOUT_MS);
+    (timer as { unref?: () => void }).unref?.();
+  });
+
+  const run = async () => {
+    if (sessionReuseEnabled()) {
+      const session = await acquireSession(SERVICE);
+      abortCleanup = () => evictSession(SERVICE);
+      try {
+        const result = await fn(session.context, session.page);
+        if (process.env.SAVE_STATE_AFTER_RUN === "true") {
+          await saveStorageState(SERVICE, session.context);
+        }
+        return result;
+      } catch (error) {
+        if (timedOut) throw new Error(`SoundCloud runner timed out after ${RUNNER_TIMEOUT_MS}ms`);
+        throw error;
+      }
     }
-    return result;
-  }
-  const session = await openWorkerBrowser({ service: SERVICE, humanize: opts?.humanize });
-  try {
-    const result = await fn(session.context, session.page);
-    if (process.env.SAVE_STATE_AFTER_RUN === "true") {
-      await saveStorageState(SERVICE, session.context);
+    const session = await openWorkerBrowser({ service: SERVICE, humanize: opts?.humanize });
+    abortCleanup = () => session.close();
+    try {
+      const result = await fn(session.context, session.page);
+      if (process.env.SAVE_STATE_AFTER_RUN === "true") {
+        await saveStorageState(SERVICE, session.context);
+      }
+      return result;
+    } catch (error) {
+      if (timedOut) throw new Error(`SoundCloud runner timed out after ${RUNNER_TIMEOUT_MS}ms`);
+      throw error;
+    } finally {
+      if (!timedOut) await session.close();
     }
-    return result;
-  } finally {
-    await session.close();
-  }
+  };
+
+  return Promise.race([run(), timeoutPromise]);
 }
 
 async function settle(page: Page): Promise<void> {
@@ -89,7 +120,11 @@ async function maybeDebug(page: Page, label: string): Promise<void> {
 }
 
 async function getRuntime(page: Page): Promise<SoundCloudRuntime> {
-  await page.goto(SERVICE_URLS.soundcloud.home, { waitUntil: "domcontentloaded" });
+  if (!page.url().includes("soundcloud.com")) {
+    await page.goto(SERVICE_URLS.soundcloud.home, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  } else {
+    await page.goto(SERVICE_URLS.soundcloud.home, { waitUntil: "domcontentloaded", timeout: 60_000 }).catch(() => {});
+  }
   await settle(page);
 
   const runtime = await page.evaluate(() => {
@@ -120,19 +155,21 @@ function withClientId(url: string, clientId: string): string {
 
 async function apiGet<T>(page: Page, runtime: SoundCloudRuntime, url: string): Promise<T> {
   const requestUrl = withClientId(url, runtime.clientId);
-  return page.evaluate(async (requestUrl) => {
-    const response = await fetch(requestUrl, { credentials: "include" });
+  return page.evaluate(async ({ requestUrl, timeoutMs }) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(requestUrl, { credentials: "include", signal: controller.signal }).finally(() => clearTimeout(timer));
     const text = await response.text();
     if (!response.ok) {
       throw new Error(`SoundCloud API ${response.status}: ${text.slice(0, 300)}`);
     }
     return JSON.parse(text);
-  }, requestUrl);
+  }, { requestUrl, timeoutMs: API_TIMEOUT_MS });
 }
 
 async function apiPut<T>(page: Page, runtime: SoundCloudRuntime, url: string, body: unknown): Promise<T> {
   const requestUrl = withClientId(url, runtime.clientId);
-  return page.evaluate(async ({ requestUrl, body }) => {
+  return page.evaluate(async ({ requestUrl, body, timeoutMs }) => {
     const cookies = Object.fromEntries(
       document.cookie.split(";").map((item) => {
         const [key, ...value] = item.trim().split("=");
@@ -140,15 +177,18 @@ async function apiPut<T>(page: Page, runtime: SoundCloudRuntime, url: string, bo
       }),
     );
     const oauthToken = cookies.oauth_token;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const response = await fetch(requestUrl, {
       method: "PUT",
       credentials: "include",
+      signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
         ...(oauthToken ? { Authorization: `OAuth ${oauthToken}` } : {}),
       },
       body: JSON.stringify(body),
-    });
+    }).finally(() => clearTimeout(timer));
     const text = await response.text();
     if (!response.ok) {
       if (response.status === 403 && /captcha-delivery|captcha/i.test(text)) {
@@ -157,12 +197,12 @@ async function apiPut<T>(page: Page, runtime: SoundCloudRuntime, url: string, bo
       throw new Error(`SoundCloud API ${response.status}: ${text.slice(0, 300)}`);
     }
     return text ? JSON.parse(text) : {};
-  }, { requestUrl, body });
+  }, { requestUrl, body, timeoutMs: API_TIMEOUT_MS });
 }
 
 async function apiPost<T>(page: Page, runtime: SoundCloudRuntime, url: string, body: unknown): Promise<T> {
   const requestUrl = withClientId(url, runtime.clientId);
-  return page.evaluate(async ({ requestUrl, body }) => {
+  return page.evaluate(async ({ requestUrl, body, timeoutMs }) => {
     const cookies = Object.fromEntries(
       document.cookie.split(";").map((item) => {
         const [key, ...value] = item.trim().split("=");
@@ -170,15 +210,18 @@ async function apiPost<T>(page: Page, runtime: SoundCloudRuntime, url: string, b
       }),
     );
     const oauthToken = cookies.oauth_token;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     const response = await fetch(requestUrl, {
       method: "POST",
       credentials: "include",
+      signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
         ...(oauthToken ? { Authorization: `OAuth ${oauthToken}` } : {}),
       },
       body: JSON.stringify(body),
-    });
+    }).finally(() => clearTimeout(timer));
     const text = await response.text();
     if (!response.ok) {
       if (response.status === 403 && /captcha-delivery|captcha/i.test(text)) {
@@ -187,7 +230,7 @@ async function apiPost<T>(page: Page, runtime: SoundCloudRuntime, url: string, b
       throw new Error(`SoundCloud API ${response.status}: ${text.slice(0, 300)}`);
     }
     return text ? JSON.parse(text) : {};
-  }, { requestUrl, body });
+  }, { requestUrl, body, timeoutMs: API_TIMEOUT_MS });
 }
 
 async function apiGetCollection<T>(page: Page, runtime: SoundCloudRuntime, url: string, maxPages = 8): Promise<T[]> {
@@ -337,6 +380,8 @@ function normalizePlaylist(
   const url = playlist.permalink_url || (id ? `https://soundcloud.com/${id}` : undefined);
   if (!id || !name || !url) return undefined;
 
+  const apiId = playlist.id == null ? undefined : String(playlist.id);
+  const permalink = soundCloudPathFromUrl(playlist.permalink_url) || undefined;
   return {
     id,
     name,
@@ -344,6 +389,8 @@ function normalizePlaylist(
     imageUrl: playlist.artwork_url || undefined,
     url,
     isWritable: runtime ? playlist.user_id === runtime.userId : undefined,
+    apiId,
+    permalink,
   };
 }
 
@@ -519,7 +566,7 @@ export async function listSoundCloudPlaylists(): Promise<SoundCloudPlaylist[]> {
     const apiItems = await listPlaylistsViaApi(page, runtime);
     if (apiItems.length) return apiItems;
 
-    await page.goto(SERVICE_URLS.soundcloud.playlists!, { waitUntil: "domcontentloaded" });
+    await page.goto(SERVICE_URLS.soundcloud.playlists!, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await settle(page);
     await maybeDebug(page, "soundcloud-playlists");
     const items = await collectWhileScrolling(page, () => extractVisiblePlaylists(page), 25);
@@ -535,7 +582,7 @@ export async function listSoundCloudPlaylistTracks(playlistIdOrUrl: string): Pro
     if (apiItems.length) return apiItems;
 
     const url = playlistIdOrUrl.startsWith("http") ? playlistIdOrUrl : `https://soundcloud.com/${playlistIdOrUrl}`;
-    await page.goto(url, { waitUntil: "domcontentloaded" });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await settle(page);
     await maybeDebug(page, "soundcloud-playlist-tracks");
     const items = await collectWhileScrolling(page, () => extractVisibleTracks(page), 50);
@@ -550,7 +597,7 @@ export async function searchSoundCloudTracks(query: string): Promise<NormalizedT
     const apiItems = await searchTracksViaApi(page, runtime, query);
     if (apiItems.length) return apiItems;
 
-    await page.goto(`https://soundcloud.com/search/sounds?q=${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded" });
+    await page.goto(`https://soundcloud.com/search/sounds?q=${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await settle(page);
     await maybeDebug(page, "soundcloud-search");
     const items = await collectWhileScrolling(page, () => extractVisibleTracks(page), 10);
@@ -604,6 +651,14 @@ async function main() {
     return;
   }
 
+  if (command === "create-b64") {
+    const encoded = process.argv[3];
+    if (!encoded) throw new Error('Usage: npm run sc -- create-b64 "<base64 playlist name>"');
+    const result = await createSoundCloudPlaylist(Buffer.from(encoded, "base64").toString("utf8"));
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
   if (command === "remove") {
     const playlist = process.argv[3];
     const track = process.argv[4];
@@ -613,12 +668,22 @@ async function main() {
     return;
   }
 
-  throw new Error("Usage: npm run sc -- list | tracks | search | add | create | remove");
+  throw new Error("Usage: npm run sc -- list | tracks | search | add | create | create-b64 | remove");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err) => {
-    console.error(err);
+  const watchdog = setTimeout(() => {
+    console.error(new Error(`SoundCloud runner hard timeout after ${RUNNER_TIMEOUT_MS}ms`));
     process.exit(1);
-  });
+  }, RUNNER_TIMEOUT_MS + 5_000);
+  main()
+    .then(() => {
+      clearTimeout(watchdog);
+      setImmediate(() => process.exit(0));
+    })
+    .catch((err) => {
+      clearTimeout(watchdog);
+      console.error(err);
+      process.exit(1);
+    });
 }

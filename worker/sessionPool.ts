@@ -20,3 +20,10 @@ export async function releaseAllSessions(): Promise<void> {
   pool.clear();
   await Promise.allSettled(sessions.map((s) => s.close()));
 }
+
+export async function evictSession(service: ServiceId): Promise<void> {
+  const existing = pool.get(service);
+  if (!existing) return;
+  pool.delete(service);
+  await existing.close().catch(() => {});
+}
