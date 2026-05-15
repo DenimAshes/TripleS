@@ -1,14 +1,26 @@
 import type { MusicServiceAdapter } from "../MusicServiceAdapter";
 import type { NormalizedPlaylist, NormalizedTrack, TokenPair, TrackSearchQuery } from "@/lib/sync/syncTypes";
 import { cachedSearchTracks } from "@/lib/services/searchCache";
+import { prisma } from "@/lib/db/prisma";
 import {
-  addSoundCloudTrackToPlaylist,
-  createSoundCloudPlaylist,
-  listSoundCloudPlaylistTracks,
-  listSoundCloudPlaylists,
-  removeSoundCloudTrackFromPlaylist,
-  searchSoundCloudTracks,
-} from "@/worker/runners/soundcloud";
+  invokeSoundCloudAddTrack,
+  invokeSoundCloudCreatePlaylist,
+  invokeSoundCloudListPlaylistTracks,
+  invokeSoundCloudListPlaylists,
+  invokeSoundCloudRemoveTrack,
+  invokeSoundCloudSearchTracks,
+} from "@/lib/services/runnerInvoker";
+
+async function resolveSoundCloudWriteId(servicePlaylistId: string): Promise<string> {
+  if (/^\d+$/.test(servicePlaylistId)) return servicePlaylistId;
+  const row = await prisma.playlist
+    .findUnique({
+      where: { service_servicePlaylistId: { service: "SOUNDCLOUD", servicePlaylistId } },
+      select: { apiId: true },
+    })
+    .catch(() => null);
+  return row?.apiId || servicePlaylistId;
+}
 
 export class SoundCloudBrowserAdapter implements MusicServiceAdapter {
   async getCurrentUser() {
@@ -16,42 +28,45 @@ export class SoundCloudBrowserAdapter implements MusicServiceAdapter {
   }
 
   async getPlaylists(): Promise<NormalizedPlaylist[]> {
-    const playlists = await listSoundCloudPlaylists();
-    return playlists.map((playlist) => ({
-      id: playlist.id,
-      name: playlist.name,
-      imageUrl: playlist.imageUrl,
-      trackCount: playlist.trackCount,
-      isWritable: playlist.isWritable === true,
-    }));
+    return invokeSoundCloudListPlaylists();
   }
 
   async createPlaylist(name: string): Promise<NormalizedPlaylist> {
-    const playlist = await createSoundCloudPlaylist(name);
-    return {
-      id: playlist.id,
-      name: playlist.name,
-      imageUrl: playlist.imageUrl,
-      trackCount: playlist.trackCount,
-      isWritable: playlist.isWritable === true,
-    };
+    const normalize = (value: string) => value.trim().toLowerCase();
+    const target = normalize(name);
+
+    try {
+      return await invokeSoundCloudCreatePlaylist(name);
+    } catch (createError) {
+      const afterFailure = await invokeSoundCloudListPlaylists().catch(() => []);
+      const matchAfter = afterFailure.find((playlist) => normalize(playlist.name) === target);
+      if (matchAfter) {
+        console.warn(
+          `[soundcloud-create] create call failed but playlist "${name}" exists on SoundCloud (idempotent resolution): ${createError instanceof Error ? createError.message : String(createError)}`,
+        );
+        return matchAfter;
+      }
+      throw createError;
+    }
   }
 
   async getPlaylistTracks(playlistId: string): Promise<NormalizedTrack[]> {
-    return listSoundCloudPlaylistTracks(playlistId);
+    return invokeSoundCloudListPlaylistTracks(playlistId);
   }
 
   async searchTrack(query: TrackSearchQuery): Promise<NormalizedTrack[]> {
-    return cachedSearchTracks("soundcloud", query.query, () => searchSoundCloudTracks(query.query));
+    return cachedSearchTracks("soundcloud", query.query, () => invokeSoundCloudSearchTracks(query.query), query.isrc);
   }
 
   async addTrackToPlaylist(playlistId: string, track: NormalizedTrack): Promise<void> {
     const trackId = track.url || track.sourceTrackId;
-    await addSoundCloudTrackToPlaylist(playlistId, trackId);
+    const writeId = await resolveSoundCloudWriteId(playlistId);
+    await invokeSoundCloudAddTrack(writeId, trackId);
   }
 
   async removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void> {
-    await removeSoundCloudTrackFromPlaylist(playlistId, trackId);
+    const writeId = await resolveSoundCloudWriteId(playlistId);
+    await invokeSoundCloudRemoveTrack(writeId, trackId);
   }
 
   async refreshAccessToken(): Promise<TokenPair> {

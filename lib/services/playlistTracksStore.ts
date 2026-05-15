@@ -41,6 +41,17 @@ export async function upsertServiceTrack(track: NormalizedTrack) {
   });
 }
 
+const PARTIAL_TOLERANCE = Math.max(
+  0,
+  Math.min(0.5, Number(process.env.WORKER_SNAPSHOT_PARTIAL_TOLERANCE ?? 0.1)),
+);
+
+function snapshotComplete(received: number, expected: number): boolean {
+  if (expected <= 0) return received > 0;
+  if (received === 0) return false;
+  return (expected - received) / expected <= PARTIAL_TOLERANCE;
+}
+
 export async function syncPlaylistTracksToDb(userId: string, service: ServiceKey, servicePlaylistId: string) {
   const playlist = await prisma.playlist.findUnique({
     where: { service_servicePlaylistId: { service: serviceEnum(service), servicePlaylistId } },
@@ -52,6 +63,19 @@ export async function syncPlaylistTracksToDb(userId: string, service: ServiceKey
   const adapter = getAdapter(service, userId);
   const tracks = await adapter.getPlaylistTracks(servicePlaylistId);
   const now = new Date();
+
+  const activeStateCount = await prisma.playlistTrackState.count({
+    where: { playlistId: playlist.id, removedAt: null },
+  });
+  const expected = Math.max(playlist.trackCount ?? 0, activeStateCount);
+  if (!snapshotComplete(tracks.length, expected)) {
+    return {
+      skipped: true as const,
+      reason: `partial-read (${tracks.length}/${expected})`,
+      count: tracks.length,
+      playlistId: playlist.id,
+    };
+  }
 
   const seenServiceTrackIds = new Set<string>();
   let position = 0;

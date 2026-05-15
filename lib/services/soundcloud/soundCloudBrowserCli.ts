@@ -1,7 +1,24 @@
-import { execFile } from "node:child_process";
-import path from "node:path";
-import { promisify } from "node:util";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
+import { runBrowserRunnerCli } from "../browserRunnerCli";
+import { classifyError, isHardBlockError, isRetryableError } from "@/lib/sync/failureClassifier";
+import { setServiceCooldown } from "@/lib/sync/serviceCooldown";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("triples:soundcloud-cli");
+
+const MAX_RETRIES = Math.max(0, Number(process.env.SOUNDCLOUD_CLI_MAX_RETRIES ?? 0));
+const RETRY_BASE_MS = Math.max(0, Number(process.env.SOUNDCLOUD_CLI_RETRY_BASE_MS ?? 5_000));
+const RETRY_MAX_MS = Math.max(RETRY_BASE_MS, Number(process.env.SOUNDCLOUD_CLI_RETRY_MAX_MS ?? 30_000));
+
+function backoffMs(attempt: number): number {
+  const exp = RETRY_BASE_MS * 2 ** attempt;
+  const jitter = Math.floor(Math.random() * RETRY_BASE_MS);
+  return Math.min(RETRY_MAX_MS, exp) + jitter;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export type SoundCloudPlaylist = {
   id: string;
@@ -10,31 +27,64 @@ export type SoundCloudPlaylist = {
   imageUrl?: string;
   url: string;
   isWritable?: boolean;
+  apiId?: string;
+  permalink?: string;
 };
 
-const execFileAsync = promisify(execFile);
+function runnerTimeoutMs(): number {
+  return Math.max(1, Number(process.env.SOUNDCLOUD_CLI_TIMEOUT_MS ?? 600_000));
+}
 
 async function runSoundCloud(args: string[]) {
-  const tsxCli = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
-  try {
-    const { stdout } = await execFileAsync(process.execPath, [tsxCli, "worker/runners/soundcloud.ts", ...args], {
-      cwd: process.cwd(),
-      env: process.env,
-      timeout: 180_000,
-      maxBuffer: 10 * 1024 * 1024,
-      windowsHide: true,
-    });
-    return stdout;
-  } catch (error) {
-    const details = error && typeof error === "object" && "stderr" in error ? String(error.stderr || "") : "";
-    const message = error instanceof Error ? error.message : "SoundCloud browser runner failed";
-    if (/captcha-delivery|SoundCloud API 403/i.test(details)) {
-      throw new Error(
-        "SoundCloud blocked the write request with captcha. Reading still works; open SoundCloud in the saved Chrome profile and try again later.",
-      );
+  const timeoutMs = runnerTimeoutMs();
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    try {
+      return await runBrowserRunnerCli({
+        serviceName: "SoundCloud",
+        script: "worker/runners/soundcloud.ts",
+        args,
+        timeoutMs,
+      });
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : "SoundCloud browser runner failed";
+      const kind = classifyError(error);
+      log.warn("retry attempt", {
+        attempt: attempt + 1,
+        max: MAX_RETRIES + 1,
+        kind,
+        command: args[0],
+        message: message.slice(0, 200),
+      });
+
+      if (/captcha-delivery|SoundCloud API 403/i.test(message)) {
+        await setServiceCooldown("soundcloud", "SoundCloud captcha/403 on browser runner").catch(() => {});
+        throw new Error(
+          "SoundCloud blocked the write request with captcha. Reading still works; open SoundCloud in the saved Chrome profile and try again later.",
+        );
+      }
+
+      if (isHardBlockError(error)) {
+        await setServiceCooldown("soundcloud", `SoundCloud hard-block (${kind}): ${message.slice(0, 200)}`).catch(() => {});
+        throw error instanceof Error ? error : new Error(message);
+      }
+
+      if (isRetryableError(error) && attempt < MAX_RETRIES) {
+        const wait = backoffMs(attempt);
+        log.info("retrying", { delayMs: wait, kind });
+        await sleep(wait);
+        continue;
+      }
+
+      if (kind === "timeout") {
+        await setServiceCooldown("soundcloud", `SoundCloud runner timed out repeatedly after ${timeoutMs}ms`).catch(() => {});
+        throw new Error(`SoundCloud browser runner timed out after ${timeoutMs}ms`);
+      }
+      throw error instanceof Error ? error : new Error(message);
     }
-    throw new Error(details.trim() ? `${message}: ${details.trim()}` : message);
   }
+  throw lastError instanceof Error ? lastError : new Error("SoundCloud browser runner failed");
 }
 
 function parseJsonArray<T>(stdout: string): T[] {
@@ -68,7 +118,8 @@ export async function addSoundCloudTrackToPlaylistCli(playlistId: string, trackI
 }
 
 export async function createSoundCloudPlaylistCli(name: string): Promise<SoundCloudPlaylist> {
-  return parseJsonObject<SoundCloudPlaylist>(await runSoundCloud(["create", name]));
+  const encoded = Buffer.from(name, "utf8").toString("base64");
+  return parseJsonObject<SoundCloudPlaylist>(await runSoundCloud(["create-b64", encoded]));
 }
 
 export async function removeSoundCloudTrackFromPlaylistCli(playlistId: string, trackId: string): Promise<{ removed: boolean }> {

@@ -172,7 +172,28 @@ export class SpotifyAdapter implements MusicServiceAdapter {
   }
 
   async searchTrack(query: TrackSearchQuery): Promise<NormalizedTrack[]> {
-    const q = query.isrc ? `isrc:${query.isrc}` : query.query;
+    const sanitize = (value: string) =>
+      value
+        .replace(/[":()\[\]\\]/g, " ")
+        .replace(/\b(and|or|not)\b/gi, " ")
+        .replace(/[-+!^~*?]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    const quoted = (value: string) => `"${sanitize(value)}"`;
+    const structuredParts: string[] = [];
+    if (query.title) {
+      const cleaned = sanitize(query.title);
+      if (cleaned) structuredParts.push(`track:${quoted(cleaned)}`);
+    }
+    if (query.artist) {
+      const cleaned = sanitize(query.artist);
+      if (cleaned) structuredParts.push(`artist:${quoted(cleaned)}`);
+    }
+    const q = query.isrc
+      ? `isrc:${query.isrc}`
+      : structuredParts.length
+        ? structuredParts.join(" ")
+        : sanitize(query.query) || query.query;
     const cookie = await this.getWebCookie();
     if (cookie) {
       return webSearchTrack(cookie, q);

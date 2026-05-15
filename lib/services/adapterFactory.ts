@@ -1,5 +1,8 @@
 import type { ServiceKey } from "@/lib/sync/syncTypes";
 import type { MusicServiceAdapter } from "./MusicServiceAdapter";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("triples:adapter");
 import { SpotifyAdapter } from "./spotify/SpotifyAdapter";
 import { SpotifyMockAdapter } from "./spotify/SpotifyMockAdapter";
 import { YouTubeBrowserAdapter } from "./youtube/YouTubeBrowserAdapter";
@@ -20,26 +23,26 @@ export function getAdapter(service: string, userId?: string): MusicServiceAdapte
   const key = typeof service === "string" && service === service.toUpperCase() ? service.toLowerCase() : service;
   if (key === "spotify") {
     if (!process.env.SPOTIFY_CLIENT_ID) {
-      console.log("[spotify] Running in MOCK mode");
+      log.debug("spotify adapter resolved", { mode: "mock" });
       return new SpotifyMockAdapter();
     }
     return new SpotifyAdapter(userId);
   }
   if (key === "youtube") {
     if (process.env.YOUTUBE_BROWSER_AUTOMATION === "true") {
-      console.log("[youtube] Running in browser automation mode");
+      log.debug("youtube adapter resolved", { mode: "browser" });
       return new YouTubeBrowserAdapter();
     }
-    console.log("[youtube] Running in MOCK mode");
+    log.debug("youtube adapter resolved", { mode: "mock" });
     return new YouTubeMockAdapter();
   }
   if (key === "soundcloud") {
     if (process.env.SOUNDCLOUD_BROWSER_AUTOMATION === "true") {
-      console.log("[soundcloud] Running in browser automation mode");
+      log.debug("soundcloud adapter resolved", { mode: "browser" });
       return new SoundCloudBrowserAdapter();
     }
     if (!process.env.SOUNDCLOUD_CLIENT_ID) {
-      console.log("[soundcloud] Running in MOCK mode");
+      log.debug("soundcloud adapter resolved", { mode: "mock" });
       return new SoundCloudMockAdapter();
     }
   }
