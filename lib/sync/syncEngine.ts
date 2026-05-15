@@ -1,31 +1,98 @@
-import type { ServiceTrack, SyncJob } from "@prisma/client";
+import type { Prisma, ServiceTrack, SyncJob } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
 import { syncPlaylistTracksToDb } from "@/lib/services/playlistTracksStore";
 import type { NormalizedTrack, ServiceKey } from "./syncTypes";
-import { findMatch } from "./matchEngine";
-import { findStoredDestinationMatch, upsertAutoTrackMatch } from "./trackMatchStore";
+import { findMatch, prewarmLocalCatalog, type LocalCatalogPool } from "./matchEngine";
+import { upsertAutoTrackMatch } from "./trackMatchStore";
+import {
+  buildMatchContext,
+  bulkUpsertServiceTracks,
+  lookupExistingInPlaylist,
+  lookupIsrcMatch,
+  lookupStoredMatch,
+  resolveInternalTrackId,
+} from "./matchContext";
 import { nextRunAfterFailure } from "./failureClassifier";
 import { recordCooldownForRule, recordSuccessForRule } from "./serviceCooldown";
 import { releaseAllSessions } from "@/worker/sessionPool";
+import { preflightSyncRule } from "./preflight";
+import { bindCurrentJob, killChildPids, listKnownChildPids } from "@/worker/childPidRegistry";
+import { throwIfActiveJobAborted } from "@/lib/jobs/activeJobContext";
 
 const WRITE_THROTTLE_MIN_MS = Number(process.env.WORKER_WRITE_THROTTLE_MIN_MS ?? 4000);
 const WRITE_THROTTLE_SPREAD_MS = Number(process.env.WORKER_WRITE_THROTTLE_SPREAD_MS ?? 8000);
 const WRITE_BURST_LONG_PAUSE_MIN_MS = Number(process.env.WORKER_WRITE_LONG_PAUSE_MIN_MS ?? 60_000);
 const WRITE_BURST_LONG_PAUSE_SPREAD_MS = Number(process.env.WORKER_WRITE_LONG_PAUSE_SPREAD_MS ?? 120_000);
 const MAX_TRACKS_PER_RUN = Number(process.env.WORKER_MAX_TRACKS_PER_RUN ?? 10);
+const AUTO_MATCH_THRESHOLD = Number(process.env.WORKER_AUTO_MATCH_THRESHOLD ?? 0.82);
+const MANUAL_REVIEW_THRESHOLD = Number(process.env.WORKER_MANUAL_REVIEW_THRESHOLD ?? 0.65);
 const SKIP_PREVIOUSLY_LOGGED = process.env.WORKER_SKIP_PREVIOUSLY_LOGGED !== "false";
 const REFRESH_SOURCE_TRACKS = process.env.WORKER_REFRESH_SOURCE_TRACKS === "true";
+const MATCH_CONCURRENCY = Math.max(1, Number(process.env.WORKER_MATCH_CONCURRENCY ?? 4));
+const RUNNING_JOB_TIMEOUT_MINUTES = Math.max(1, Number(process.env.WORKER_RUNNING_JOB_TIMEOUT_MINUTES ?? 60));
+const SNAPSHOT_PARTIAL_TOLERANCE = Math.max(
+  0,
+  Math.min(0.5, Number(process.env.WORKER_SNAPSHOT_PARTIAL_TOLERANCE ?? 0.1)),
+);
+const REQUIRE_PREFLIGHT = process.env.WORKER_REQUIRE_PREFLIGHT !== "false";
+const SYNC_JOB_TIMEOUT_MS = Math.max(60_000, Number(process.env.WORKER_SYNC_JOB_TIMEOUT_MS ?? 30 * 60_000));
 
-let writesSinceLongPause = 0;
-let writesBeforeNextLongPause = 2 + Math.floor(Math.random() * 3);
+export class PartialSourceReadError extends Error {
+  readonly received: number;
+  readonly expected: number;
+  constructor(received: number, expected: number) {
+    super(`Live source read returned ${received} tracks, expected ~${expected}; refusing to overwrite snapshot.`);
+    this.name = "PartialSourceReadError";
+    this.received = received;
+    this.expected = expected;
+  }
+}
 
-function writeThrottle(): Promise<void> {
-  writesSinceLongPause += 1;
-  const useLong = writesSinceLongPause >= writesBeforeNextLongPause;
+function isReadComplete(received: number, expected: number): boolean {
+  if (expected <= 0) return received > 0;
+  if (received === 0) return false;
+  const dropRatio = (expected - received) / expected;
+  return dropRatio <= SNAPSHOT_PARTIAL_TOLERANCE;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      throwIfActiveJobAborted();
+      const idx = cursor++;
+      if (idx >= items.length) return;
+      results[idx] = await worker(items[idx], idx);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
+type ThrottleState = { writesSinceLongPause: number; writesBeforeNextLongPause: number };
+const throttleStateByService = new Map<string, ThrottleState>();
+function getThrottleState(service: string): ThrottleState {
+  let state = throttleStateByService.get(service);
+  if (!state) {
+    state = { writesSinceLongPause: 0, writesBeforeNextLongPause: 2 + Math.floor(Math.random() * 3) };
+    throttleStateByService.set(service, state);
+  }
+  return state;
+}
+
+function writeThrottle(service: string): Promise<void> {
+  const state = getThrottleState(service);
+  state.writesSinceLongPause += 1;
+  const useLong = state.writesSinceLongPause >= state.writesBeforeNextLongPause;
   if (useLong) {
-    writesSinceLongPause = 0;
-    writesBeforeNextLongPause = 2 + Math.floor(Math.random() * 3);
+    state.writesSinceLongPause = 0;
+    state.writesBeforeNextLongPause = 2 + Math.floor(Math.random() * 3);
     const min = Math.max(0, WRITE_BURST_LONG_PAUSE_MIN_MS);
     const spread = Math.max(0, WRITE_BURST_LONG_PAUSE_SPREAD_MS);
     const ms = min + Math.floor(Math.random() * spread);
@@ -38,11 +105,12 @@ function writeThrottle(): Promise<void> {
 }
 
 async function upsertServiceTrack(track: NormalizedTrack) {
+  const internalId = await resolveInternalTrackId(track);
   const internal = await prisma.internalTrack.upsert({
-    where: { id: `${track.sourceService}_${track.sourceTrackId}` },
+    where: { id: internalId },
     update: {},
     create: {
-      id: `${track.sourceService}_${track.sourceTrackId}`,
+      id: internalId,
       canonicalTitle: track.title,
       canonicalArtists: JSON.stringify(track.artists),
       canonicalAlbum: track.album,
@@ -59,6 +127,7 @@ async function upsertServiceTrack(track: NormalizedTrack) {
       durationMs: track.durationMs,
       isrc: track.isrc,
       url: track.url,
+      imageUrl: track.imageUrl,
     },
     create: {
       internalTrackId: internal.id,
@@ -70,6 +139,7 @@ async function upsertServiceTrack(track: NormalizedTrack) {
       durationMs: track.durationMs,
       isrc: track.isrc,
       url: track.url,
+      imageUrl: track.imageUrl,
     },
   });
 }
@@ -97,37 +167,75 @@ async function getPlaylistTracksFromDb(playlistId: string): Promise<NormalizedTr
   return states.map((state) => normalizedFromServiceTrack(state.serviceTrack));
 }
 
-async function storePlaylistSnapshot(playlistId: string, tracks: NormalizedTrack[]): Promise<void> {
-  for (let index = 0; index < tracks.length; index += 1) {
-    const serviceTrack = await upsertServiceTrack(tracks[index]);
-    const existing = await prisma.playlistTrackState.findFirst({
-      where: {
+async function storePlaylistSnapshot(
+  playlistId: string,
+  tracks: NormalizedTrack[],
+  options?: { expectedCount?: number; allowPartial?: boolean },
+): Promise<{ stored: boolean; reason?: string }> {
+  if (!tracks.length) return { stored: false, reason: "empty" };
+  const expected = options?.expectedCount ?? 0;
+  if (!options?.allowPartial && !isReadComplete(tracks.length, expected)) {
+    return { stored: false, reason: `partial-read (${tracks.length}/${expected})` };
+  }
+  const serviceTrackByKey = await bulkUpsertServiceTracks(tracks);
+  const orderedServiceTracks = tracks
+    .map((track) => serviceTrackByKey.get(`${track.sourceService}::${track.sourceTrackId}`))
+    .filter((track): track is ServiceTrack => Boolean(track));
+  const existingStates = await prisma.playlistTrackState.findMany({
+    where: {
+      playlistId,
+      removedAt: null,
+    },
+  });
+  const stateByServiceTrackId = new Map(existingStates.map((state) => [state.serviceTrackId, state]));
+  const now = new Date();
+  const creates: Prisma.PlaylistTrackStateCreateManyInput[] = [];
+  const updates: Promise<unknown>[] = [];
+  const seenServiceTrackIds = new Set<string>();
+  for (let index = 0; index < orderedServiceTracks.length; index += 1) {
+    const serviceTrack = orderedServiceTracks[index];
+    seenServiceTrackIds.add(serviceTrack.id);
+    const existing = stateByServiceTrackId.get(serviceTrack.id);
+    if (existing) {
+      updates.push(
+        prisma.playlistTrackState.update({
+          where: { id: existing.id },
+          data: {
+            position: index + 1,
+            lastSeenAt: now,
+            removedAt: null,
+          },
+        }),
+      );
+    } else {
+      creates.push({
         playlistId,
         serviceTrackId: serviceTrack.id,
-      },
-    });
-    if (existing) {
-      await prisma.playlistTrackState.update({
-        where: { id: existing.id },
-        data: {
-          position: index + 1,
-          lastSeenAt: new Date(),
-          removedAt: null,
-        },
-      });
-    } else {
-      await prisma.playlistTrackState.create({
-        data: {
-          playlistId,
-          serviceTrackId: serviceTrack.id,
-          position: index + 1,
-          addedBySystem: false,
-          firstSeenAt: new Date(),
-          lastSeenAt: new Date(),
-        },
+        position: index + 1,
+        addedBySystem: false,
+        firstSeenAt: now,
+        lastSeenAt: now,
       });
     }
   }
+  if (updates.length) await Promise.all(updates);
+  if (creates.length) await prisma.playlistTrackState.createMany({ data: creates });
+
+  const staleStates = existingStates.filter((state) => !seenServiceTrackIds.has(state.serviceTrackId) && !state.removedAt);
+  if (staleStates.length) {
+    await prisma.playlistTrackState.updateMany({
+      where: { id: { in: staleStates.map((state) => state.id) } },
+      data: { removedAt: now, lastSeenAt: now },
+    });
+  }
+  await prisma.playlist.update({
+    where: { id: playlistId },
+    data: {
+      trackCount: orderedServiceTracks.length,
+      lastFetchedAt: now,
+    },
+  });
+  return { stored: true };
 }
 
 function nextScheduledRun(intervalMinutes: number) {
@@ -138,8 +246,13 @@ function boundedTrackCount(): number {
   return Number.isFinite(MAX_TRACKS_PER_RUN) && MAX_TRACKS_PER_RUN > 0 ? Math.floor(MAX_TRACKS_PER_RUN) : 0;
 }
 
+const PREVIOUSLY_LOGGED_WINDOW_DAYS = Math.max(0, Number(process.env.WORKER_PREVIOUSLY_LOGGED_WINDOW_DAYS ?? 30));
+
 async function getPreviouslyLoggedTitles(syncRuleId: string, service: string, playlistId: string): Promise<Set<string>> {
   if (!SKIP_PREVIOUSLY_LOGGED) return new Set();
+  const since = PREVIOUSLY_LOGGED_WINDOW_DAYS > 0
+    ? new Date(Date.now() - PREVIOUSLY_LOGGED_WINDOW_DAYS * 24 * 60 * 60_000)
+    : undefined;
   const logs = await prisma.syncLog.findMany({
     where: {
       service,
@@ -150,8 +263,10 @@ async function getPreviouslyLoggedTitles(syncRuleId: string, service: string, pl
       syncJob: {
         syncRuleId,
       },
+      ...(since ? { createdAt: { gte: since } } : {}),
     },
     select: { trackTitle: true },
+    distinct: ["trackTitle"],
   });
   return new Set(logs.map((log) => log.trackTitle));
 }
@@ -167,24 +282,20 @@ async function getDestinationPlaylist(service: string, servicePlaylistId: string
   });
 }
 
-async function markPlaylistTrackPresent(playlistId: string, serviceTrackId: string, addedBySystem: boolean) {
-  const existing = await prisma.playlistTrackState.findFirst({
-    where: {
-      playlistId,
-      serviceTrackId,
-      removedAt: null,
-    },
-  });
-
+async function markPlaylistTrackPresent(
+  playlistId: string,
+  serviceTrackId: string,
+  addedBySystem: boolean,
+  existing?: { id: string; addedBySystem: boolean } | null,
+) {
   if (existing) {
-    await prisma.playlistTrackState.update({
+    return prisma.playlistTrackState.update({
       where: { id: existing.id },
       data: {
         addedBySystem: existing.addedBySystem || addedBySystem,
         lastSeenAt: new Date(),
       },
     });
-    return existing;
   }
 
   const lastPosition = await prisma.playlistTrackState.count({ where: { playlistId } });
@@ -215,49 +326,94 @@ async function upsertManualCandidate({
   confidence: number;
   alternatives?: Array<{ serviceTrackId: string; confidence: number }>;
 }) {
-  const existing = await prisma.manualMatchCandidate.findFirst({
-    where: {
-      userId,
-      sourceServiceTrackId,
-      targetService,
-      candidateServiceTrackId,
-    },
+  const naturalKey = {
+    userId,
+    sourceServiceTrackId,
+    targetService,
+    candidateServiceTrackId,
+  };
+  const existing = await prisma.manualMatchCandidate.findUnique({
+    where: { ManualMatchCandidate_natural_key: naturalKey },
   });
-
-  if (existing) {
-    if (existing.status === "REJECTED") {
-      return { candidate: existing, status: "REJECTED" as const };
-    }
-    const candidate = await prisma.manualMatchCandidate.update({
-      where: { id: existing.id },
-      data: {
-        confidence: Math.max(existing.confidence, confidence),
-        alternativesJson: JSON.stringify(alternatives),
-      },
-    });
-    return { candidate, status: candidate.status };
+  if (existing?.status === "REJECTED") {
+    return { candidate: existing, status: "REJECTED" as const };
   }
 
-  const candidate = await prisma.manualMatchCandidate.create({
-    data: {
-      userId,
-      sourceServiceTrackId,
-      targetService,
-      candidateServiceTrackId,
+  const candidate = await prisma.manualMatchCandidate.upsert({
+    where: { ManualMatchCandidate_natural_key: naturalKey },
+    update: {
+      confidence: existing ? Math.max(existing.confidence, confidence) : confidence,
+      alternativesJson: JSON.stringify(alternatives),
+    },
+    create: {
+      ...naturalKey,
       confidence,
       alternativesJson: JSON.stringify(alternatives),
       status: "PENDING",
     },
   });
-  return { candidate, status: "PENDING" as const };
+  return { candidate, status: candidate.status };
 }
 
 export async function runSync(syncRuleId: string): Promise<SyncJob> {
+  throwIfActiveJobAborted();
   const rule = await prisma.syncRule.findUnique({
     where: { id: syncRuleId },
     include: { destinations: { where: { isEnabled: true } } },
   });
   if (!rule) throw new Error("SyncRule not found");
+
+  if (REQUIRE_PREFLIGHT) {
+    const preflight = await preflightSyncRule(rule, {
+      allowIncompleteSourceCache: REFRESH_SOURCE_TRACKS,
+    });
+    if (!preflight.ok) {
+      throw new Error(`Preflight failed for SyncRule ${rule.id}: ${preflight.reasons.join("; ")}`);
+    }
+  }
+
+  const staleBefore = new Date(Date.now() - RUNNING_JOB_TIMEOUT_MINUTES * 60_000);
+  await prisma.syncJob.updateMany({
+    where: {
+      syncRuleId,
+      status: "RUNNING",
+      startedAt: { lt: staleBefore },
+      finishedAt: null,
+    },
+    data: {
+      status: "FAILED",
+      finishedAt: new Date(),
+      errorMessage: `Sync job expired after ${RUNNING_JOB_TIMEOUT_MINUTES} minutes without finishing.`,
+    },
+  });
+
+  const lockKey = `sync_rule:${syncRuleId}`;
+  const lockAcquired = await prisma.$queryRawUnsafe<Array<{ pg_try_advisory_lock: boolean }>>(
+    `SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS pg_try_advisory_lock`,
+    lockKey,
+  ).then((rows) => rows[0]?.pg_try_advisory_lock === true).catch(() => false);
+  if (!lockAcquired) {
+    throw new Error(`Could not acquire advisory lock for SyncRule ${syncRuleId}; another process is already running it.`);
+  }
+
+  let lockReleased = false;
+  const releaseLock = async () => {
+    if (lockReleased) return;
+    lockReleased = true;
+    await prisma.$queryRawUnsafe(
+      `SELECT pg_advisory_unlock(hashtextextended($1, 0))`,
+      lockKey,
+    ).catch(() => {});
+  };
+
+  const running = await prisma.syncJob.findFirst({
+    where: { syncRuleId, status: "RUNNING", finishedAt: null },
+    orderBy: { startedAt: "desc" },
+  });
+  if (running) {
+    await releaseLock();
+    throw new Error(`SyncRule already has a RUNNING job (${running.id}) started at ${running.startedAt.toISOString()}`);
+  }
 
   const job = await prisma.syncJob.create({
     data: {
@@ -267,17 +423,115 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       statsJson: JSON.stringify({ synced: 0, alreadySynced: 0, notFound: 0, manualRequired: 0, removed: 0 }),
     },
   });
+  bindCurrentJob(job.id);
 
-  const stats = { synced: 0, alreadySynced: 0, notFound: 0, manualRequired: 0, removed: 0 };
+  type PerDestinationStats = {
+    synced: number;
+    alreadySynced: number;
+    notFound: number;
+    manualRequired: number;
+    removed: number;
+    bySource: Record<string, number>;
+    confidenceBuckets: Record<string, number>;
+  };
+  const newPerDestinationStats = (): PerDestinationStats => ({
+    synced: 0,
+    alreadySynced: 0,
+    notFound: 0,
+    manualRequired: 0,
+    removed: 0,
+    bySource: {},
+    confidenceBuckets: {
+      "0.65-0.72": 0,
+      "0.72-0.82": 0,
+      "0.82-0.90": 0,
+      "0.90-1.00": 0,
+    },
+  });
+  const stats = {
+    synced: 0,
+    alreadySynced: 0,
+    notFound: 0,
+    manualRequired: 0,
+    removed: 0,
+    bySource: {} as Record<string, number>,
+    confidenceBuckets: {
+      "0.65-0.72": 0,
+      "0.72-0.82": 0,
+      "0.82-0.90": 0,
+      "0.90-1.00": 0,
+    } as Record<string, number>,
+    byDestination: {} as Record<string, PerDestinationStats>,
+  };
+  const destKey = (destination: { service: string; playlistId: string }) =>
+    `${destination.service}:${destination.playlistId}`;
+  const getDestStats = (destination: { service: string; playlistId: string }): PerDestinationStats => {
+    const key = destKey(destination);
+    let perDest = stats.byDestination[key];
+    if (!perDest) {
+      perDest = newPerDestinationStats();
+      stats.byDestination[key] = perDest;
+    }
+    return perDest;
+  };
+  const recordSource = (source: string | undefined, destination?: { service: string; playlistId: string }) => {
+    const key = source || "unknown";
+    stats.bySource[key] = (stats.bySource[key] || 0) + 1;
+    if (destination) {
+      const perDest = getDestStats(destination);
+      perDest.bySource[key] = (perDest.bySource[key] || 0) + 1;
+    }
+  };
+  const bucketOf = (confidence: number): string | null => {
+    if (confidence >= 0.9) return "0.90-1.00";
+    if (confidence >= 0.82) return "0.82-0.90";
+    if (confidence >= 0.72) return "0.72-0.82";
+    if (confidence >= 0.65) return "0.65-0.72";
+    return null;
+  };
+  const recordConfidence = (confidence: number, destination?: { service: string; playlistId: string }) => {
+    const bucket = bucketOf(confidence);
+    if (!bucket) return;
+    stats.confidenceBuckets[bucket] += 1;
+    if (destination) {
+      const perDest = getDestStats(destination);
+      perDest.confidenceBuckets[bucket] += 1;
+    }
+  };
+  const recordOutcome = (
+    destination: { service: string; playlistId: string },
+    field: "synced" | "alreadySynced" | "notFound" | "manualRequired" | "removed",
+  ) => {
+    stats[field] += 1;
+    getDestStats(destination)[field] += 1;
+  };
   let deferredByBatchLimit = false;
   const sourcePlaylist = await getDestinationPlaylist(rule.sourceService, rule.sourcePlaylistId);
-  const cachedSourceTracks = sourcePlaylist && !REFRESH_SOURCE_TRACKS ? await getPlaylistTracksFromDb(sourcePlaylist.id) : [];
-  const expectedSourceTracks = sourcePlaylist?.trackCount ?? 0;
-  const sourceCacheComplete = cachedSourceTracks.length > 0 && (expectedSourceTracks <= 0 || cachedSourceTracks.length >= expectedSourceTracks);
-  const sourceAdapter = sourceCacheComplete ? null : getAdapter(rule.sourceService, rule.userId);
-  const sourceTracks = sourceCacheComplete ? cachedSourceTracks : await sourceAdapter!.getPlaylistTracks(rule.sourcePlaylistId);
-  if (sourcePlaylist && !sourceCacheComplete) {
-    await storePlaylistSnapshot(sourcePlaylist.id, sourceTracks);
+  if (!sourcePlaylist) {
+    throw new Error(
+      `Source playlist ${rule.sourceService}:${rule.sourcePlaylistId} is not cached in DB; refresh playlists list before running sync.`,
+    );
+  }
+  const cachedSourceTracks = !REFRESH_SOURCE_TRACKS ? await getPlaylistTracksFromDb(sourcePlaylist.id) : [];
+  const expectedSourceTracks = sourcePlaylist.trackCount ?? 0;
+  const sourceCacheComplete = isReadComplete(cachedSourceTracks.length, expectedSourceTracks);
+  let sourceTracks: NormalizedTrack[];
+  if (sourceCacheComplete) {
+    sourceTracks = cachedSourceTracks;
+  } else {
+    const sourceAdapter = getAdapter(rule.sourceService, rule.userId);
+    const liveTracks = await sourceAdapter.getPlaylistTracks(rule.sourcePlaylistId);
+    const expectedForLive = Math.max(expectedSourceTracks, cachedSourceTracks.length);
+    if (!isReadComplete(liveTracks.length, expectedForLive)) {
+      throw new PartialSourceReadError(liveTracks.length, expectedForLive);
+    }
+    const snapshotResult = await storePlaylistSnapshot(sourcePlaylist.id, liveTracks, {
+      expectedCount: expectedForLive,
+    });
+    if (!snapshotResult.stored) {
+      throw new PartialSourceReadError(liveTracks.length, expectedForLive);
+    }
+    sourceTracks = liveTracks;
   }
   const sourceGroupMember = sourcePlaylist
     ? await prisma.playlistGroupMember.findUnique({ where: { playlistId: sourcePlaylist.id } })
@@ -299,6 +553,12 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       })
     : [];
   const overrideBySourceAndService = new Map(overrides.map((item) => [`${item.sourceTrackId}:${item.targetService}`, item.targetTrackId]));
+  const overrideTrackRows = overrides.length
+    ? await prisma.serviceTrack.findMany({
+        where: { id: { in: Array.from(new Set(overrides.map((item) => item.targetTrackId))) } },
+      })
+    : [];
+  const overrideTrackById = new Map(overrideTrackRows.map((track) => [track.id, track]));
   const serviceExclusions = groupId
     ? await prisma.syncTrackExclusion.findMany({
         where: { groupId },
@@ -306,14 +566,23 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     : [];
   const excludedSourceAndService = new Set(serviceExclusions.map((item) => `${item.sourceTrackId}:${item.targetService}`));
 
+  let wallClockTimer: ReturnType<typeof setTimeout> | null = null;
+  const wallClockPromise = new Promise<never>((_, reject) => {
+    wallClockTimer = setTimeout(() => {
+      reject(new Error(`Sync job exceeded wall-clock timeout of ${SYNC_JOB_TIMEOUT_MS}ms`));
+    }, SYNC_JOB_TIMEOUT_MS);
+    (wallClockTimer as { unref?: () => void }).unref?.();
+  });
+
   try {
-    for (const destination of rule.destinations) {
+    await Promise.race([wallClockPromise, Promise.all(rule.destinations.map(async (destination) => {
+      throwIfActiveJobAborted();
       const targetKey = serviceKey(destination.service);
       const targetAdapter = getAdapter(destination.service, rule.userId);
       const destinationTracks = await targetAdapter.getPlaylistTracks(destination.playlistId);
       const destinationPlaylist = await getDestinationPlaylist(destination.service, destination.playlistId);
       if (destinationPlaylist && !destinationPlaylist.isWritable) {
-        continue;
+        return;
       }
       const destinationExcludedTrackIds = new Set(
         groupId && destinationPlaylist
@@ -328,42 +597,145 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       const sourceIds = new Set(sourceTracks.map((track) => track.isrc || track.sourceTrackId));
       const previouslyLoggedTitles = await getPreviouslyLoggedTitles(syncRuleId, destination.service, destination.playlistId);
       const maxTracksThisRun = boundedTrackCount();
-      let processedThisRun = 0;
 
-      for (const sourceTrack of sourceTracks) {
-        if (previouslyLoggedTitles.has(sourceTrack.title)) {
-          continue;
+      const candidatesForThisRun = sourceTracks.filter((track) => !previouslyLoggedTitles.has(track.title));
+      const pendingSourceTracks =
+        maxTracksThisRun > 0 ? candidatesForThisRun.slice(0, maxTracksThisRun) : candidatesForThisRun;
+      if (maxTracksThisRun > 0 && candidatesForThisRun.length > pendingSourceTracks.length) {
+        deferredByBatchLimit = true;
+      }
+
+      const sourceServiceTrackById = await bulkUpsertServiceTracks(pendingSourceTracks);
+      const internalTrackIds = Array.from(
+        new Set(Array.from(sourceServiceTrackById.values()).map((track) => track.internalTrackId)),
+      );
+
+      const [matchContext, localCatalogPool] = await Promise.all([
+        buildMatchContext({
+          internalTrackIds,
+          sourceTracks: pendingSourceTracks,
+          targetService: destination.service,
+          destinationTracks,
+          sourceService: rule.sourceService,
+          userId: rule.userId,
+        }),
+        prewarmLocalCatalog(pendingSourceTracks, targetKey).catch(() => new Map() as LocalCatalogPool),
+      ]);
+
+      const searchNeeded: Array<{ sourceTrack: NormalizedTrack; sourceKey: string; internalTrackId: string }> = [];
+      for (const sourceTrack of pendingSourceTracks) {
+        throwIfActiveJobAborted();
+        const sourceKey = `${sourceTrack.sourceService}::${sourceTrack.sourceTrackId}`;
+        const sourceServiceTrack = sourceServiceTrackById.get(sourceKey);
+        if (!sourceServiceTrack) continue;
+        if (sourceExcludedTrackIds.has(sourceServiceTrack.id)) continue;
+        if (excludedSourceAndService.has(`${sourceServiceTrack.id}:${destination.service}`)) continue;
+        if (overrideBySourceAndService.has(`${sourceServiceTrack.id}:${destination.service}`)) continue;
+        if (lookupExistingInPlaylist(matchContext, sourceTrack)) continue;
+        if (lookupStoredMatch(matchContext, sourceServiceTrack.internalTrackId)) continue;
+        if (lookupIsrcMatch(matchContext, sourceTrack)) continue;
+        searchNeeded.push({ sourceTrack, sourceKey, internalTrackId: sourceServiceTrack.internalTrackId });
+      }
+
+      const searchResults = await mapWithConcurrency(searchNeeded, MATCH_CONCURRENCY, async (item) =>
+        findMatch(item.sourceTrack, targetKey, targetAdapter, {
+          skipIsrcDb: true,
+          internalTrackId: item.internalTrackId,
+          localCatalogPool,
+        }).catch(() => null),
+      );
+      const precomputedMatches = new Map<string, Awaited<ReturnType<typeof findMatch>>>();
+      for (let i = 0; i < searchNeeded.length; i++) {
+        throwIfActiveJobAborted();
+        precomputedMatches.set(searchNeeded[i].sourceKey, searchResults[i]);
+      }
+
+      const targetTracksToUpsert: NormalizedTrack[] = [];
+      const seenTargetKeys = new Set<string>();
+      const pushTargetTrack = (track: NormalizedTrack) => {
+        const key = `${track.sourceService}::${track.sourceTrackId}`;
+        if (seenTargetKeys.has(key)) return;
+        seenTargetKeys.add(key);
+        targetTracksToUpsert.push(track);
+      };
+      for (const sourceTrack of pendingSourceTracks) {
+        throwIfActiveJobAborted();
+        const sk = `${sourceTrack.sourceService}::${sourceTrack.sourceTrackId}`;
+        const sst = sourceServiceTrackById.get(sk);
+        if (!sst) continue;
+        const overrideTrackId = overrideBySourceAndService.get(`${sst.id}:${destination.service}`);
+        const existing = lookupExistingInPlaylist(matchContext, sourceTrack);
+        const storedMatch = lookupStoredMatch(matchContext, sst.internalTrackId);
+        const isrcDbMatch = lookupIsrcMatch(matchContext, sourceTrack);
+        if (overrideTrackId) continue;
+        if (existing) {
+          pushTargetTrack(existing);
+        } else if (storedMatch) {
+          pushTargetTrack(storedMatch.track);
+        } else if (isrcDbMatch) {
+          pushTargetTrack(isrcDbMatch);
+        } else {
+          const m = precomputedMatches.get(sk);
+          if (m) {
+            pushTargetTrack(m.track);
+            for (const c of (m.candidates ?? []).slice(0, 5)) pushTargetTrack(c.track);
+          }
         }
-        if (maxTracksThisRun > 0 && processedThisRun >= maxTracksThisRun) {
-          deferredByBatchLimit = true;
-          break;
-        }
-        processedThisRun += 1;
-        const sourceServiceTrack = await upsertServiceTrack(sourceTrack);
-        if (sourceExcludedTrackIds.has(sourceServiceTrack.id)) {
-          continue;
-        }
-        if (excludedSourceAndService.has(`${sourceServiceTrack.id}:${destination.service}`)) {
-          continue;
-        }
+      }
+      const targetServiceTrackByKey = targetTracksToUpsert.length
+        ? await bulkUpsertServiceTracks(targetTracksToUpsert)
+        : new Map<string, Awaited<ReturnType<typeof bulkUpsertServiceTracks>> extends Map<string, infer V> ? V : never>();
+      const destinationStateByServiceTrackId = new Map(
+        destinationPlaylist && targetServiceTrackByKey.size
+          ? (
+              await prisma.playlistTrackState.findMany({
+                where: {
+                  playlistId: destinationPlaylist.id,
+                  serviceTrackId: { in: Array.from(targetServiceTrackByKey.values()).map((track) => track.id) },
+                  removedAt: null,
+                },
+              })
+            ).map((state) => [state.serviceTrackId, state])
+          : [],
+      );
+      const getTargetServiceTrack = async (track: NormalizedTrack) => {
+        const key = `${track.sourceService}::${track.sourceTrackId}`;
+        return targetServiceTrackByKey.get(key) ?? (await upsertServiceTrack(track));
+      };
+
+      const pendingLogs: Prisma.SyncLogCreateManyInput[] = [];
+
+      for (const sourceTrack of pendingSourceTracks) {
+        throwIfActiveJobAborted();
+        const sourceKey = `${sourceTrack.sourceService}::${sourceTrack.sourceTrackId}`;
+        const sourceServiceTrack = sourceServiceTrackById.get(sourceKey);
+        if (!sourceServiceTrack) continue;
+        if (sourceExcludedTrackIds.has(sourceServiceTrack.id)) continue;
+        if (excludedSourceAndService.has(`${sourceServiceTrack.id}:${destination.service}`)) continue;
+
         const overrideTrackId = overrideBySourceAndService.get(`${sourceServiceTrack.id}:${destination.service}`);
-        const overrideTrack = overrideTrackId
-          ? await prisma.serviceTrack.findUnique({ where: { id: overrideTrackId } })
-          : null;
-        const existing = destinationTracks.find(
-          (track) => (sourceTrack.isrc && track.isrc === sourceTrack.isrc) || track.title === sourceTrack.title,
-        );
-        const storedMatch = await findStoredDestinationMatch(sourceServiceTrack.internalTrackId, destination.service);
-        const match = overrideTrack
-          ? { track: normalizedFromServiceTrack(overrideTrack), confidence: 1, source: "manual_override" }
-          : existing
-            ? { track: existing, confidence: 0.95, source: "playlist" }
-            : storedMatch
-              ? { track: storedMatch.track, confidence: storedMatch.confidence, source: "stored" }
-              : await findMatch(sourceTrack, targetKey, targetAdapter);
+        const overrideTrack = overrideTrackId ? overrideTrackById.get(overrideTrackId) ?? null : null;
+        const existing = lookupExistingInPlaylist(matchContext, sourceTrack);
+        const storedMatch = lookupStoredMatch(matchContext, sourceServiceTrack.internalTrackId);
+        const isrcDbMatch = lookupIsrcMatch(matchContext, sourceTrack);
 
-        if (match && match.confidence >= 0.9) {
-          const targetServiceTrack = await upsertServiceTrack(match.track);
+        let match: { track: NormalizedTrack; confidence: number; source?: string; candidates?: { track: NormalizedTrack; confidence: number }[] } | null;
+        if (overrideTrack) {
+          match = { track: normalizedFromServiceTrack(overrideTrack), confidence: 1, source: "manual_override" };
+        } else if (existing) {
+          match = { track: existing, confidence: 0.95, source: "playlist" };
+        } else if (storedMatch) {
+          match = { track: storedMatch.track, confidence: storedMatch.confidence, source: "stored" };
+        } else if (isrcDbMatch) {
+          match = { track: isrcDbMatch, confidence: 1, source: "isrc_db" };
+        } else {
+          match = precomputedMatches.get(sourceKey) ?? null;
+        }
+
+        if (match && match.confidence >= AUTO_MATCH_THRESHOLD) {
+          recordSource(match.source, destination);
+          recordConfidence(match.confidence, destination);
+          const targetServiceTrack = await getTargetServiceTrack(match.track);
           await upsertAutoTrackMatch({
             internalTrackId: sourceServiceTrack.internalTrackId,
             sourceService: rule.sourceService,
@@ -373,59 +745,69 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
             confidence: match.confidence,
           });
 
-          const state = destinationPlaylist
-            ? await prisma.playlistTrackState.findFirst({
-                where: {
-                  playlistId: destinationPlaylist.id,
-                  serviceTrackId: targetServiceTrack.id,
-                  removedAt: null,
-                },
-              })
-            : null;
+          const state = destinationStateByServiceTrackId.get(targetServiceTrack.id) ?? null;
           if (destinationExcludedTrackIds.has(targetServiceTrack.id)) {
             continue;
           }
           const alreadyPresent = Boolean(existing || state);
 
           if (!alreadyPresent) {
-            await writeThrottle();
+            throwIfActiveJobAborted();
+            await writeThrottle(destination.service);
+            throwIfActiveJobAborted();
             await targetAdapter.addTrackToPlaylist(destination.playlistId, match.track);
             destinationTracks.push(match.track);
           }
           if (destinationPlaylist) {
-            await markPlaylistTrackPresent(destinationPlaylist.id, targetServiceTrack.id, !alreadyPresent);
+            const updatedState = await markPlaylistTrackPresent(
+              destinationPlaylist.id,
+              targetServiceTrack.id,
+              !alreadyPresent,
+              state,
+            );
+            destinationStateByServiceTrackId.set(targetServiceTrack.id, updatedState);
           }
 
           const action = alreadyPresent ? "already_synced" : "synced";
-          if (alreadyPresent) {
-            stats.alreadySynced++;
-          } else {
-            stats.synced++;
-          }
+          recordOutcome(destination, alreadyPresent ? "alreadySynced" : "synced");
 
-          await prisma.syncLog.create({
-            data: {
-              syncJobId: job.id,
-              level: "INFO",
-              action,
-              service: destination.service,
-              playlistId: destination.playlistId,
-              trackTitle: sourceTrack.title,
-              message: alreadyPresent
-                ? `Already present with ${(match.confidence * 100).toFixed(0)}% confidence`
-                : `Added with ${(match.confidence * 100).toFixed(0)}% confidence`,
-              metadataJson: JSON.stringify({ confidence: match.confidence, alreadyPresent, matchSource: "source" in match ? match.source : "search" }),
-            },
+          pendingLogs.push({
+            syncJobId: job.id,
+            level: "INFO",
+            action,
+            service: destination.service,
+            playlistId: destination.playlistId,
+            trackTitle: sourceTrack.title,
+            message: alreadyPresent
+              ? `Already present with ${(match.confidence * 100).toFixed(0)}% confidence`
+              : `Added with ${(match.confidence * 100).toFixed(0)}% confidence`,
+            metadataJson: JSON.stringify({
+              confidence: match.confidence,
+              alreadyPresent,
+              matchSource: match.source ?? "search",
+              topConfidence: match.candidates?.[0]?.confidence,
+              secondConfidence: match.candidates?.[1]?.confidence,
+              candidateCount: match.candidates?.length ?? 0,
+              scoreBreakdown: match.candidates?.[0] && "breakdown" in match.candidates[0]
+                ? match.candidates[0].breakdown
+                : undefined,
+              gap:
+                match.candidates && match.candidates.length >= 2
+                  ? match.candidates[0].confidence - match.candidates[1].confidence
+                  : undefined,
+            }),
           });
-        } else if (match && match.confidence >= 0.65) {
+        } else if (match && match.confidence >= MANUAL_REVIEW_THRESHOLD) {
+          recordSource(`${match.source ?? "search"}_manual`, destination);
+          recordConfidence(match.confidence, destination);
           const ranked = ("candidates" in match && match.candidates?.length ? match.candidates : [match]).slice(0, 5);
           const alternativeTracks = await Promise.all(
             ranked.map(async (candidate) => ({
-              serviceTrack: await upsertServiceTrack(candidate.track),
+              serviceTrack: await getTargetServiceTrack(candidate.track),
               confidence: candidate.confidence,
             })),
           );
-          const targetServiceTrack = alternativeTracks[0]?.serviceTrack || (await upsertServiceTrack(match.track));
+          const targetServiceTrack = alternativeTracks[0]?.serviceTrack || (await getTargetServiceTrack(match.track));
           const manualCandidate = await upsertManualCandidate({
             userId: rule.userId,
             sourceServiceTrackId: sourceServiceTrack.id,
@@ -438,48 +820,52 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
             })),
           });
           if (manualCandidate.status === "REJECTED") {
-            stats.notFound++;
-            await prisma.syncLog.create({
-              data: {
-                syncJobId: job.id,
-                level: "WARNING",
-                action: "rejected_candidate",
-                service: destination.service,
-                playlistId: destination.playlistId,
-                trackTitle: sourceTrack.title,
-                message: "Previously rejected candidate was skipped",
-                metadataJson: JSON.stringify({ confidence: match.confidence, candidateId: manualCandidate.candidate.id }),
-              },
+            recordOutcome(destination, "notFound");
+            pendingLogs.push({
+              syncJobId: job.id,
+              level: "WARNING",
+              action: "rejected_candidate",
+              service: destination.service,
+              playlistId: destination.playlistId,
+              trackTitle: sourceTrack.title,
+              message: "Previously rejected candidate was skipped",
+              metadataJson: JSON.stringify({ confidence: match.confidence, candidateId: manualCandidate.candidate.id }),
             });
             continue;
           }
 
-          stats.manualRequired++;
-          await prisma.syncLog.create({
-            data: {
-              syncJobId: job.id,
-              level: "WARNING",
-              action: "manual_required",
-              service: destination.service,
-              playlistId: destination.playlistId,
-              trackTitle: sourceTrack.title,
-              message: `Manual review required at ${(match.confidence * 100).toFixed(0)}% confidence`,
-              metadataJson: JSON.stringify({ confidence: match.confidence }),
-            },
+          recordOutcome(destination, "manualRequired");
+          pendingLogs.push({
+            syncJobId: job.id,
+            level: "WARNING",
+            action: "manual_required",
+            service: destination.service,
+            playlistId: destination.playlistId,
+            trackTitle: sourceTrack.title,
+            message: `Manual review required at ${(match.confidence * 100).toFixed(0)}% confidence`,
+            metadataJson: JSON.stringify({
+              confidence: match.confidence,
+              matchSource: match.source ?? "search",
+              topConfidence: match.candidates?.[0]?.confidence,
+              secondConfidence: match.candidates?.[1]?.confidence,
+              candidateCount: match.candidates?.length ?? 0,
+              scoreBreakdown: match.candidates?.[0] && "breakdown" in match.candidates[0]
+                ? match.candidates[0].breakdown
+                : undefined,
+            }),
           });
         } else {
-          stats.notFound++;
-          await prisma.syncLog.create({
-            data: {
-              syncJobId: job.id,
-              level: "WARNING",
-              action: "not_found",
-              service: destination.service,
-              playlistId: destination.playlistId,
-              trackTitle: sourceTrack.title,
-              message: "No reliable match found",
-              metadataJson: JSON.stringify({ confidence: match?.confidence || 0 }),
-            },
+          recordSource(match ? `${match.source ?? "search"}_low_confidence` : "no_match", destination);
+          recordOutcome(destination, "notFound");
+          pendingLogs.push({
+            syncJobId: job.id,
+            level: "WARNING",
+            action: "not_found",
+            service: destination.service,
+            playlistId: destination.playlistId,
+            trackTitle: sourceTrack.title,
+            message: "No reliable match found",
+            metadataJson: JSON.stringify({ confidence: match?.confidence || 0 }),
           });
         }
       }
@@ -487,6 +873,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       if (rule.mode === "ADD_AND_REMOVE") {
         const removable = destinationTracks.filter((track) => !sourceIds.has(track.isrc || track.sourceTrackId));
         for (const track of removable) {
+          throwIfActiveJobAborted();
           const serviceTrack = await upsertServiceTrack({ ...track, sourceService: targetKey as ServiceKey });
           if (destinationExcludedTrackIds.has(serviceTrack.id)) {
             continue;
@@ -502,33 +889,48 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
               })
             : null;
           if (state) {
-            await writeThrottle();
+            throwIfActiveJobAborted();
+            await writeThrottle(destination.service);
+            throwIfActiveJobAborted();
             await targetAdapter.removeTrackFromPlaylist(destination.playlistId, track.sourceTrackId);
             await prisma.playlistTrackState.update({
               where: { id: state.id },
               data: { removedAt: new Date(), lastSeenAt: new Date() },
             });
-            stats.removed++;
-            await prisma.syncLog.create({
-              data: {
-                syncJobId: job.id,
-                level: "INFO",
-                action: "removed",
-                service: destination.service,
-                playlistId: destination.playlistId,
-                trackTitle: track.title,
-                message: "Removed system-added track missing from source",
-                metadataJson: JSON.stringify({ source: "ADD_AND_REMOVE" }),
-              },
+            recordOutcome(destination, "removed");
+            pendingLogs.push({
+              syncJobId: job.id,
+              level: "INFO",
+              action: "removed",
+              service: destination.service,
+              playlistId: destination.playlistId,
+              trackTitle: track.title,
+              message: "Removed system-added track missing from source",
+              metadataJson: JSON.stringify({ source: "ADD_AND_REMOVE" }),
             });
           }
         }
       }
 
-      if (destinationPlaylist) {
-        await syncPlaylistTracksToDb(rule.userId, targetKey, destination.playlistId).catch(() => {});
+      if (pendingLogs.length) {
+        await prisma.syncLog.createMany({ data: pendingLogs });
       }
-    }
+
+      if (destinationPlaylist) {
+        try {
+          const refreshResult = await syncPlaylistTracksToDb(rule.userId, targetKey, destination.playlistId);
+          if (refreshResult && "skipped" in refreshResult && refreshResult.skipped) {
+            console.warn(
+              `[syncEngine] destination snapshot refresh skipped for ${destination.service}:${destination.playlistId}: ${refreshResult.reason}`,
+            );
+          }
+        } catch (refreshError) {
+          console.warn(
+            `[syncEngine] destination snapshot refresh failed for ${destination.service}:${destination.playlistId}: ${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
+          );
+        }
+      }
+    }))]);
 
     const status = stats.notFound || stats.manualRequired ? "PARTIAL_SUCCESS" : "SUCCESS";
     const finished = await prisma.syncJob.update({
@@ -565,6 +967,13 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     await recordCooldownForRule([rule.sourceService, ...destServices], error).catch(() => {});
     return failed;
   } finally {
+    if (wallClockTimer) clearTimeout(wallClockTimer);
+    const remainingPids = listKnownChildPids();
+    if (remainingPids.length) {
+      killChildPids(remainingPids);
+    }
+    bindCurrentJob(null);
     await releaseAllSessions().catch(() => {});
+    await releaseLock();
   }
 }
