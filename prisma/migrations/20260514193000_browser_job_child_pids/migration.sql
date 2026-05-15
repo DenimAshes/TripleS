@@ -1,0 +1,2 @@
+ALTER TABLE "BrowserJob"
+  ADD COLUMN IF NOT EXISTS "childPidsJson" TEXT;

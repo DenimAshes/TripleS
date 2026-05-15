@@ -1,8 +1,6 @@
-import { execFile } from "node:child_process";
-import path from "node:path";
-import { promisify } from "node:util";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import { normalizeArtist, normalizeTitle } from "@/lib/utils/normalizeTrack";
+import { runBrowserRunnerCli } from "../browserRunnerCli";
 
 export type YtPlaylist = {
   id: string;
@@ -11,23 +9,25 @@ export type YtPlaylist = {
   imageUrl?: string;
 };
 
-const execFileAsync = promisify(execFile);
+function runnerTimeoutMs(): number {
+  return Math.max(1, Number(process.env.YOUTUBE_CLI_TIMEOUT_MS ?? 600_000));
+}
 
 async function runYt(args: string[]) {
-  const tsxCli = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
+  const timeoutMs = runnerTimeoutMs();
   try {
-    const { stdout } = await execFileAsync(process.execPath, [tsxCli, "worker/runners/youtube.ts", ...args], {
-      cwd: process.cwd(),
-      env: process.env,
-      timeout: 180_000,
-      maxBuffer: 10 * 1024 * 1024,
-      windowsHide: true,
+    return await runBrowserRunnerCli({
+      serviceName: "YouTube",
+      script: "worker/runners/youtube.ts",
+      args,
+      timeoutMs,
     });
-    return stdout;
   } catch (error) {
-    const details = error && typeof error === "object" && "stderr" in error ? String(error.stderr || "") : "";
     const message = error instanceof Error ? error.message : "YouTube browser runner failed";
-    throw new Error(details.trim() ? `${message}: ${details.trim()}` : message);
+    if (/timed out|ETIMEDOUT|SIGTERM|killed/i.test(message)) {
+      throw new Error(`YouTube browser runner timed out after ${timeoutMs}ms`);
+    }
+    throw new Error(message);
   }
 }
 

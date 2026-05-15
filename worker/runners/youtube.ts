@@ -1,3 +1,4 @@
+import "./_runnerGuard";
 import fs from "node:fs";
 import { type BrowserContext, type Locator, type Page } from "playwright";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
@@ -5,7 +6,7 @@ import { normalizeArtist, normalizeTitle } from "@/lib/utils/normalizeTrack";
 import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
 import { humanDwell, humanHoverClick, sleep } from "../sleep";
-import { acquireSession, sessionReuseEnabled } from "../sessionPool";
+import { acquireSession, evictSession, sessionReuseEnabled } from "../sessionPool";
 import { pathToFileURL } from "node:url";
 
 export type YtPlaylist = {
@@ -16,6 +17,11 @@ export type YtPlaylist = {
 };
 
 const SERVICE = "youtube";
+const RUNNER_TIMEOUT_MS = Math.max(1, Number(process.env.YOUTUBE_RUNNER_TIMEOUT_MS ?? 600_000));
+
+function trace(label: string): void {
+  if (process.env.RUNNER_TRACE === "true") console.error(`[yt:trace] ${label}`);
+}
 
 type YouTubeDebugInfo = {
   label: string;
@@ -32,24 +38,50 @@ async function withContext<T>(
   fn: (ctx: BrowserContext, page: Page) => Promise<T>,
   opts?: { humanize?: boolean },
 ): Promise<T> {
-  if (sessionReuseEnabled()) {
-    const session = await acquireSession(SERVICE);
-    const result = await fn(session.context, session.page);
-    if (process.env.SAVE_STATE_AFTER_RUN === "true") {
-      await saveStorageState(SERVICE, session.context);
+  let abortCleanup: (() => Promise<void>) | null = null;
+  let timedOut = false;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    const timer = setTimeout(async () => {
+      timedOut = true;
+      if (abortCleanup) await abortCleanup().catch(() => {});
+      reject(new Error(`YouTube runner timed out after ${RUNNER_TIMEOUT_MS}ms`));
+    }, RUNNER_TIMEOUT_MS);
+    (timer as { unref?: () => void }).unref?.();
+  });
+
+  const run = async () => {
+    if (sessionReuseEnabled()) {
+      const session = await acquireSession(SERVICE);
+      abortCleanup = () => evictSession(SERVICE);
+      try {
+        const result = await fn(session.context, session.page);
+        if (process.env.SAVE_STATE_AFTER_RUN === "true") {
+          await saveStorageState(SERVICE, session.context);
+        }
+        return result;
+      } catch (error) {
+        if (timedOut) throw new Error(`YouTube runner timed out after ${RUNNER_TIMEOUT_MS}ms`);
+        throw error;
+      }
     }
-    return result;
-  }
-  const session = await openWorkerBrowser({ service: SERVICE, humanize: opts?.humanize });
-  try {
-    const result = await fn(session.context, session.page);
-    if (process.env.SAVE_STATE_AFTER_RUN === "true") {
-      await saveStorageState(SERVICE, session.context);
+    const session = await openWorkerBrowser({ service: SERVICE, humanize: opts?.humanize });
+    abortCleanup = () => session.close();
+    try {
+      const result = await fn(session.context, session.page);
+      if (process.env.SAVE_STATE_AFTER_RUN === "true") {
+        await saveStorageState(SERVICE, session.context);
+      }
+      return result;
+    } catch (error) {
+      if (timedOut) throw new Error(`YouTube runner timed out after ${RUNNER_TIMEOUT_MS}ms`);
+      throw error;
+    } finally {
+      if (!timedOut) await session.close();
     }
-    return result;
-  } finally {
-    await session.close();
-  }
+  };
+
+  return Promise.race([run(), timeoutPromise]);
 }
 
 function sanitizeDebugLabel(label: string): string {
@@ -195,22 +227,31 @@ async function scrollToTop(page: Page): Promise<void> {
 
 export async function listYouTubePlaylists(): Promise<YtPlaylist[]> {
   return withContext(async (_ctx, page) => {
-    await page.goto(SERVICE_URLS.youtube.playlists!, { waitUntil: "domcontentloaded" });
+    trace("list:goto:start");
+    await page.goto(SERVICE_URLS.youtube.playlists!, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    trace("list:goto:done");
     await settle(page);
+    trace("list:settle:done");
     await assertLoggedIn(page);
+    trace("list:auth:done");
     await maybeDebug(page, "yt-playlists");
 
     const byId = new Map<string, YtPlaylist>();
     await scrollToTop(page);
+    trace("list:scroll-top:done");
 
     for (let i = 0; i < 30; i++) {
+      trace(`list:loop:${i}:extract:start`);
       const visible = await extractVisiblePlaylists(page);
+      trace(`list:loop:${i}:extract:done:${visible.length}`);
       for (const item of visible) byId.set(item.id, item);
       const moved = await scrollMainContent(page);
+      trace(`list:loop:${i}:scroll:${moved ? "moved" : "stopped"}`);
       await sleep(700);
       if (!moved) break;
     }
 
+    trace(`list:done:${byId.size}`);
     return Array.from(byId.values());
   }, { humanize: false });
 }
@@ -357,7 +398,7 @@ async function getExpectedPlaylistTrackCount(page: Page): Promise<number | undef
 
 export async function listYouTubePlaylistTracks(playlistId: string): Promise<NormalizedTrack[]> {
   return withContext(async (_ctx, page) => {
-    await page.goto(`https://music.youtube.com/playlist?list=${encodeURIComponent(playlistId)}`, { waitUntil: "domcontentloaded" });
+    await page.goto(`https://music.youtube.com/playlist?list=${encodeURIComponent(playlistId)}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await settle(page);
     await assertLoggedIn(page);
     await maybeDebug(page, "yt-playlist-tracks");
@@ -367,7 +408,7 @@ export async function listYouTubePlaylistTracks(playlistId: string): Promise<Nor
 
 export async function searchYouTubeTracks(query: string): Promise<NormalizedTrack[]> {
   return withContext(async (_ctx, page) => {
-    await page.goto(`https://music.youtube.com/search?q=${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded" });
+    await page.goto(`https://music.youtube.com/search?q=${encodeURIComponent(query)}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await settle(page);
     await assertLoggedIn(page);
     await maybeDebug(page, "yt-search");
@@ -602,8 +643,18 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((err) => {
-    console.error(err);
+  const watchdog = setTimeout(() => {
+    console.error(new Error(`YouTube runner hard timeout after ${RUNNER_TIMEOUT_MS}ms`));
     process.exit(1);
-  });
+  }, RUNNER_TIMEOUT_MS + 5_000);
+  main()
+    .then(() => {
+      clearTimeout(watchdog);
+      setImmediate(() => process.exit(0));
+    })
+    .catch((err) => {
+      clearTimeout(watchdog);
+      console.error(err);
+      process.exit(1);
+    });
 }

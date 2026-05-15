@@ -19,6 +19,18 @@ export type PreflightResult = {
   reasons: string[];
 };
 
+const PARTIAL_TOLERANCE = Math.max(
+  0,
+  Math.min(0.5, Number(process.env.WORKER_SNAPSHOT_PARTIAL_TOLERANCE ?? 0.1)),
+);
+const SOURCE_CACHE_TTL_HOURS = Math.max(0, Number(process.env.WORKER_SOURCE_CACHE_TTL_HOURS ?? 0));
+
+function isCacheComplete(active: number, declared: number): boolean {
+  if (declared <= 0) return active > 0;
+  if (active === 0) return false;
+  return (declared - active) / declared <= PARTIAL_TOLERANCE;
+}
+
 function serviceKey(service: string): string {
   return service.toLowerCase();
 }
@@ -59,7 +71,14 @@ async function checkBrowserSession(service: string): Promise<string | null> {
   return null;
 }
 
-export async function preflightSyncRule(rule: RuleForPreflight): Promise<PreflightResult> {
+export type PreflightOptions = {
+  allowIncompleteSourceCache?: boolean;
+};
+
+export async function preflightSyncRule(
+  rule: RuleForPreflight,
+  options: PreflightOptions = {},
+): Promise<PreflightResult> {
   const reasons: string[] = [];
   const enabledDestinations = rule.destinations.filter((destination) => destination.isEnabled);
 
@@ -77,6 +96,23 @@ export async function preflightSyncRule(rule: RuleForPreflight): Promise<Preflig
   });
   if (!sourcePlaylist) {
     reasons.push(`Source playlist ${rule.sourceService}:${rule.sourcePlaylistId} is not cached in database.`);
+  } else {
+    const activeCount = await prisma.playlistTrackState.count({
+      where: { playlistId: sourcePlaylist.id, removedAt: null },
+    });
+    if (!options.allowIncompleteSourceCache && !isCacheComplete(activeCount, sourcePlaylist.trackCount ?? 0)) {
+      reasons.push(
+        `Source playlist ${rule.sourceService}:${sourcePlaylist.name} has incomplete cache (${activeCount}/${sourcePlaylist.trackCount} active). Refresh playlist tracks before running sync.`,
+      );
+    }
+    if (SOURCE_CACHE_TTL_HOURS > 0 && sourcePlaylist.lastFetchedAt) {
+      const ageHours = (Date.now() - sourcePlaylist.lastFetchedAt.getTime()) / 3_600_000;
+      if (ageHours > SOURCE_CACHE_TTL_HOURS) {
+        reasons.push(
+          `Source playlist ${rule.sourceService}:${sourcePlaylist.name} cache is stale (last fetched ${ageHours.toFixed(1)}h ago, TTL ${SOURCE_CACHE_TTL_HOURS}h).`,
+        );
+      }
+    }
   }
 
   for (const destination of enabledDestinations) {

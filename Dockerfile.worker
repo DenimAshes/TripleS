@@ -3,6 +3,7 @@ FROM node:20-slim
 ENV NODE_ENV=production \
     WORKER_BROWSER=state \
     HEADLESS=true \
+    BROWSER_JOB_WORKER_ENABLED=true \
     CLOAKBROWSER_AUTO_UPDATE=false \
     CLOAKBROWSER_CACHE_DIR=/root/.cloakbrowser
 
@@ -26,4 +27,4 @@ RUN node scripts/cloak-install.mjs
 COPY . .
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["sh", "-lc", "npm run state:restore && npm run sync-worker"]
+CMD ["sh", "-lc", "npm run state:restore && npm run worker:all"]

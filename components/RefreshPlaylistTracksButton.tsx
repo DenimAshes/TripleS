@@ -3,28 +3,33 @@
 import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { pollBrowserJob, startBrowserJob } from "./browserJobClient";
 
 export function RefreshPlaylistTracksButton({ playlistId }: { playlistId: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
     setLoading(true);
+    setStatus("Queued");
     setError(null);
     try {
-      const response = await fetch(`/api/playlists/${playlistId}/refresh`, { method: "POST" });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        setError(body.error || "Could not update this playlist.");
-      } else {
-        router.refresh();
-        window.setTimeout(() => router.refresh(), 5000);
+      const started = await startBrowserJob("playlistTracks.refresh", { playlistId });
+      setStatus(started.currentStep);
+      const finished = await pollBrowserJob(started.id, (job) => setStatus(job.currentStep));
+      if (finished.status === "failed") {
+        setError(finished.error || "Could not update this playlist.");
+        return;
       }
+      router.refresh();
+      window.setTimeout(() => router.refresh(), 5000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update this playlist.");
     } finally {
       setLoading(false);
+      setStatus(null);
     }
   }
 
@@ -39,7 +44,9 @@ export function RefreshPlaylistTracksButton({ playlistId }: { playlistId: string
         <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
         {loading ? "Updating..." : "Update"}
       </button>
-      {error ? <p className="text-xs text-red-700">{error}</p> : null}
+      {status ? <p className="max-w-80 text-right text-xs text-[#666a73]">{status}</p> : null}
+      {error ? <p className="max-w-80 text-right text-xs text-red-700">{error}</p> : null}
     </div>
   );
 }
+

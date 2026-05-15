@@ -46,6 +46,8 @@ model Playlist {
   userId            String
   service           String
   servicePlaylistId String
+  apiId             String?
+  permalink         String?
   name              String
   description       String?
   imageUrl          String?
@@ -59,6 +61,7 @@ model Playlist {
   groupMembers      PlaylistGroupMember[]
 
   @@unique([service, servicePlaylistId])
+  @@index([service, apiId])
 }
 
 model PlaylistGroup {
@@ -165,26 +168,54 @@ model InternalTrack {
   updatedAt        DateTime       @updatedAt
   serviceTracks    ServiceTrack[]
   trackMatches     TrackMatch[]
+
+  @@index([isrc])
 }
 
 model ServiceTrack {
-  id              String        @id @default(cuid())
-  internalTrackId String
-  service         String
-  serviceTrackId  String
-  title           String
-  artistsJson     String
-  album           String?
-  durationMs      Int?
-  isrc            String?
-  url             String?
-  imageUrl        String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  internalTrack   InternalTrack @relation(fields: [internalTrackId], references: [id], onDelete: Cascade)
-  playlistStates  PlaylistTrackState[]
+  id                String        @id @default(cuid())
+  internalTrackId   String
+  service           String
+  serviceTrackId    String
+  title             String
+  artistsJson       String
+  album             String?
+  durationMs        Int?
+  isrc              String?
+  url               String?
+  imageUrl          String?
+  titleNormalized   String?
+  artistNormalized  String?
+  durationBucket    Int?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  internalTrack     InternalTrack @relation(fields: [internalTrackId], references: [id], onDelete: Cascade)
+  playlistStates    PlaylistTrackState[]
 
   @@unique([service, serviceTrackId])
+  @@index([service, titleNormalized, artistNormalized])
+  @@index([service, isrc])
+}
+
+model SearchCache {
+  id          String   @id @default(cuid())
+  service     String
+  queryNorm   String
+  resultsJson String
+  fetchedAt   DateTime @default(now())
+
+  @@unique([service, queryNorm])
+  @@index([fetchedAt])
+}
+
+model TrackMatchNegativeCache {
+  id               String   @id @default(cuid())
+  internalTrackId  String
+  targetService    String
+  sourceMetadataHash String?
+  attemptedAt      DateTime @default(now())
+
+  @@unique([internalTrackId, targetService])
 }
 
 model TrackMatch {
@@ -198,6 +229,10 @@ model TrackMatch {
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
   internalTrack            InternalTrack @relation(fields: [internalTrackId], references: [id], onDelete: Cascade)
+
+  @@unique([internalTrackId, spotifyServiceTrackId])
+  @@unique([internalTrackId, youtubeServiceTrackId])
+  @@unique([internalTrackId, soundcloudServiceTrackId])
 }
 
 model PlaylistTrackState {
@@ -214,15 +249,16 @@ model PlaylistTrackState {
 }
 
 model SyncJob {
-  id           String        @id @default(cuid())
-  syncRuleId   String
-  status       String
-  startedAt    DateTime
-  finishedAt   DateTime?
-  statsJson    String
-  errorMessage String?
-  syncRule     SyncRule      @relation(fields: [syncRuleId], references: [id], onDelete: Cascade)
-  logs         SyncLog[]
+  id            String        @id @default(cuid())
+  syncRuleId    String
+  status        String
+  startedAt     DateTime
+  finishedAt    DateTime?
+  statsJson     String
+  errorMessage  String?
+  childPidsJson String?
+  syncRule      SyncRule      @relation(fields: [syncRuleId], references: [id], onDelete: Cascade)
+  logs          SyncLog[]
 }
 
 model SyncLog {
@@ -247,6 +283,33 @@ model WorkerSessionState {
   updatedBy       String?
 }
 
+model BrowserJob {
+  id            String    @id @default(cuid())
+  userId        String
+  type          String
+  status        String    @default("queued")
+  inputJson     String
+  resultJson    String?
+  errorCode     String?
+  errorMessage  String?
+  errorDetailsJson String?
+  childPidsJson String?
+  currentStep   String
+  claimedAt     DateTime?
+  workerId      String?
+  attempts      Int       @default(0)
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([type, status])
+  @@index([status, updatedAt])
+  @@index([workerId])
+  @@index([createdAt])
+}
+
 model ServiceCooldown {
   service       String    @id
   until         DateTime
@@ -269,4 +332,6 @@ model ManualMatchCandidate {
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
   user                    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceServiceTrackId, targetService, candidateServiceTrackId], name: "ManualMatchCandidate_natural_key")
 }

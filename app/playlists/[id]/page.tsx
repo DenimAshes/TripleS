@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddPlaylistSyncButton, type SyncPlaylistOption } from "@/components/AddPlaylistSyncButton";
+import { PlaylistDiagnosticsCard } from "@/components/PlaylistDiagnosticsCard";
 import { PlaylistTracksAutoRefresh } from "@/components/PlaylistTracksAutoRefresh";
 import { PlaylistTracksTable, type PlaylistTrackRow } from "@/components/PlaylistTracksTable";
 import { RefreshPlaylistTracksButton } from "@/components/RefreshPlaylistTracksButton";
@@ -132,6 +133,8 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
           <RefreshPlaylistTracksButton playlistId={playlist.id} />
         </div>
       </div>
+
+      <PlaylistDiagnosticsCard playlist={playlist} activeStates={states.length} />
 
       {states.length === 0 ? (
         <div className="panel p-6 text-sm text-[#666a73]">No songs to show yet.</div>

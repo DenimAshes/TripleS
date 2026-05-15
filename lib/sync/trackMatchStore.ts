@@ -1,4 +1,4 @@
-import type { ServiceTrack } from "@prisma/client";
+import { Prisma, type ServiceTrack } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { NormalizedTrack } from "./syncTypes";
 import { serviceKey } from "@/lib/services/adapterFactory";
@@ -94,12 +94,33 @@ export async function upsertAutoTrackMatch({
     });
   }
 
-  return prisma.trackMatch.create({
-    data: {
-      internalTrackId,
-      ...buildTrackMatchData(sourceService, destinationService, sourceServiceTrackId, targetServiceTrackId),
-      confidence,
-      status,
-    },
-  });
+  try {
+    return await prisma.trackMatch.create({
+      data: {
+        internalTrackId,
+        ...buildTrackMatchData(sourceService, destinationService, sourceServiceTrackId, targetServiceTrackId),
+        confidence,
+        status,
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+      throw error;
+    }
+    const raced = await prisma.trackMatch.findFirst({
+      where: {
+        internalTrackId,
+        [destinationField]: targetServiceTrackId,
+        status: { in: ["AUTO_MATCHED", "CONFIRMED"] },
+      },
+    });
+    if (!raced) throw error;
+    return prisma.trackMatch.update({
+      where: { id: raced.id },
+      data: {
+        confidence: Math.max(raced.confidence, confidence),
+        status: raced.status === "CONFIRMED" || status === "CONFIRMED" ? "CONFIRMED" : "AUTO_MATCHED",
+      },
+    });
+  }
 }

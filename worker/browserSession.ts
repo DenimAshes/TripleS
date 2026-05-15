@@ -131,6 +131,22 @@ function commonOptions(service: ServiceId, headless: boolean, humanize: boolean)
   };
 }
 
+function configurePage(page: Page): Page {
+  const timeout = Number(process.env.WORKER_PAGE_TIMEOUT_MS ?? 60_000);
+  const navigationTimeout = Number(process.env.WORKER_NAVIGATION_TIMEOUT_MS ?? 60_000);
+  page.setDefaultTimeout(Number.isFinite(timeout) && timeout > 0 ? timeout : 60_000);
+  page.setDefaultNavigationTimeout(Number.isFinite(navigationTimeout) && navigationTimeout > 0 ? navigationTimeout : 60_000);
+  return page;
+}
+
+function pageForService(context: BrowserContext, service: ServiceId): Page | undefined {
+  const host =
+    service === "youtube" ? "music.youtube.com" :
+    service === "soundcloud" ? "soundcloud.com" :
+    "open.spotify.com";
+  return context.pages().find((page) => page.url().includes(host));
+}
+
 export async function openWorkerBrowser(options: WorkerBrowserOptions): Promise<WorkerBrowserSession> {
   ensureStateDir();
 
@@ -143,11 +159,13 @@ export async function openWorkerBrowser(options: WorkerBrowserOptions): Promise<
   if (mode === "cdp") {
     const browser = await chromium.connectOverCDP(cdpUrlForService(options.service, options.cdpUrl));
     const context = browser.contexts()[0] || (await browser.newContext());
-    const page = context.pages()[0] || (await context.newPage());
+    const page = configurePage(pageForService(context, options.service) || context.pages()[0] || (await context.newPage()));
     return {
       context,
       page,
       close: async () => {
+        // For CDP connections this closes Playwright's connection handle. The
+        // external browser process stays alive, but the runner can exit cleanly.
         await browser.close();
       },
     };
@@ -158,7 +176,7 @@ export async function openWorkerBrowser(options: WorkerBrowserOptions): Promise<
     const context = await browser.newContext({
       viewport: base.viewport,
     });
-    const page = await context.newPage();
+    const page = configurePage(await context.newPage());
     return {
       context,
       page,
@@ -175,7 +193,7 @@ export async function openWorkerBrowser(options: WorkerBrowserOptions): Promise<
       ...base,
       userDataDir: profilePath,
     });
-    const page = context.pages()[0] || (await context.newPage());
+    const page = configurePage(pageForService(context, options.service) || context.pages()[0] || (await context.newPage()));
     return {
       context,
       page,
@@ -197,7 +215,7 @@ export async function openWorkerBrowser(options: WorkerBrowserOptions): Promise<
     ...base,
     contextOptions: { storageState: statePath },
   });
-  const page = await context.newPage();
+  const page = configurePage(await context.newPage());
 
   return {
     context,

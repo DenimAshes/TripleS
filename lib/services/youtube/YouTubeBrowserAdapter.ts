@@ -2,12 +2,12 @@ import type { MusicServiceAdapter } from "../MusicServiceAdapter";
 import type { NormalizedPlaylist, NormalizedTrack, TokenPair, TrackSearchQuery } from "@/lib/sync/syncTypes";
 import { cachedSearchTracks } from "@/lib/services/searchCache";
 import {
-  addFirstSearchResultToPlaylistIfMissing,
-  listYouTubePlaylistTracks,
-  listYouTubePlaylists,
-  removeTrackFromPlaylist,
-  searchYouTubeTracks,
-} from "@/worker/runners/youtube";
+  invokeYouTubeAddTrack,
+  invokeYouTubeListPlaylistTracks,
+  invokeYouTubeListPlaylists,
+  invokeYouTubeRemoveTrack,
+  invokeYouTubeSearchTracks,
+} from "@/lib/services/runnerInvoker";
 
 export class YouTubeBrowserAdapter implements MusicServiceAdapter {
   async getCurrentUser() {
@@ -15,14 +15,7 @@ export class YouTubeBrowserAdapter implements MusicServiceAdapter {
   }
 
   async getPlaylists(): Promise<NormalizedPlaylist[]> {
-    const playlists = await listYouTubePlaylists();
-    return playlists.map((playlist) => ({
-      id: playlist.id,
-      name: playlist.name,
-      imageUrl: playlist.imageUrl,
-      trackCount: playlist.trackCount,
-      isWritable: true,
-    }));
+    return invokeYouTubeListPlaylists();
   }
 
   async createPlaylist(): Promise<NormalizedPlaylist> {
@@ -30,20 +23,20 @@ export class YouTubeBrowserAdapter implements MusicServiceAdapter {
   }
 
   async getPlaylistTracks(playlistId: string): Promise<NormalizedTrack[]> {
-    return listYouTubePlaylistTracks(playlistId);
+    return invokeYouTubeListPlaylistTracks(playlistId);
   }
 
   async searchTrack(query: TrackSearchQuery): Promise<NormalizedTrack[]> {
-    return cachedSearchTracks("youtube", query.query, () => searchYouTubeTracks(query.query));
+    return cachedSearchTracks("youtube", query.query, () => invokeYouTubeSearchTracks(query.query), query.isrc);
   }
 
   async addTrackToPlaylist(playlistId: string, track: NormalizedTrack): Promise<void> {
     const query = `${track.artists.join(" ")} ${track.title}`;
-    await addFirstSearchResultToPlaylistIfMissing(query, playlistId);
+    await invokeYouTubeAddTrack(playlistId, query);
   }
 
   async removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void> {
-    await removeTrackFromPlaylist(playlistId, trackId);
+    await invokeYouTubeRemoveTrack(playlistId, trackId);
   }
 
   async refreshAccessToken(): Promise<TokenPair> {

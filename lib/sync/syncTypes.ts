@@ -12,6 +12,8 @@ export type NormalizedPlaylist = {
   imageUrl?: string;
   trackCount: number;
   isWritable: boolean;
+  apiId?: string;
+  permalink?: string;
 };
 
 export type NormalizedTrack = {
@@ -29,6 +31,8 @@ export type NormalizedTrack = {
 export type TrackSearchQuery = {
   query: string;
   isrc?: string;
+  title?: string;
+  artist?: string;
 };
 
 export type TokenPair = {

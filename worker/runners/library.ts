@@ -1,3 +1,4 @@
+import "./_runnerGuard";
 import fs from "node:fs";
 import type { Page } from "playwright";
 import { openWorkerBrowser, saveStorageState } from "../browserSession";
