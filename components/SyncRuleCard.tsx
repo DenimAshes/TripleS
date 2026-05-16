@@ -13,7 +13,39 @@ function modeLabel(mode: string) {
   return labels[mode] || mode;
 }
 
-export function SyncRuleCard({ rule }: { rule: SyncRule & { destinations: SyncDestination[] } }) {
+function formatRelative(target: Date | null | undefined): string | null {
+  if (!target) return null;
+  const diff = target.getTime() - Date.now();
+  const abs = Math.abs(diff);
+  const minutes = Math.round(abs / 60_000);
+  if (minutes < 1) return diff > 0 ? "in a moment" : "just now";
+  if (minutes < 60) return diff > 0 ? `in ${minutes}m` : `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return diff > 0 ? `in ${hours}h` : `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return diff > 0 ? `in ${days}d` : `${days}d ago`;
+}
+
+export type SyncRuleCardProgress = {
+  sourceTotal: number;
+  destinations: Array<{
+    service: string;
+    playlistId: string;
+    playlistName?: string;
+    synced: number;
+    pendingReview: number;
+  }>;
+};
+
+export function SyncRuleCard({
+  rule,
+  progress,
+}: {
+  rule: SyncRule & { destinations: SyncDestination[] };
+  progress?: SyncRuleCardProgress;
+}) {
+  const lastRunRel = formatRelative(rule.lastRunAt);
+  const nextRunRel = rule.isEnabled ? formatRelative(rule.nextRunAt) : null;
   return (
     <div className="panel p-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -35,6 +67,43 @@ export function SyncRuleCard({ rule }: { rule: SyncRule & { destinations: SyncDe
           </RunSyncButton>
         </div>
       </div>
+
+      {progress && progress.sourceTotal > 0 ? (
+        <div className="mt-3 space-y-2">
+          {progress.destinations.map((dest) => {
+            const pct = Math.min(100, Math.round((dest.synced / progress.sourceTotal) * 100));
+            const remaining = Math.max(0, progress.sourceTotal - dest.synced);
+            return (
+              <div key={`${dest.service}::${dest.playlistId}`} className="text-sm">
+                <div className="flex items-center justify-between gap-3 text-[#444851]">
+                  <span>
+                    {dest.service}
+                    {dest.playlistName ? <span className="text-[#666a73]"> · {dest.playlistName}</span> : null}
+                  </span>
+                  <span className="text-xs text-[#666a73]">
+                    {dest.synced} / {progress.sourceTotal} synced
+                    {remaining > 0 ? <span> · {remaining} to go</span> : null}
+                    {dest.pendingReview > 0 ? <span className="text-amber-700"> · {dest.pendingReview} need review</span> : null}
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded bg-[#ececec]">
+                  <div
+                    className={pct >= 100 ? "h-full bg-emerald-500" : "h-full bg-[#18181b]"}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {(lastRunRel || nextRunRel) ? (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#666a73]">
+          {lastRunRel ? <span>Last run: {lastRunRel}</span> : null}
+          {nextRunRel ? <span>Next run: {nextRunRel}</span> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

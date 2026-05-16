@@ -10,6 +10,113 @@ import { getSession } from "@/lib/auth/session";
 
 const WORKER_SERVICES = ["youtube", "spotify", "soundcloud"] as const;
 
+type RuleWithDestinations = Awaited<ReturnType<typeof prisma.syncRule.findMany>>[number] & {
+  destinations: Awaited<ReturnType<typeof prisma.syncDestination.findMany>>;
+};
+
+export type SyncRuleProgress = {
+  sourceTotal: number;
+  destinations: Array<{
+    service: string;
+    playlistId: string;
+    playlistName?: string;
+    synced: number;
+    pendingReview: number;
+  }>;
+};
+
+async function computeRuleProgress(
+  userId: string,
+  rules: RuleWithDestinations[],
+): Promise<Map<string, SyncRuleProgress>> {
+  const out = new Map<string, SyncRuleProgress>();
+  if (!rules.length) return out;
+
+  const keys = new Set<string>();
+  const refs: Array<{ service: string; servicePlaylistId: string }> = [];
+  for (const rule of rules) {
+    for (const ref of [
+      { service: rule.sourceService, servicePlaylistId: rule.sourcePlaylistId },
+      ...rule.destinations.map((d) => ({ service: d.service, servicePlaylistId: d.playlistId })),
+    ]) {
+      const key = `${ref.service}::${ref.servicePlaylistId}`;
+      if (keys.has(key)) continue;
+      keys.add(key);
+      refs.push(ref);
+    }
+  }
+  const playlists = await prisma.playlist.findMany({
+    where: {
+      userId,
+      OR: refs.map((ref) => ({ service: ref.service, servicePlaylistId: ref.servicePlaylistId })),
+    },
+    select: { id: true, service: true, servicePlaylistId: true, name: true, trackCount: true },
+  });
+  const playlistByKey = new Map(
+    playlists.map((row) => [`${row.service}::${row.servicePlaylistId}`, row]),
+  );
+
+  const destPlaylistIds = rules.flatMap((rule) =>
+    rule.destinations
+      .map((d) => playlistByKey.get(`${d.service}::${d.playlistId}`)?.id)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const stateCounts = destPlaylistIds.length
+    ? await prisma.playlistTrackState.groupBy({
+        by: ["playlistId"],
+        where: { playlistId: { in: destPlaylistIds }, removedAt: null, addedBySystem: true },
+        _count: { _all: true },
+      })
+    : [];
+  const syncedByPlaylistId = new Map(stateCounts.map((row) => [row.playlistId, row._count._all]));
+
+  // Pending review counts are per-source-playlist (a track from this playlist
+  // got flagged for manual review). We attribute the same count to each
+  // destination so cards show how many reviews block this rule's progress.
+  const sourceIds = rules
+    .map((rule) => playlistByKey.get(`${rule.sourceService}::${rule.sourcePlaylistId}`)?.id)
+    .filter((id): id is string => Boolean(id));
+  const pendingBySource = new Map<string, number>();
+  if (sourceIds.length) {
+    const stateByPlaylist = await prisma.playlistTrackState.findMany({
+      where: { playlistId: { in: sourceIds }, removedAt: null },
+      select: { playlistId: true, serviceTrackId: true },
+    });
+    const trackIdsByPlaylist = new Map<string, string[]>();
+    for (const row of stateByPlaylist) {
+      const list = trackIdsByPlaylist.get(row.playlistId) ?? [];
+      list.push(row.serviceTrackId);
+      trackIdsByPlaylist.set(row.playlistId, list);
+    }
+    for (const [playlistId, ids] of trackIdsByPlaylist) {
+      if (!ids.length) continue;
+      const count = await prisma.manualMatchCandidate.count({
+        where: { userId, status: "PENDING", sourceServiceTrackId: { in: ids } },
+      });
+      pendingBySource.set(playlistId, count);
+    }
+  }
+
+  for (const rule of rules) {
+    const source = playlistByKey.get(`${rule.sourceService}::${rule.sourcePlaylistId}`);
+    const pendingForRule = source ? pendingBySource.get(source.id) ?? 0 : 0;
+    out.set(rule.id, {
+      sourceTotal: source?.trackCount ?? 0,
+      destinations: rule.destinations.map((d) => {
+        const dest = playlistByKey.get(`${d.service}::${d.playlistId}`);
+        return {
+          service: d.service,
+          playlistId: d.playlistId,
+          playlistName: dest?.name,
+          synced: dest ? syncedByPlaylistId.get(dest.id) ?? 0 : 0,
+          pendingReview: pendingForRule,
+        };
+      }),
+    });
+  }
+  return out;
+}
+
 export default async function DashboardPage() {
   const session = await getSession();
   const [accounts, rules, lastJob, playlists, sessionRows, pendingReviewCount] = await Promise.all([
@@ -20,6 +127,13 @@ export default async function DashboardPage() {
     prisma.workerSessionState.findMany({ where: { service: { in: WORKER_SERVICES as unknown as string[] } } }),
     prisma.manualMatchCandidate.count({ where: { userId: session!.userId, status: "PENDING" } }),
   ]);
+
+  // Per-rule progress: how many tracks of the source playlist have already
+  // been written into each destination. The sync engine bounds runs by
+  // WORKER_MAX_TRACKS_PER_RUN, so a 58-track playlist can need many runs;
+  // without this number on the card the user can't tell whether sync is
+  // still working through it or finished.
+  const ruleProgress = await computeRuleProgress(session!.userId, rules);
   const sessionByService = new Map(sessionRows.map((row) => [row.service, row]));
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
@@ -74,7 +188,9 @@ export default async function DashboardPage() {
 
       <section className="mt-6 space-y-3">
         <h2 className="text-lg font-semibold">Playlist copies</h2>
-        {rules.map((rule) => <SyncRuleCard key={rule.id} rule={rule} />)}
+        {rules.map((rule) => (
+          <SyncRuleCard key={rule.id} rule={rule} progress={ruleProgress.get(rule.id)} />
+        ))}
       </section>
 
       <section className="mt-6 panel p-4">
