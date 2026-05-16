@@ -14,6 +14,9 @@ import {
   resolveInternalTrackId,
 } from "./matchContext";
 import { classifyError, nextRunAfterFailure } from "./failureClassifier";
+import { createLogger } from "@/lib/utils/logger";
+
+const log = createLogger("triples:sync-engine");
 import { recordCooldownForRule, recordSuccessForRule } from "./serviceCooldown";
 import { releaseAllSessions } from "@/worker/sessionPool";
 import { preflightSyncRule } from "./preflight";
@@ -609,6 +612,29 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         new Set(Array.from(sourceServiceTrackById.values()).map((track) => track.internalTrackId)),
       );
 
+      // Tracks that already have a PENDING manual-review candidate for this
+      // destination service. Re-searching them every run is pure waste: the
+      // candidate is upserted via a natural key so the second insert is a
+      // no-op, but we still spin up SC browser subprocesses and burn rate
+      // budget. Once the user accepts/skips via /manual-match the candidate
+      // status flips to ACCEPTED/REJECTED and the normal stored-match /
+      // rejected_candidate paths take over.
+      const pendingReviewSourceTrackIds = new Set(
+        sourceServiceTrackById.size
+          ? (
+              await prisma.manualMatchCandidate.findMany({
+                where: {
+                  userId: rule.userId,
+                  status: "PENDING",
+                  targetService: destination.service,
+                  sourceServiceTrackId: { in: Array.from(sourceServiceTrackById.values()).map((t) => t.id) },
+                },
+                select: { sourceServiceTrackId: true },
+              })
+            ).map((row) => row.sourceServiceTrackId)
+          : [],
+      );
+
       const [matchContext, localCatalogPool] = await Promise.all([
         buildMatchContext({
           internalTrackIds,
@@ -633,6 +659,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         if (lookupExistingInPlaylist(matchContext, sourceTrack)) continue;
         if (lookupStoredMatch(matchContext, sourceServiceTrack.internalTrackId)) continue;
         if (lookupIsrcMatch(matchContext, sourceTrack)) continue;
+        if (pendingReviewSourceTrackIds.has(sourceServiceTrack.id)) continue;
         searchNeeded.push({ sourceTrack, sourceKey, internalTrackId: sourceServiceTrack.internalTrackId });
       }
 
@@ -711,7 +738,11 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         if (!pendingLogs.length) return;
         const batch = pendingLogs.splice(0);
         await prisma.syncLog.createMany({ data: batch }).catch((error) => {
-          console.warn(`[syncEngine] flush ${batch.length} logs failed: ${error instanceof Error ? error.message : String(error)}`);
+          log.warn("flush logs failed", {
+            jobId: job.id,
+            batch: batch.length,
+            error: error instanceof Error ? error.message : String(error),
+          });
         });
       };
       let lastStatsCheckpointAt = Date.now();
@@ -731,6 +762,15 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         if (!sourceServiceTrack) continue;
         if (sourceExcludedTrackIds.has(sourceServiceTrack.id)) continue;
         if (excludedSourceAndService.has(`${sourceServiceTrack.id}:${destination.service}`)) continue;
+
+        // Track already awaits a user decision on /manual-match. Skip the
+        // search and re-stats it as manualRequired so the dashboard reflects
+        // the carry-over without spawning another SC search subprocess.
+        if (pendingReviewSourceTrackIds.has(sourceServiceTrack.id)) {
+          recordSource("pending_review", destination);
+          recordOutcome(destination, "manualRequired");
+          continue;
+        }
 
         const overrideTrackId = overrideBySourceAndService.get(`${sourceServiceTrack.id}:${destination.service}`);
         const overrideTrack = overrideTrackId ? overrideTrackById.get(overrideTrackId) ?? null : null;
@@ -948,14 +988,18 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         try {
           const refreshResult = await syncPlaylistTracksToDb(rule.userId, targetKey, destination.playlistId);
           if (refreshResult && "skipped" in refreshResult && refreshResult.skipped) {
-            console.warn(
-              `[syncEngine] destination snapshot refresh skipped for ${destination.service}:${destination.playlistId}: ${refreshResult.reason}`,
-            );
+            log.warn("destination snapshot refresh skipped", {
+              jobId: job.id,
+              destination: `${destination.service}:${destination.playlistId}`,
+              reason: refreshResult.reason,
+            });
           }
         } catch (refreshError) {
-          console.warn(
-            `[syncEngine] destination snapshot refresh failed for ${destination.service}:${destination.playlistId}: ${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
-          );
+          log.warn("destination snapshot refresh failed", {
+            jobId: job.id,
+            destination: `${destination.service}:${destination.playlistId}`,
+            error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+          });
         }
       }
     }))]);

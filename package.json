@@ -22,6 +22,7 @@
     "sync:cache:invalidate": "tsx scripts/sync-cache-invalidate.ts",
     "cleanup:orphans": "tsx scripts/cleanup-orphaned-playlists.ts",
     "sweep:stale-jobs": "tsx scripts/sweep-stale-jobs.ts",
+    "lint:migrations": "tsx scripts/lint-migrations.ts",
     "match:calibrate": "tsx scripts/match-calibration.ts",
     "sync-worker": "tsx scripts/sync-worker.ts",
     "browser-job-worker": "tsx scripts/browser-job-worker.ts",
