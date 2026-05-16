@@ -99,59 +99,72 @@ export function PlaylistSyncSelector({
 
   return (
     <div className="space-y-4">
-      <div className="panel flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+      <div className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">{rule ? rule.name : "New selection"}</h2>
-          <p className="mt-1 text-sm text-[#666a73]">
-            Main playlist: {sourcePlaylist ? `${sourcePlaylist.service}: ${sourcePlaylist.name}` : "not selected"} / copies: {destinationIds.size}
+          <p className="mt-1 text-sm text-muted-fg">
+            Main:{" "}
+            <span className="text-[var(--text)]">
+              {sourcePlaylist ? `${sourcePlaylist.service} · ${sourcePlaylist.name}` : "not selected"}
+            </span>
+            <span className="mx-2 text-dim-fg">·</span>
+            <span className="tabular-nums">{destinationIds.size}</span> {destinationIds.size === 1 ? "copy" : "copies"}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving || !sourcePlaylistId}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-[#18181b] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-        >
+        <button type="button" onClick={save} disabled={saving || !sourcePlaylistId} className="btn btn-primary">
           <Save size={16} /> {saving ? "Saving..." : "Save"}
         </button>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {services.map((service) => (
-          <button
-            type="button"
-            key={service}
-            onClick={() => setActiveService(service)}
-            className={`rounded-md border px-3 py-2 text-sm font-medium ${
-              activeService === service ? "border-[#18181b] bg-[#18181b] text-white" : "border-[#deded8] bg-white"
-            }`}
-          >
-            {service}
-          </button>
-        ))}
+        {services.map((service) => {
+          const active = activeService === service;
+          return (
+            <button
+              type="button"
+              key={service}
+              onClick={() => setActiveService(service)}
+              className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
+                active
+                  ? "border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)] text-[var(--text)]"
+                  : "border-[var(--border-soft)] bg-[var(--surface)] text-muted-fg hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+              }`}
+            >
+              {service}
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
         {activePlaylists.map((playlist) => {
           const isSource = playlist.servicePlaylistId === sourcePlaylistId;
           const isDestination = destinationIds.has(playlist.servicePlaylistId);
+          const highlight = isSource || isDestination;
           return (
-            <div key={playlist.id} className={`panel p-4 ${isSource ? "border-[#18181b]" : ""}`}>
+            <div
+              key={playlist.id}
+              className={`panel p-4 transition ${
+                highlight
+                  ? "border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_25%,transparent)]"
+                  : ""
+              }`}
+            >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-medium">{playlist.name}</h3>
-                  <p className="mt-1 text-sm text-[#666a73]">{playlist.description || "No description"}</p>
-                  <p className="mt-2 text-xs text-[#666a73]">{playlist.trackCount} tracks</p>
+                <div className="min-w-0">
+                  <h3 className="truncate font-medium">{playlist.name}</h3>
+                  <p className="mt-1 truncate text-sm text-muted-fg">{playlist.description || "No description"}</p>
+                  <p className="mt-2 text-xs text-dim-fg">
+                    <span className="tabular-nums">{playlist.trackCount}</span> tracks
+                  </p>
                 </div>
-                {isSource || isDestination ? <Check className="shrink-0" size={18} /> : null}
+                {highlight ? <Check className="shrink-0 text-[var(--accent)]" size={18} /> : null}
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => selectSource(playlist)}
-                  className={`rounded-md px-3 py-2 text-sm ${
-                    isSource ? "bg-[#18181b] text-white" : "border border-[#deded8] bg-white"
-                  }`}
+                  className={isSource ? "btn btn-primary" : "btn btn-ghost"}
                 >
                   Main
                 </button>
@@ -159,22 +172,24 @@ export function PlaylistSyncSelector({
                   type="button"
                   onClick={() => toggleDestination(playlist)}
                   disabled={isSource || !playlist.isWritable}
-                  className={`rounded-md px-3 py-2 text-sm disabled:opacity-50 ${
-                    isDestination ? "bg-emerald-700 text-white" : "border border-[#deded8] bg-white"
-                  }`}
+                  className={
+                    isDestination
+                      ? "btn bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-60"
+                      : "btn btn-ghost"
+                  }
                 >
-                  Copy to
+                  {isDestination ? "Copying" : "Copy to"}
                 </button>
-                <Link
-                  href={`/playlists/${playlist.id}`}
-                  className="inline-flex items-center gap-1 rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm"
-                >
+                <Link href={`/playlists/${playlist.id}`} className="btn btn-ghost">
                   <ListMusic size={14} /> Songs
                 </Link>
               </div>
             </div>
           );
         })}
+        {!activePlaylists.length ? (
+          <div className="panel p-5 text-sm text-muted-fg md:col-span-2">No playlists on this platform yet.</div>
+        ) : null}
       </div>
     </div>
   );

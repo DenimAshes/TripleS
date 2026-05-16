@@ -19,12 +19,7 @@ export function DeleteRuleButton({ ruleId }: { ruleId: string }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={remove}
-      disabled={deleting}
-      className="inline-flex items-center justify-center gap-2 rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-60"
-    >
+    <button type="button" onClick={remove} disabled={deleting} className="btn btn-danger">
       <Trash2 size={16} /> {deleting ? "Deleting..." : "Delete"}
     </button>
   );

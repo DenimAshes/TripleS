@@ -44,17 +44,31 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           {selectedRule ? (
             <div className="panel flex items-center justify-between gap-3 p-4">
               <div>
-                <div className="font-medium">Delete selected rule</div>
-                <div className="text-sm text-[#666a73]">This removes its destinations and sync history cascade data.</div>
+                <div className="text-sm font-semibold">Delete selected rule</div>
+                <div className="mt-0.5 text-xs text-muted-fg">
+                  Removes its destinations and sync history cascade data.
+                </div>
               </div>
               <DeleteRuleButton ruleId={selectedRule.id} />
             </div>
           ) : null}
         </div>
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Existing rules</h2>
-          {rules.map((rule) => <SyncRuleCard key={rule.id} rule={rule} />)}
-          <a href="/settings?new=1" className="block rounded-md border border-dashed border-[#bdbdb6] bg-white px-3 py-3 text-center text-sm font-medium">Create another rule</a>
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-lg font-semibold">Existing rules</h2>
+            <span className="text-xs text-dim-fg">{rules.length} rule{rules.length === 1 ? "" : "s"}</span>
+          </div>
+          {rules.length ? (
+            rules.map((rule) => <SyncRuleCard key={rule.id} rule={rule} />)
+          ) : (
+            <div className="panel p-5 text-sm text-muted-fg">No sync rules yet.</div>
+          )}
+          <a
+            href="/settings?new=1"
+            className="block rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-center text-sm font-medium text-muted-fg transition hover:border-[var(--accent)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+          >
+            + Create another rule
+          </a>
         </section>
       </div>
     </AppShell>

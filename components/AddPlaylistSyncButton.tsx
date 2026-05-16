@@ -119,67 +119,78 @@ export function AddPlaylistSyncButton({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-md bg-[#18181b] px-3 py-2 text-sm font-medium text-white"
-      >
+      <button type="button" onClick={() => setOpen(true)} className="btn btn-primary">
         <Link2 size={16} /> Add sync
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-2xl rounded-lg bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#deded8] p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div className="panel w-full max-w-2xl shadow-[0_24px_80px_-20px_rgba(0,0,0,0.7)]">
+            <div className="flex items-center justify-between border-b border-[var(--border-soft)] p-5">
               <div>
                 <h2 className="text-lg font-semibold">Connect playlist</h2>
-                <p className="mt-1 text-sm text-[#666a73]">Choose where this playlist should copy songs.</p>
+                <p className="mt-1 text-sm text-muted-fg">Choose where this playlist should copy songs.</p>
               </div>
-              <button type="button" onClick={() => setOpen(false)} className="rounded-md p-2 hover:bg-[#f0f0ec]" aria-label="Close">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded-lg p-2 text-muted-fg transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                aria-label="Close"
+              >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="space-y-4 p-4">
+            <div className="space-y-4 p-5">
               <div className="flex flex-wrap gap-2">
-                {services.map((service) => (
-                  <button
-                    type="button"
-                    key={service}
-                    onClick={() => setActiveService(service)}
-                    className={`rounded-md border px-3 py-2 text-sm font-medium ${
-                      activeService === service ? "border-[#18181b] bg-[#18181b] text-white" : "border-[#deded8] bg-white"
-                    }`}
-                  >
-                    {SERVICE_LABELS[service] || service}
-                  </button>
-                ))}
+                {services.map((service) => {
+                  const active = activeService === service;
+                  return (
+                    <button
+                      type="button"
+                      key={service}
+                      onClick={() => setActiveService(service)}
+                      className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
+                        active
+                          ? "border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)] text-[var(--text)]"
+                          : "border-[var(--border-soft)] bg-[var(--surface)] text-muted-fg hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                      }`}
+                    >
+                      {SERVICE_LABELS[service] || service}
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="grid max-h-[360px] gap-2 overflow-auto">
                 {activePlaylists.map((playlist) => {
                   const disabled = !playlist.isWritable || playlist.isConnected;
+                  const checked = selectedIds.includes(playlist.id);
                   return (
                     <label
                       key={playlist.id}
-                      className={`rounded-md border p-3 text-sm ${
-                        disabled ? "border-[#eeeeea] bg-[#f8f8f6] text-[#777]" : "border-[#deded8] bg-white"
+                      className={`rounded-xl border p-3 text-sm transition ${
+                        disabled
+                          ? "cursor-not-allowed border-[var(--border-soft)] bg-[var(--surface-2)]/50 text-dim-fg"
+                          : checked
+                          ? "cursor-pointer border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)]"
+                          : "cursor-pointer border-[var(--border-soft)] bg-[var(--surface-2)] hover:border-[var(--border)]"
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <input
                           type="checkbox"
-                          checked={selectedIds.includes(playlist.id)}
+                          checked={checked}
                           disabled={disabled}
                           onChange={() => toggle(playlist.id)}
-                          className="mt-1"
+                          className="mt-1 !h-4 !w-4 accent-[var(--accent)]"
                         />
-                        <div>
-                          <div className="font-medium">{playlist.name}</div>
-                          <div className="mt-1 text-xs text-[#666a73]">
-                            {playlist.trackCount} songs
-                            {playlist.isConnected ? " · already connected" : ""}
-                            {!playlist.isWritable ? " · cannot be changed here" : ""}
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{playlist.name}</div>
+                          <div className="mt-0.5 text-xs text-muted-fg">
+                            <span className="tabular-nums">{playlist.trackCount}</span> songs
+                            {playlist.isConnected ? <span className="text-dim-fg"> · already connected</span> : null}
+                            {!playlist.isWritable ? <span className="text-dim-fg"> · read-only</span> : null}
                           </div>
                         </div>
                       </div>
@@ -187,43 +198,52 @@ export function AddPlaylistSyncButton({
                   );
                 })}
                 {activeService ? (
-                  <div className="rounded-md border border-dashed border-[#bdbdb6] bg-white p-3">
+                  <div className="rounded-xl border border-dashed border-[var(--border)] p-3">
                     <div className="flex flex-col gap-2 sm:flex-row">
                       <input
                         value={newPlaylistName}
                         onChange={(event) => setNewPlaylistName(event.target.value)}
                         placeholder={`New ${SERVICE_LABELS[activeService] || activeService} playlist name`}
-                        className="min-w-0 flex-1 rounded-md border border-[#deded8] px-3 py-2 text-sm outline-none"
+                        className="min-w-0 flex-1 text-sm"
                       />
                       <button
                         type="button"
                         onClick={createAndConnect}
                         disabled={saving || !newPlaylistName.trim()}
-                        className="inline-flex items-center justify-center gap-2 rounded-md border border-[#18181b] bg-white px-3 py-2 text-sm font-medium disabled:opacity-60"
+                        className="btn btn-ghost"
                       >
-                        <Plus size={16} /> Create new playlist
+                        <Plus size={16} /> Create new
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-md border border-[#deded8] bg-white p-4 text-sm text-[#666a73]">
+                  <div className="panel-inset p-4 text-sm text-muted-fg">
                     No other platforms are available yet.
                   </div>
                 )}
               </div>
 
-              {status ? <div className="rounded-md border border-[#deded8] bg-[#f7f7f4] p-3 text-sm text-[#444852]">{status}</div> : null}
-              {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
+              {status ? (
+                <div className="panel-inset px-3 py-2 text-sm text-muted-fg">
+                  <span className="pill pill-accent mr-2">running</span>
+                  {status}
+                </div>
+              ) : null}
+              {error ? (
+                <div className="panel-inset border border-[color-mix(in_srgb,var(--danger)_25%,var(--border))] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[#fca5a5]">
+                  {error}
+                </div>
+              ) : null}
 
-              <div className="flex justify-end gap-2 border-t border-[#deded8] pt-4">
-                <button type="button" onClick={() => setOpen(false)} className="rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm">
+              <div className="flex justify-end gap-2 border-t border-[var(--border-soft)] pt-4">
+                <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={save}
                   disabled={saving || selectedIds.length === 0}
-                  className="rounded-md bg-[#18181b] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  className="btn btn-primary"
                 >
                   {saving ? "Saving..." : "Connect"}
                 </button>

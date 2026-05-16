@@ -36,10 +36,10 @@ function staleLevel(exists: boolean, iso: string | null): StaleLevel {
 }
 
 const STALE_BADGE: Record<StaleLevel, { label: string; classes: string }> = {
-  fresh: { label: "fresh", classes: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300" },
-  warn: { label: "ageing", classes: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" },
-  stale: { label: "stale", classes: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300" },
-  missing: { label: "missing", classes: "bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400" },
+  fresh: { label: "fresh", classes: "pill-success" },
+  warn: { label: "ageing", classes: "pill-warning" },
+  stale: { label: "stale", classes: "pill-danger" },
+  missing: { label: "missing", classes: "" },
 };
 
 export function SessionUploader({ initial }: { initial: SessionInfo }) {
@@ -111,10 +111,8 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
 
   return (
     <div
-      className={`rounded-md border bg-white p-4 transition dark:bg-neutral-950 ${
-        dragOver
-          ? "border-blue-500 ring-2 ring-blue-200 dark:ring-blue-900"
-          : "border-neutral-200 dark:border-neutral-800"
+      className={`panel p-5 transition ${
+        dragOver ? "border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring)]" : ""
       }`}
       onDragOver={(e) => {
         e.preventDefault();
@@ -129,28 +127,28 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
       }}
     >
       <div className="flex items-center justify-between">
-        <h3 className="font-medium capitalize text-neutral-900 dark:text-neutral-100">{info.service}</h3>
+        <h3 className="text-base font-semibold capitalize">{info.service}</h3>
         {(() => {
           const level = staleLevel(info.exists, info.updatedAt);
           const badge = STALE_BADGE[level];
-          return <span className={`rounded-full px-2 py-0.5 text-xs ${badge.classes}`}>{badge.label}</span>;
+          return <span className={`pill ${badge.classes}`}>{badge.label}</span>;
         })()}
       </div>
-      <dl className="mt-3 space-y-1 text-xs text-neutral-600 dark:text-neutral-400">
+      <dl className="mt-4 space-y-1 text-xs text-muted-fg">
         <div className="flex justify-between">
           <dt>Updated</dt>
-          <dd>{formatRelative(info.updatedAt)}</dd>
+          <dd className="text-[var(--text)]">{formatRelative(info.updatedAt)}</dd>
         </div>
         <div className="flex justify-between">
           <dt>Size</dt>
-          <dd>{formatBytes(info.bytes)}</dd>
+          <dd className="text-[var(--text)] tabular-nums">{formatBytes(info.bytes)}</dd>
         </div>
         <div className="flex justify-between">
           <dt>By</dt>
-          <dd>{info.updatedBy ?? "—"}</dd>
+          <dd className="text-[var(--text)]">{info.updatedBy ?? "—"}</dd>
         </div>
       </dl>
-      <label className="mt-4 block cursor-pointer rounded border-2 border-dashed border-neutral-300 p-4 text-center text-sm text-neutral-600 hover:border-neutral-400 dark:border-neutral-700 dark:text-neutral-400">
+      <label className="mt-4 block cursor-pointer rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-4 text-center text-sm text-muted-fg transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">
         <input
           type="file"
           accept="application/json,.json"
@@ -164,8 +162,8 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
         />
         {busy ? "Uploading…" : "Drop storageState.json or click"}
       </label>
-      <details className="mt-3 text-xs text-neutral-600 dark:text-neutral-400">
-        <summary className="cursor-pointer select-none hover:text-neutral-900 dark:hover:text-neutral-200">Or paste JSON</summary>
+      <details className="mt-3 text-xs text-muted-fg">
+        <summary className="cursor-pointer select-none hover:text-[var(--text)]">Or paste JSON</summary>
         <textarea
           value={pasted}
           onChange={(e) => setPasted(e.target.value)}
@@ -180,14 +178,14 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
           spellCheck={false}
           rows={4}
           disabled={busy}
-          className="mt-2 w-full rounded border border-neutral-300 bg-white p-2 font-mono text-xs text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+          className="mt-2 w-full font-mono text-xs"
         />
         <div className="mt-2 flex items-center gap-2">
           <button
             type="button"
             onClick={submitPasted}
             disabled={busy || pasted.trim().length === 0}
-            className="rounded bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300"
+            className="btn btn-primary text-xs"
           >
             {busy ? "Uploading…" : "Upload pasted JSON"}
           </button>
@@ -196,20 +194,20 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
               type="button"
               onClick={() => setPasted("")}
               disabled={busy}
-              className="text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200"
+              className="text-xs text-muted-fg hover:text-[var(--text)] disabled:opacity-50"
             >
               Clear
             </button>
           )}
         </div>
       </details>
-      {error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="mt-2 text-xs text-[#fca5a5]">{error}</p>}
       {info.exists && (
         <button
           type="button"
           onClick={clear}
           disabled={busy}
-          className="mt-2 text-xs text-neutral-500 hover:text-red-600 disabled:opacity-50 dark:text-neutral-400"
+          className="mt-3 text-xs text-muted-fg transition hover:text-[#fca5a5] disabled:opacity-50"
         >
           Delete saved session
         </button>

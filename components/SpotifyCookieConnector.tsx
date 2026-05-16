@@ -87,74 +87,86 @@ export function SpotifyCookieConnector({ hasCookie, serviceUsername, connectionS
   }
 
   return (
-    <section className="panel space-y-3 p-4">
-      <header className="flex items-center gap-2">
-        <Cookie size={18} />
-        <h2 className="text-lg font-semibold">Spotify (Web cookie)</h2>
+    <section className="panel space-y-4 p-5">
+      <header className="flex items-center gap-2.5">
+        <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--surface-2)] text-[var(--accent)]">
+          <Cookie size={16} />
+        </div>
+        <h2 className="text-base font-semibold">Spotify (Web cookie)</h2>
       </header>
-      <p className="text-sm text-[#666a73]">
-        OAuth для Spotify требует Premium у владельца app. Обход — вставить cookie <code>sp_dc</code> из своего браузера.
+      <p className="text-sm text-muted-fg">
+        OAuth для Spotify требует Premium у владельца app. Обход — вставить cookie{" "}
+        <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-xs">sp_dc</code> из своего браузера.
         Один раз вставил → видны все плейлисты (включая приватные). Cookie живёт ~год.
       </p>
-      <ol className="list-decimal space-y-1 pl-5 text-sm text-[#666a73]">
-        <li>Открой <a href="https://open.spotify.com" target="_blank" rel="noreferrer" className="underline">open.spotify.com</a> и убедись что залогинен.</li>
-        <li>F12 → Application → Cookies → <code>https://open.spotify.com</code>.</li>
-        <li>Скопируй значение <code>sp_dc</code> и вставь сюда.</li>
+      <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-fg">
+        <li>
+          Открой{" "}
+          <a
+            href="https://open.spotify.com"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[var(--accent)] hover:underline"
+          >
+            open.spotify.com
+          </a>{" "}
+          и убедись что залогинен.
+        </li>
+        <li>
+          F12 → Application → Cookies →{" "}
+          <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-xs">https://open.spotify.com</code>.
+        </li>
+        <li>
+          Скопируй значение <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-xs">sp_dc</code> и
+          вставь сюда.
+        </li>
       </ol>
 
       {hasCookie ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-          Cookie сохранена. Аккаунт: <strong>{serviceUsername || "—"}</strong>
-          {connectionStatus ? <> · status: {connectionStatus}</> : null}
-          {lastError ? <div className="mt-1 text-xs text-red-700">last error: {lastError}</div> : null}
+        <div className="panel-inset p-3 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="pill pill-success">connected</span>
+            <span className="text-muted-fg">
+              as <strong className="text-[var(--text)]">{serviceUsername || "—"}</strong>
+            </span>
+          </div>
+          {lastError ? <div className="mt-2 text-xs text-[#fca5a5]">last error: {lastError}</div> : null}
         </div>
       ) : (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <div className="panel-inset p-3 text-sm text-muted-fg">
+          <span className="pill pill-warning mr-2">not connected</span>
           Cookie ещё не сохранена.
         </div>
       )}
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium">sp_dc</label>
+      <div className="space-y-2.5">
+        <label className="block text-xs font-medium uppercase tracking-wider text-muted-fg">sp_dc</label>
         <textarea
           value={cookie}
           onChange={(e) => setCookie(e.target.value)}
           placeholder="AQB..."
           rows={3}
-          className="w-full rounded-md border border-[#deded8] px-3 py-2 font-mono text-xs"
+          className="w-full font-mono text-xs"
         />
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={save}
-            disabled={busy || !cookie.trim()}
-            className="rounded-md bg-[#18181b] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-          >
+          <button type="button" onClick={save} disabled={busy || !cookie.trim()} className="btn btn-primary">
             {busy ? "Saving..." : hasCookie ? "Replace cookie" : "Save cookie"}
           </button>
           {hasCookie ? (
-            <button
-              type="button"
-              onClick={remove}
-              disabled={busy}
-              className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-white px-3 py-2 text-sm text-red-700 disabled:opacity-60"
-            >
+            <button type="button" onClick={remove} disabled={busy} className="btn btn-danger">
               <Trash2 size={14} /> Remove
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={diagnose}
-            disabled={busy || !cookie.trim()}
-            className="rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm disabled:opacity-60"
-          >
+          <button type="button" onClick={diagnose} disabled={busy || !cookie.trim()} className="btn btn-ghost">
             Diagnose
           </button>
         </div>
-        {error ? <p className="text-sm text-red-700">{error}</p> : null}
-        {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
+        {error ? <p className="text-sm text-[#fca5a5]">{error}</p> : null}
+        {message ? <p className="text-sm text-emerald-400">{message}</p> : null}
         {diagnostic ? (
-          <pre className="max-h-96 overflow-auto rounded-md bg-[#0f0f12] p-3 text-xs text-[#d8d8d2]">{diagnostic}</pre>
+          <pre className="max-h-96 overflow-auto rounded-xl border border-[var(--border-soft)] bg-[#06070b] p-3 font-mono text-xs text-muted-fg">
+            {diagnostic}
+          </pre>
         ) : null}
       </div>
     </section>

@@ -34,58 +34,93 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
     router.refresh();
   }
 
+  const writableDestinations = playlists.filter((playlist) => playlist.servicePlaylistId !== sourceId && playlist.isWritable);
   return (
-    <form onSubmit={submit} className="panel space-y-4 p-4">
+    <form onSubmit={submit} className="panel space-y-5 p-5">
       <div>
         <h2 className="text-lg font-semibold">{rule ? "Edit playlist copy" : "Create playlist copy"}</h2>
-        <p className="mt-1 text-sm text-[#666a73]">{rule ? "Changes update where songs are copied." : "Choose where songs should be copied."}</p>
+        <p className="mt-1 text-sm text-muted-fg">
+          {rule ? "Changes update where songs are copied." : "Choose where songs should be copied."}
+        </p>
       </div>
-      <label className="block space-y-1">
-        <span className="text-sm font-medium">Name</span>
-        <input name="name" defaultValue={rule?.name || "Playlist copy"} className="w-full rounded-md border border-[#deded8] px-3 py-2" />
+      <label className="block space-y-1.5">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-fg">Name</span>
+        <input name="name" defaultValue={rule?.name || "Playlist copy"} className="w-full" />
       </label>
-      <label className="block space-y-1">
-        <span className="text-sm font-medium">Main playlist</span>
-        <select name="sourcePlaylistId" value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="w-full rounded-md border border-[#deded8] px-3 py-2">
-          {playlists.map((playlist) => <option key={playlist.id} value={playlist.servicePlaylistId}>{playlist.service}: {playlist.name}</option>)}
+      <label className="block space-y-1.5">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-fg">Main playlist</span>
+        <select name="sourcePlaylistId" value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="w-full">
+          {playlists.map((playlist) => (
+            <option key={playlist.id} value={playlist.servicePlaylistId}>
+              {playlist.service}: {playlist.name}
+            </option>
+          ))}
         </select>
       </label>
       <div>
-        <div className="mb-2 text-sm font-medium">Copy to</div>
+        <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-fg">Copy to</div>
         <div className="grid gap-2 sm:grid-cols-2">
-          {playlists.filter((playlist) => playlist.servicePlaylistId !== sourceId && playlist.isWritable).map((playlist) => (
-            <label key={playlist.id} className="rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm">
-              <input name="destinations" type="checkbox" value={playlist.servicePlaylistId} defaultChecked={destinationIds.has(playlist.servicePlaylistId)} className="mr-2" />
-              {playlist.service}: {playlist.name}
-            </label>
-          ))}
-          {sourcePlaylist && playlists.filter((playlist) => playlist.servicePlaylistId !== sourceId && playlist.isWritable).length === 0 ? (
-            <div className="rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm text-[#666a73]">No writable playlists available.</div>
+          {writableDestinations.map((playlist) => {
+            const checked = destinationIds.has(playlist.servicePlaylistId);
+            return (
+              <label
+                key={playlist.id}
+                className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition ${
+                  checked
+                    ? "border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)]"
+                    : "border-[var(--border-soft)] bg-[var(--surface-2)] hover:border-[var(--border)]"
+                }`}
+              >
+                <input
+                  name="destinations"
+                  type="checkbox"
+                  value={playlist.servicePlaylistId}
+                  defaultChecked={checked}
+                  className="!h-4 !w-4 cursor-pointer accent-[var(--accent)]"
+                />
+                <span className="min-w-0 flex-1 truncate">
+                  <span className="text-dim-fg">{playlist.service}:</span> {playlist.name}
+                </span>
+              </label>
+            );
+          })}
+          {sourcePlaylist && writableDestinations.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[var(--border-soft)] px-3 py-2.5 text-sm text-muted-fg">
+              No writable playlists available.
+            </div>
           ) : null}
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Behavior</span>
-          <select name="mode" defaultValue={rule?.mode || "ADD_ONLY"} className="w-full rounded-md border border-[#deded8] px-3 py-2">
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-fg">Behavior</span>
+          <select name="mode" defaultValue={rule?.mode || "ADD_ONLY"} className="w-full">
             <option value="ADD_ONLY">Add new songs</option>
             <option value="ADD_AND_REMOVE">Keep matched</option>
           </select>
         </label>
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">Repeat</span>
-          <select name="intervalMinutes" defaultValue={rule?.intervalMinutes || 60} className="w-full rounded-md border border-[#deded8] px-3 py-2">
+        <label className="block space-y-1.5">
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-fg">Repeat</span>
+          <select name="intervalMinutes" defaultValue={rule?.intervalMinutes || 60} className="w-full">
             <option value="15">15 min</option>
             <option value="30">30 min</option>
             <option value="60">1 hour</option>
             <option value="0">Manual</option>
           </select>
         </label>
-        <label className="mt-7 flex items-center gap-2 text-sm">
-          <input name="isEnabled" type="checkbox" defaultChecked={rule?.isEnabled ?? true} /> Active
+        <label className="flex items-center gap-2 self-end pb-2 text-sm">
+          <input
+            name="isEnabled"
+            type="checkbox"
+            defaultChecked={rule?.isEnabled ?? true}
+            className="!h-4 !w-4 cursor-pointer accent-[var(--accent)]"
+          />{" "}
+          Active
         </label>
       </div>
-      <button className="rounded-md bg-[#18181b] px-3 py-2 text-sm font-medium text-white">{rule ? "Save" : "Create"}</button>
+      <button type="submit" className="btn btn-primary">
+        {rule ? "Save" : "Create"}
+      </button>
     </form>
   );
 }

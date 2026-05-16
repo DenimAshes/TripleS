@@ -23,11 +23,14 @@ function messageLabel(message: string) {
 }
 
 export function SyncLogTable({ logs }: { logs: SyncLog[] }) {
+  if (!logs.length) {
+    return <div className="panel p-6 text-sm text-muted-fg">No activity yet.</div>;
+  }
   return (
     <div className="panel overflow-x-auto">
       <table className="w-full min-w-[760px] border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-[#deded8] text-left text-[#666a73]">
+        <thead className="bg-[var(--surface-2)] text-left text-[10px] uppercase tracking-[0.15em] text-dim-fg">
+          <tr>
             <th className="p-3 font-medium">Date</th>
             <th className="p-3 font-medium">Service</th>
             <th className="p-3 font-medium">Track</th>
@@ -38,13 +41,18 @@ export function SyncLogTable({ logs }: { logs: SyncLog[] }) {
         </thead>
         <tbody>
           {logs.map((log) => (
-            <tr key={log.id} className="border-b border-[#eeeeea] last:border-0">
-              <td className="p-3 font-mono text-xs">{log.createdAt.toLocaleString()}</td>
-              <td className="p-3">{log.service}</td>
-              <td className="p-3">{log.trackTitle}</td>
-              <td className="p-3">{actionLabel(log.action)}</td>
-              <td className="p-3"><StatusBadge status={log.level.toLowerCase()} /></td>
-              <td className="p-3 text-[#666a73]">{messageLabel(log.message)}</td>
+            <tr
+              key={log.id}
+              className="border-t border-[var(--border-soft)] transition hover:bg-[var(--surface-2)]/50"
+            >
+              <td className="p-3 font-mono text-xs text-muted-fg">{log.createdAt.toLocaleString()}</td>
+              <td className="p-3 text-[var(--text)]">{log.service}</td>
+              <td className="p-3 text-[var(--text)]">{log.trackTitle}</td>
+              <td className="p-3 text-muted-fg">{actionLabel(log.action)}</td>
+              <td className="p-3">
+                <StatusBadge status={log.level.toLowerCase()} />
+              </td>
+              <td className="p-3 text-muted-fg">{messageLabel(log.message)}</td>
             </tr>
           ))}
         </tbody>

@@ -17,7 +17,7 @@ export function RefreshPlaylistsButton() {
     window.setTimeout(() => router.refresh(), 30000);
   }
   return (
-    <button onClick={refresh} className="inline-flex items-center gap-2 rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm">
+    <button onClick={refresh} className="btn btn-ghost" disabled={loading}>
       <RefreshCw size={16} className={loading ? "animate-spin" : ""} /> Update
     </button>
   );
