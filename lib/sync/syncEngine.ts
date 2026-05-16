@@ -703,7 +703,27 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       };
 
       const pendingLogs: Prisma.SyncLogCreateManyInput[] = [];
+      // Flush logs in small batches so a mid-run crash still leaves
+      // breadcrumbs in SyncLog instead of an empty job. Same idea for
+      // SyncJob.statsJson — without periodic checkpoints, a worker killed
+      // after 7 minutes of a 10-minute run shows "0 / 0" stats forever.
+      const flushLogs = async () => {
+        if (!pendingLogs.length) return;
+        const batch = pendingLogs.splice(0);
+        await prisma.syncLog.createMany({ data: batch }).catch((error) => {
+          console.warn(`[syncEngine] flush ${batch.length} logs failed: ${error instanceof Error ? error.message : String(error)}`);
+        });
+      };
+      let lastStatsCheckpointAt = Date.now();
+      const checkpointStats = async () => {
+        if (Date.now() - lastStatsCheckpointAt < 30_000) return;
+        lastStatsCheckpointAt = Date.now();
+        await prisma.syncJob
+          .update({ where: { id: job.id }, data: { statsJson: JSON.stringify(stats) } })
+          .catch(() => undefined);
+      };
 
+      try {
       for (const sourceTrack of pendingSourceTracks) {
         throwIfActiveJobAborted();
         const sourceKey = `${sourceTrack.sourceService}::${sourceTrack.sourceTrackId}`;
@@ -869,6 +889,9 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
             metadataJson: JSON.stringify({ confidence: match?.confidence || 0 }),
           });
         }
+
+        if (pendingLogs.length >= 20) await flushLogs();
+        await checkpointStats();
       }
 
       if (rule.mode === "ADD_AND_REMOVE") {
@@ -913,8 +936,12 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         }
       }
 
-      if (pendingLogs.length) {
-        await prisma.syncLog.createMany({ data: pendingLogs });
+      } finally {
+        await flushLogs();
+        // Force a final stats write so the dashboard reflects this
+        // destination's outcome before runSync writes the summary row.
+        lastStatsCheckpointAt = 0;
+        await checkpointStats();
       }
 
       if (destinationPlaylist) {
