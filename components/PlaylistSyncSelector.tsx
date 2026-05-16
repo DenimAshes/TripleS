@@ -98,20 +98,20 @@ export function PlaylistSyncSelector({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-5">
+      <div className="panel flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold">{rule ? rule.name : "New selection"}</h2>
-          <p className="mt-1 text-sm text-muted-fg">
+          <h2 className="text-2xl font-bold text-[var(--text)]">{rule ? rule.name : "Create new sync"}</h2>
+          <p className="mt-2 text-sm text-muted-fg">
             Main:{" "}
-            <span className="text-[var(--text)]">
+            <span className="font-semibold text-[var(--accent)]">
               {sourcePlaylist ? `${sourcePlaylist.service} · ${sourcePlaylist.name}` : "not selected"}
             </span>
             <span className="mx-2 text-dim-fg">·</span>
-            <span className="tabular-nums">{destinationIds.size}</span> {destinationIds.size === 1 ? "copy" : "copies"}
+            <span className="tabular-nums font-semibold text-[var(--text)]">{destinationIds.size}</span> <span className="text-muted-fg">{destinationIds.size === 1 ? "copy" : "copies"}</span>
           </p>
         </div>
-        <button type="button" onClick={save} disabled={saving || !sourcePlaylistId} className="btn btn-primary">
+        <button type="button" onClick={save} disabled={saving || !sourcePlaylistId} className="btn btn-primary whitespace-nowrap">
           <Save size={16} /> {saving ? "Saving..." : "Save"}
         </button>
       </div>
@@ -123,12 +123,12 @@ export function PlaylistSyncSelector({
             <button
               type="button"
               key={service}
-              onClick={() => setActiveService(service)}
-              className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
+              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition duration-200 ${
                 active
-                  ? "border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)] text-[var(--text)]"
-                  : "border-[var(--border-soft)] bg-[var(--surface)] text-muted-fg hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                  ? "border-[var(--border-accent)] bg-gradient-to-r from-[var(--accent-soft)] to-transparent text-[var(--text)]"
+                  : "border-[var(--border-soft)] bg-[var(--surface-2)] text-muted-fg hover:border-[var(--border-accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
               }`}
+              onClick={() => setActiveService(service)}
             >
               {service}
             </button>
@@ -136,7 +136,7 @@ export function PlaylistSyncSelector({
         })}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {activePlaylists.map((playlist) => {
           const isSource = playlist.servicePlaylistId === sourcePlaylistId;
           const isDestination = destinationIds.has(playlist.servicePlaylistId);
@@ -144,23 +144,23 @@ export function PlaylistSyncSelector({
           return (
             <div
               key={playlist.id}
-              className={`panel p-4 transition ${
+              className={`panel p-5 transition duration-200 ${
                 highlight
-                  ? "border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] shadow-[0_0_0_1px_color-mix(in_srgb,var(--accent)_25%,transparent)]"
-                  : ""
+                  ? "border-[var(--border-accent)] shadow-[0_0_20px_rgba(79,141,255,0.1)]"
+                  : "hover:border-[var(--border)]"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="truncate font-medium">{playlist.name}</h3>
+                  <h3 className="truncate font-semibold text-[var(--text)]">{playlist.name}</h3>
                   <p className="mt-1 truncate text-sm text-muted-fg">{playlist.description || "No description"}</p>
-                  <p className="mt-2 text-xs text-dim-fg">
+                  <p className="mt-2.5 text-xs font-medium text-dim-fg">
                     <span className="tabular-nums">{playlist.trackCount}</span> tracks
                   </p>
                 </div>
-                {highlight ? <Check className="shrink-0 text-[var(--accent)]" size={18} /> : null}
+                {highlight ? <Check className="shrink-0 text-[var(--accent)]" size={20} strokeWidth={2.5} /> : null}
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-5 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => selectSource(playlist)}

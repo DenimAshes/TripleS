@@ -31,9 +31,9 @@ export default async function ManualMatchPage() {
 
   return (
     <AppShell title="Review songs">
-      <div className="space-y-3">
+      <div className="space-y-4">
         {enriched.map((item) => <ManualMatchDialog key={item.id} item={item} />)}
-        {!enriched.length ? <div className="panel p-4 text-sm text-[#666a73]">Nothing to review.</div> : null}
+        {!enriched.length ? <div className="panel p-8 text-center text-sm text-muted-fg">All songs are synced. Nothing to review!</div> : null}
       </div>
     </AppShell>
   );

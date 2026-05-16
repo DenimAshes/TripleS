@@ -36,39 +36,44 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
 
   const writableDestinations = playlists.filter((playlist) => playlist.servicePlaylistId !== sourceId && playlist.isWritable);
   return (
-    <form onSubmit={submit} className="panel space-y-5 p-5">
+    <form onSubmit={submit} className="relative overflow-hidden rounded-3xl border border-white/5 bg-[#0d0e12]/80 p-8 backdrop-blur-2xl transition-all hover:border-blue-500/10">
       <div>
-        <h2 className="text-lg font-semibold">{rule ? "Edit playlist copy" : "Create playlist copy"}</h2>
-        <p className="mt-1 text-sm text-muted-fg">
-          {rule ? "Changes update where songs are copied." : "Choose where songs should be copied."}
+        <h2 className="text-2xl font-black tracking-tight text-white">{rule ? "Edit Sync Configuration" : "New Sync Protocol"}</h2>
+        <p className="mt-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+          {rule ? "Update bridge parameters" : "Initialize cross-platform mapping"}
         </p>
       </div>
-      <label className="block space-y-1.5">
-        <span className="text-xs font-medium uppercase tracking-wider text-muted-fg">Name</span>
-        <input name="name" defaultValue={rule?.name || "Playlist copy"} className="w-full" />
-      </label>
-      <label className="block space-y-1.5">
-        <span className="text-xs font-medium uppercase tracking-wider text-muted-fg">Main playlist</span>
-        <select name="sourcePlaylistId" value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="w-full">
-          {playlists.map((playlist) => (
-            <option key={playlist.id} value={playlist.servicePlaylistId}>
-              {playlist.service}: {playlist.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div>
-        <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-fg">Copy to</div>
+
+      <div className="mt-8 space-y-5">
+        <label className="block space-y-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Protocol Label</span>
+          <input name="name" defaultValue={rule?.name || "Music Bridge"} placeholder="e.g., Daily Mix Sync" className="w-full rounded-xl border border-white/5 bg-black/40 p-3 text-sm font-bold text-white placeholder:text-slate-700 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all shadow-inner" />
+        </label>
+
+        <label className="block space-y-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Origin Data Source</span>
+          <select name="sourcePlaylistId" value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="w-full rounded-xl border border-white/5 bg-black/40 p-3 text-sm font-bold text-white focus:border-blue-500/50 focus:outline-none transition-all cursor-pointer">
+            {playlists.map((playlist) => (
+              <option key={playlist.id} value={playlist.servicePlaylistId}>
+                [{playlist.service}] — {playlist.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-8">
+        <div className="mb-3 text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Destination Nodes</div>
         <div className="grid gap-2 sm:grid-cols-2">
           {writableDestinations.map((playlist) => {
             const checked = destinationIds.has(playlist.servicePlaylistId);
             return (
               <label
                 key={playlist.id}
-                className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition ${
+                className={`group flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm font-medium transition duration-200 ${
                   checked
-                    ? "border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)]"
-                    : "border-[var(--border-soft)] bg-[var(--surface-2)] hover:border-[var(--border)]"
+                    ? "border-blue-500/40 bg-blue-500/5 text-white"
+                    : "border-white/5 bg-white/[0.02] text-slate-400 hover:border-white/10 hover:bg-white/[0.04]"
                 }`}
               >
                 <input
@@ -76,50 +81,51 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
                   type="checkbox"
                   value={playlist.servicePlaylistId}
                   defaultChecked={checked}
-                  className="!h-4 !w-4 cursor-pointer accent-[var(--accent)]"
+                  className="!h-4 !w-4 cursor-pointer accent-blue-500"
                 />
                 <span className="min-w-0 flex-1 truncate">
-                  <span className="text-dim-fg">{playlist.service}:</span> {playlist.name}
+                  <span className="text-blue-500/60 text-xs font-bold">{playlist.service}:</span> <span className="ml-1">{playlist.name}</span>
                 </span>
               </label>
             );
           })}
-          {sourcePlaylist && writableDestinations.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-[var(--border-soft)] px-3 py-2.5 text-sm text-muted-fg">
-              No writable playlists available.
-            </div>
-          ) : null}
         </div>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <label className="block space-y-1.5">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-fg">Behavior</span>
-          <select name="mode" defaultValue={rule?.mode || "ADD_ONLY"} className="w-full">
-            <option value="ADD_ONLY">Add new songs</option>
-            <option value="ADD_AND_REMOVE">Keep matched</option>
+
+      <div className="mt-8 grid gap-6 sm:grid-cols-3">
+        <label className="block space-y-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Operation Mode</span>
+          <select name="mode" defaultValue={rule?.mode || "ADD_ONLY"} className="w-full rounded-xl border border-white/5 bg-black/40 p-2.5 text-xs font-bold text-white focus:outline-none">
+            <option value="ADD_ONLY">Additive Sync</option>
+            <option value="ADD_AND_REMOVE">Full Match</option>
           </select>
         </label>
-        <label className="block space-y-1.5">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-fg">Repeat</span>
-          <select name="intervalMinutes" defaultValue={rule?.intervalMinutes || 60} className="w-full">
-            <option value="15">15 min</option>
-            <option value="30">30 min</option>
-            <option value="60">1 hour</option>
-            <option value="0">Manual</option>
+        <label className="block space-y-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Frequency</span>
+          <select name="intervalMinutes" defaultValue={rule?.intervalMinutes || 60} className="w-full rounded-xl border border-white/5 bg-black/40 p-2.5 text-xs font-bold text-white focus:outline-none">
+            <option value="15">15 Minutes</option>
+            <option value="30">30 Minutes</option>
+            <option value="60">60 Minutes</option>
+            <option value="0">Manual Trigger</option>
           </select>
         </label>
-        <label className="flex items-center gap-2 self-end pb-2 text-sm">
-          <input
-            name="isEnabled"
-            type="checkbox"
-            defaultChecked={rule?.isEnabled ?? true}
-            className="!h-4 !w-4 cursor-pointer accent-[var(--accent)]"
-          />{" "}
-          Active
+        <label className="flex items-center gap-3 self-end pb-1 text-xs font-bold text-slate-400">
+          <div className="relative inline-block h-5 w-9 cursor-pointer">
+            <input
+              name="isEnabled"
+              type="checkbox"
+              defaultChecked={rule?.isEnabled ?? true}
+              className="peer sr-only cursor-pointer"
+            />
+            <div className="absolute inset-0 rounded-full bg-white/5 transition-colors peer-checked:bg-blue-600" />
+            <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-slate-400 transition-transform peer-checked:translate-x-4 peer-checked:bg-white" />
+          </div>
+          <span className="uppercase tracking-widest">Protocol Active</span>
         </label>
       </div>
-      <button type="submit" className="btn btn-primary">
-        {rule ? "Save" : "Create"}
+
+      <button type="submit" className="mt-8 w-full rounded-2xl bg-blue-600 py-4 text-sm font-black uppercase tracking-[0.2em] text-white shadow-[0_0_30px_rgba(37,99,235,0.3)] transition-all hover:bg-blue-500 hover:shadow-blue-500/50 hover:scale-[1.02] active:scale-[0.98]">
+        {rule ? "Save changes" : "Create sync rule"}
       </button>
     </form>
   );

@@ -58,42 +58,42 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
     ? [{ track: item.candidate, confidence: item.confidence, breakdown: undefined as Record<string, number> | undefined }]
     : [];
   return (
-    <div className="panel p-5">
-      <div className="grid gap-5 md:grid-cols-[1fr_1.4fr_auto] md:items-start">
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-dim-fg">Original song</div>
-          <div className="mt-1 text-base font-semibold leading-snug">{item.source?.title || item.sourceServiceTrackId}</div>
-          <div className="mt-1 text-sm text-muted-fg">
+    <div className="panel p-6">
+      <div className="grid gap-6 md:grid-cols-[1fr_1.5fr_auto] md:items-start">
+        <div className="min-w-0 p-4 rounded-lg bg-gradient-to-br from-[var(--surface-2)] to-[var(--surface-3)] border border-[var(--border-soft)]">
+          <div className="text-xs font-semibold uppercase tracking-wider text-accent-fg">Original song</div>
+          <div className="mt-3 text-base font-bold leading-snug text-[var(--text)]">{item.source?.title || item.sourceServiceTrackId}</div>
+          <div className="mt-2 text-sm text-muted-fg">
             {artists(item.source)}
             {sourceDuration ? <span className="ml-2 text-xs text-dim-fg">· {sourceDuration}</span> : null}
           </div>
         </div>
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-dim-fg">
+          <div className="text-xs font-semibold uppercase tracking-wider text-accent-fg">
             Possible matches on {item.targetService}
           </div>
-          <div className="mt-2 space-y-2">
+          <div className="mt-3 space-y-2">
             {candidates.map((candidate) => {
               const duration = formatDuration(candidate.track.durationMs);
               return (
                 <div
                   key={candidate.track.id}
-                  className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] p-3 transition hover:border-[color-mix(in_srgb,var(--accent)_30%,var(--border))]"
+                  className="group rounded-lg border border-[var(--border-soft)] bg-gradient-to-r from-[var(--surface-2)] to-transparent p-4 transition duration-200 hover:border-[var(--border-accent)] hover:shadow-[0_0_20px_rgba(79,141,255,0.1)]"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{candidate.track.title}</div>
+                      <div className="truncate text-sm font-semibold text-[var(--text)]">{candidate.track.title}</div>
                       <div className="truncate text-xs text-muted-fg">
                         {artists(candidate.track)}
                         {duration ? <span className="ml-2 text-dim-fg">· {duration}</span> : null}
                       </div>
                     </div>
-                    <div className={`shrink-0 text-xs font-semibold tabular-nums ${confidenceColor(candidate.confidence)}`}>
+                    <div className={`shrink-0 text-sm font-bold tabular-nums ${confidenceColor(candidate.confidence)}`}>
                       {Math.round(candidate.confidence * 100)}%
                     </div>
                   </div>
                   <MatchBreakdown breakdown={candidate.breakdown} />
-                  <div className="mt-2.5 flex justify-end">
+                  <div className="mt-3 flex justify-end">
                     <ManualMatchActions id={item.id} serviceTrackId={candidate.track.id} />
                   </div>
                 </div>

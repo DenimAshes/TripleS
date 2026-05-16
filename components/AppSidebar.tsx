@@ -16,43 +16,45 @@ const items = [
 export function AppSidebar() {
   const pathname = usePathname();
   return (
-    <aside className="hidden min-h-screen w-64 shrink-0 flex-col border-r border-[var(--border-soft)] bg-[var(--surface)] px-4 py-6 md:flex">
-      <div className="mb-10 flex items-center gap-3 px-2">
-        <div className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--accent)] text-[#0a0b10] font-bold">
+    <aside className="hidden min-h-screen w-64 shrink-0 flex-col border-r border-white/5 bg-[#0a0b10] px-4 py-6 md:flex">
+      <div className="mb-10 flex items-center gap-3 px-3">
+        <div className="grid h-10 w-10 place-items-center rounded-xl bg-blue-600 text-white font-black shadow-[0_0_20px_rgba(37,99,235,0.4)]">
           S
         </div>
         <div>
-          <div className="text-base font-semibold leading-tight">TripleS</div>
-          <div className="text-xs text-dim-fg leading-tight">Playlist sync</div>
+          <div className="text-base font-black tracking-tight text-white">TripleS</div>
+          <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Sync Protocol</div>
         </div>
       </div>
-      <nav className="space-y-1">
+      <nav className="space-y-1.5">
         {items.map((item) => {
           const active = pathname === item.href || pathname?.startsWith(item.href + "/");
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-all duration-300 ${
                 active
-                  ? "bg-[var(--accent-soft)] text-[var(--text)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
-                  : "text-muted-fg hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                  ? "bg-gradient-to-r from-[var(--accent-soft)] to-transparent text-[var(--text)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
+                  : "text-text-muted hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
               }`}
             >
               <item.icon
                 size={18}
-                className={active ? "text-[var(--accent)]" : "text-dim-fg group-hover:text-[var(--text)]"}
+                className={active ? "text-[var(--accent)] transition-transform" : "text-dim-fg group-hover:text-[var(--text)]"}
+                strokeWidth={active ? 2.5 : 2}
               />
               <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
-      <div className="mt-auto pt-6 text-xs text-dim-fg">
-        <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] p-3">
-          <div className="text-[var(--text-muted)] font-medium">v0.1</div>
-          <div className="mt-1 leading-relaxed">
-            Sync your music across Spotify, YouTube and SoundCloud.
+      <div className="mt-auto pt-6">
+        <div className="relative overflow-hidden rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 text-[10px]">
+          <div className="absolute -right-4 -bottom-4 h-12 w-12 rounded-full bg-blue-500/10 blur-xl" />
+          <div className="relative z-10 text-blue-400 font-black uppercase tracking-widest">Build v0.1</div>
+          <div className="relative z-10 mt-2 leading-relaxed text-slate-500 font-medium italic">
+            Secure cross-platform bridge active.
           </div>
         </div>
       </div>

@@ -30,9 +30,9 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
   return (
     <AppShell title="Playlists">
       <PlaylistsAutoRefresh hasPlaylists={playlistOptions.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-sm text-muted-fg">
-          {selectedRule ? selectedRule.name : "New selection"}
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm font-medium text-accent-fg uppercase tracking-wider">
+          {selectedRule ? selectedRule.name : "Create new sync"}
         </div>
         <RefreshPlaylistsButton />
       </div>

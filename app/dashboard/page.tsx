@@ -157,17 +157,17 @@ export default async function DashboardPage() {
       {pendingReviewCount > 0 ? (
         <Link
           href="/manual-match"
-          className="panel-accent mb-6 flex items-center justify-between gap-4 p-4 transition hover:brightness-110"
+          className="panel-accent mb-8 flex items-center justify-between gap-4 p-6 transition duration-200 hover:shadow-[0_0_24px_rgba(79,141,255,0.15)]"
         >
           <div>
-            <div className="text-sm font-semibold text-[var(--text)]">
+            <div className="text-base font-semibold text-[var(--text)]">
               {pendingReviewCount} {pendingReviewCount === 1 ? "song needs" : "songs need"} your review
             </div>
-            <div className="mt-0.5 text-xs text-muted-fg">
+            <div className="mt-1 text-sm text-muted-fg">
               Sync wasn&apos;t sure where to put them. Pick a match or skip.
             </div>
           </div>
-          <span className="text-sm font-medium text-[var(--accent)]">Review now →</span>
+          <span className="text-base font-semibold text-[var(--accent)] whitespace-nowrap">Review now →</span>
         </Link>
       ) : null}
       <div className="grid gap-4 md:grid-cols-3">
@@ -186,27 +186,27 @@ export default async function DashboardPage() {
         })}
       </div>
 
-      <section className="mt-8 space-y-3">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-semibold">Playlist copies</h2>
-          <span className="text-xs text-dim-fg">{rules.length} rule{rules.length === 1 ? "" : "s"}</span>
+      <section className="mt-10 space-y-4">
+        <div className="flex items-baseline justify-between gap-4 px-1">
+          <h2 className="text-2xl font-bold text-[var(--text)]">Playlist copies</h2>
+          <span className="text-xs font-semibold text-accent-fg uppercase tracking-wider">{rules.length} rule{rules.length === 1 ? "" : "s"}</span>
         </div>
         {rules.length ? (
           rules.map((rule) => (
             <SyncRuleCard key={rule.id} rule={rule} progress={ruleProgress.get(rule.id)} />
           ))
         ) : (
-          <div className="panel p-6 text-sm text-muted-fg">
+          <div className="panel p-8 text-center text-sm text-muted-fg">
             No sync rules yet. Open a playlist and pick a destination to connect them.
           </div>
         )}
       </section>
 
-      <section className="mt-8 panel p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="mt-10 panel p-6">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Latest activity</h2>
-            <p className="mt-1 text-sm text-muted-fg">
+            <h2 className="text-2xl font-bold text-[var(--text)]">Latest activity</h2>
+            <p className="mt-2 text-sm text-muted-fg">
               {lastJob
                 ? lastJob.finishedAt?.toLocaleString() || lastJob.startedAt.toLocaleString()
                 : "No activity yet"}
@@ -214,36 +214,36 @@ export default async function DashboardPage() {
           </div>
           {lastJob ? <StatusBadge status={lastJob.status.toLowerCase()} /> : null}
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-4">
-          <div className="panel-inset p-4">
-            <div className="text-2xl font-semibold tracking-tight">{stats.synced}</div>
-            <div className="mt-1 text-xs uppercase tracking-wider text-dim-fg">added</div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-4">
+          <div className="panel-inset p-5 rounded-lg">
+            <div className="text-3xl font-bold text-[var(--accent)] tracking-tight">{stats.synced}</div>
+            <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-fg">Added</div>
           </div>
-          <div className="panel-inset p-4">
-            <div className="text-2xl font-semibold tracking-tight">{stats.alreadySynced || 0}</div>
-            <div className="mt-1 text-xs uppercase tracking-wider text-dim-fg">already there</div>
+          <div className="panel-inset p-5 rounded-lg">
+            <div className="text-3xl font-bold text-[var(--text)] tracking-tight">{stats.alreadySynced || 0}</div>
+            <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-fg">Already there</div>
           </div>
-          <div className="panel-inset p-4">
-            <div className="text-2xl font-semibold tracking-tight">{stats.notFound}</div>
-            <div className="mt-1 text-xs uppercase tracking-wider text-dim-fg">not found</div>
+          <div className="panel-inset p-5 rounded-lg">
+            <div className="text-3xl font-bold text-[#fca5a5] tracking-tight">{stats.notFound}</div>
+            <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-fg">Not found</div>
           </div>
           <Link
             href="/manual-match"
-            className={`panel-inset p-4 transition hover:bg-[var(--surface-hover)] ${
-              pendingReviewCount > 0 ? "ring-1 ring-[var(--accent-ring)]" : ""
+            className={`panel-inset p-5 rounded-lg transition duration-200 hover:shadow-[0_0_12px_rgba(79,141,255,0.1)] ${
+              pendingReviewCount > 0 ? "ring-1 ring-[var(--border-accent)]" : ""
             }`}
           >
-            <div className="text-2xl font-semibold tracking-tight text-[var(--accent)]">
+            <div className="text-3xl font-bold text-[#fcd34d] tracking-tight">
               {pendingReviewCount}
             </div>
-            <div className="mt-1 text-xs uppercase tracking-wider text-dim-fg">
-              review{stats.manualRequired ? ` · ${stats.manualRequired} last run` : ""}
+            <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-fg">
+              Review{stats.manualRequired ? ` · ${stats.manualRequired} last run` : ""}
             </div>
           </Link>
         </div>
         {bySourceEntries.length ? (
-          <div className="mt-5">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">
+          <div className="mt-6">
+            <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-accent-fg">
               Match sources
             </h3>
             <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">

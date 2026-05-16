@@ -24,35 +24,35 @@ function messageLabel(message: string) {
 
 export function SyncLogTable({ logs }: { logs: SyncLog[] }) {
   if (!logs.length) {
-    return <div className="panel p-6 text-sm text-muted-fg">No activity yet.</div>;
+    return <div className="panel p-8 text-center text-sm text-muted-fg">No activity yet.</div>;
   }
   return (
-    <div className="panel overflow-x-auto">
+    <div className="panel overflow-hidden">
       <table className="w-full min-w-[760px] border-collapse text-sm">
-        <thead className="bg-[var(--surface-2)] text-left text-[10px] uppercase tracking-[0.15em] text-dim-fg">
+        <thead className="bg-gradient-to-r from-[var(--surface-2)] to-transparent text-left text-xs uppercase tracking-widest font-semibold text-dim-fg border-b border-[var(--border-soft)]">
           <tr>
-            <th className="p-3 font-medium">Date</th>
-            <th className="p-3 font-medium">Service</th>
-            <th className="p-3 font-medium">Track</th>
-            <th className="p-3 font-medium">Result</th>
-            <th className="p-3 font-medium">State</th>
-            <th className="p-3 font-medium">Note</th>
+            <th className="px-4 py-3.5 font-semibold">Date</th>
+            <th className="px-4 py-3.5 font-semibold">Service</th>
+            <th className="px-4 py-3.5 font-semibold">Track</th>
+            <th className="px-4 py-3.5 font-semibold">Result</th>
+            <th className="px-4 py-3.5 font-semibold">State</th>
+            <th className="px-4 py-3.5 font-semibold">Note</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-[var(--border-soft)]">
           {logs.map((log) => (
             <tr
               key={log.id}
-              className="border-t border-[var(--border-soft)] transition hover:bg-[var(--surface-2)]/50"
+              className="transition duration-200 hover:bg-[var(--surface-2)]/40"
             >
-              <td className="p-3 font-mono text-xs text-muted-fg">{log.createdAt.toLocaleString()}</td>
-              <td className="p-3 text-[var(--text)]">{log.service}</td>
-              <td className="p-3 text-[var(--text)]">{log.trackTitle}</td>
-              <td className="p-3 text-muted-fg">{actionLabel(log.action)}</td>
-              <td className="p-3">
+              <td className="px-4 py-3.5 font-mono text-xs text-muted-fg whitespace-nowrap">{log.createdAt.toLocaleString()}</td>
+              <td className="px-4 py-3.5 font-medium text-[var(--text)]">{log.service}</td>
+              <td className="px-4 py-3.5 text-[var(--text)]">{log.trackTitle}</td>
+              <td className="px-4 py-3.5 text-muted-fg">{actionLabel(log.action)}</td>
+              <td className="px-4 py-3.5">
                 <StatusBadge status={log.level.toLowerCase()} />
               </td>
-              <td className="p-3 text-muted-fg">{messageLabel(log.message)}</td>
+              <td className="px-4 py-3.5 text-muted-fg max-w-xs truncate">{messageLabel(log.message)}</td>
             </tr>
           ))}
         </tbody>

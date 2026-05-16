@@ -24,8 +24,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <AppShell title="Settings">
-      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-        <div className="space-y-3">
+      <div className="grid gap-8 lg:grid-cols-[1fr_420px]">
+        <div className="space-y-4">
           <SpotifyCookieConnector
             hasCookie={Boolean(spotifyCookie)}
             serviceUsername={spotifyAccount?.serviceUsername}
@@ -42,32 +42,32 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           />
           <SyncRuleForm playlists={playlists} rule={selectedRule} />
           {selectedRule ? (
-            <div className="panel flex items-center justify-between gap-3 p-4">
+            <div className="panel flex items-center justify-between gap-4 p-6">
               <div>
-                <div className="text-sm font-semibold">Delete selected rule</div>
-                <div className="mt-0.5 text-xs text-muted-fg">
-                  Removes its destinations and sync history cascade data.
+                <div className="text-base font-semibold text-[var(--text)]">Delete selected rule</div>
+                <div className="mt-1 text-sm text-muted-fg">
+                  Removes its destinations and sync history.
                 </div>
               </div>
               <DeleteRuleButton ruleId={selectedRule.id} />
             </div>
           ) : null}
         </div>
-        <section className="space-y-3">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-lg font-semibold">Existing rules</h2>
-            <span className="text-xs text-dim-fg">{rules.length} rule{rules.length === 1 ? "" : "s"}</span>
+        <section className="space-y-4">
+          <div className="flex items-baseline justify-between gap-2 px-1">
+            <h2 className="text-lg font-bold text-[var(--text)]">Rules</h2>
+            <span className="text-xs font-semibold text-accent-fg uppercase tracking-wider">{rules.length}</span>
           </div>
           {rules.length ? (
             rules.map((rule) => <SyncRuleCard key={rule.id} rule={rule} />)
           ) : (
-            <div className="panel p-5 text-sm text-muted-fg">No sync rules yet.</div>
+            <div className="panel p-6 text-sm text-center text-muted-fg">No rules yet.</div>
           )}
           <a
             href="/settings?new=1"
-            className="block rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-center text-sm font-medium text-muted-fg transition hover:border-[var(--accent)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+            className="block rounded-lg border border-dashed border-[var(--border-soft)] bg-gradient-to-b from-[var(--surface-2)] to-transparent px-4 py-4 text-center text-sm font-semibold text-muted-fg transition duration-200 hover:border-[var(--border-accent)] hover:bg-gradient-to-b hover:from-[var(--accent-soft)] hover:to-transparent hover:text-[var(--accent)]"
           >
-            + Create another rule
+            + Create rule
           </a>
         </section>
       </div>
