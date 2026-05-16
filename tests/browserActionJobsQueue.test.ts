@@ -157,13 +157,14 @@ describe("browser action job queue", () => {
     });
   });
 
-  test("reclaimStaleBrowserActionJobs fails stale running jobs and kills tracked child pids", async () => {
+  test("reclaimStaleBrowserActionJobs fails stale running jobs that exhausted retries", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-15T01:00:00.000Z"));
     mocks.findMany.mockResolvedValue([
       {
         id: "job-stale",
         childPidsJson: JSON.stringify([111, 222]),
+        attempts: 3,
       },
     ]);
     mocks.updateMany.mockResolvedValue({ count: 1 });
@@ -177,7 +178,7 @@ describe("browser action job queue", () => {
         status: "running",
         updatedAt: { lt: new Date("2026-05-15T00:30:00.000Z") },
       },
-      select: { id: true, childPidsJson: true },
+      select: { id: true, childPidsJson: true, attempts: true },
     });
     expect(mocks.updateMany).toHaveBeenCalledWith({
       where: {
@@ -190,6 +191,38 @@ describe("browser action job queue", () => {
         errorCode: "RUNNER_TIMEOUT",
         childPidsJson: null,
         finishedAt: expect.any(Date),
+      }),
+    });
+    vi.useRealTimers();
+  });
+
+  test("reclaimStaleBrowserActionJobs re-queues stale jobs that still have retries left", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-15T01:00:00.000Z"));
+    mocks.findMany.mockResolvedValue([
+      {
+        id: "job-stale-retry",
+        childPidsJson: JSON.stringify([333]),
+        attempts: 1,
+      },
+    ]);
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+
+    const count = await reclaimStaleBrowserActionJobs(30 * 60_000);
+
+    expect(count).toBe(1);
+    expect(mocks.killChildPids).toHaveBeenCalledWith([333]);
+    expect(mocks.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ["job-stale-retry"] },
+        status: "running",
+        updatedAt: { lt: new Date("2026-05-15T00:30:00.000Z") },
+      },
+      data: expect.objectContaining({
+        status: "queued",
+        claimedAt: null,
+        workerId: null,
+        childPidsJson: null,
       }),
     });
     vi.useRealTimers();

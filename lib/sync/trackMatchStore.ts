@@ -34,6 +34,16 @@ export function buildTrackMatchData(
   };
 }
 
+// Stored matches go stale: a SC track can be removed, made private, or
+// the user can have a since-deleted match that we keep happily reusing.
+// Skip rows that haven't been verified within the freshness window;
+// callers fall back to live search and will re-write verifiedAt when the
+// add actually lands.
+const MATCH_FRESHNESS_MS = Math.max(
+  0,
+  Number(process.env.MATCH_FRESHNESS_DAYS ?? 30) * 24 * 60 * 60_000,
+);
+
 export async function findStoredDestinationMatch(internalTrackId: string, destinationService: string) {
   const destinationField = trackMatchField(destinationService);
   const stored = await prisma.trackMatch.findFirst({
@@ -48,6 +58,18 @@ export async function findStoredDestinationMatch(internalTrackId: string, destin
   const serviceTrackId = stored?.[destinationField as keyof typeof stored];
   if (!stored || typeof serviceTrackId !== "string") return null;
 
+  // CONFIRMED matches come from a user picking the candidate by hand, so we
+  // trust them indefinitely. AUTO_MATCHED rows can drift; re-validate when
+  // older than MATCH_FRESHNESS_DAYS by returning null so the caller falls
+  // back to search.
+  if (
+    stored.status === "AUTO_MATCHED" &&
+    MATCH_FRESHNESS_MS > 0 &&
+    (!stored.verifiedAt || Date.now() - stored.verifiedAt.getTime() > MATCH_FRESHNESS_MS)
+  ) {
+    return null;
+  }
+
   const track = await prisma.serviceTrack.findUnique({ where: { id: serviceTrackId } });
   if (!track) return null;
 
@@ -56,6 +78,12 @@ export async function findStoredDestinationMatch(internalTrackId: string, destin
     confidence: stored.confidence,
     status: stored.status,
   };
+}
+
+export async function markTrackMatchVerified(matchId: string): Promise<void> {
+  await prisma.trackMatch
+    .update({ where: { id: matchId }, data: { verifiedAt: new Date() } })
+    .catch(() => undefined);
 }
 
 export async function upsertAutoTrackMatch({
@@ -90,6 +118,7 @@ export async function upsertAutoTrackMatch({
       data: {
         confidence: Math.max(existing.confidence, confidence),
         status: existing.status === "CONFIRMED" || status === "CONFIRMED" ? "CONFIRMED" : "AUTO_MATCHED",
+        verifiedAt: new Date(),
       },
     });
   }
@@ -101,6 +130,7 @@ export async function upsertAutoTrackMatch({
         ...buildTrackMatchData(sourceService, destinationService, sourceServiceTrackId, targetServiceTrackId),
         confidence,
         status,
+        verifiedAt: new Date(),
       },
     });
   } catch (error) {

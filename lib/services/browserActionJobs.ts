@@ -281,6 +281,11 @@ export async function runNextQueuedBrowserActionJob(): Promise<BrowserActionJob 
   return getBrowserActionJob(job.userId, job.id);
 }
 
+const BROWSER_JOB_MAX_ATTEMPTS = Math.max(
+  1,
+  Number(process.env.BROWSER_JOB_MAX_ATTEMPTS ?? 3),
+);
+
 export async function reclaimStaleBrowserActionJobs(staleAfterMs: number): Promise<number> {
   const threshold = new Date(Date.now() - Math.max(1, staleAfterMs));
   const staleJobs = await prisma.browserJob.findMany({
@@ -288,7 +293,7 @@ export async function reclaimStaleBrowserActionJobs(staleAfterMs: number): Promi
       status: "running",
       updatedAt: { lt: threshold },
     },
-    select: { id: true, childPidsJson: true },
+    select: { id: true, childPidsJson: true, attempts: true },
   });
   if (staleJobs.length === 0) return 0;
 
@@ -297,25 +302,52 @@ export async function reclaimStaleBrowserActionJobs(staleAfterMs: number): Promi
     if (pids.length) killChildPids(pids);
   }
 
-  const updated = await prisma.browserJob.updateMany({
-    where: {
-      id: { in: staleJobs.map((job) => job.id) },
-      status: "running",
-      updatedAt: { lt: threshold },
-    },
-    data: {
-      status: "failed",
-      currentStep: "Failed",
-      errorCode: "RUNNER_TIMEOUT",
-      errorMessage: `Browser job worker did not update this job for ${Math.round(staleAfterMs / 1000)}s.`,
-      errorDetailsJson: JSON.stringify({
-        recommendedAction: "Retry the action; if it repeats, check browser worker logs and runner timeouts.",
-      }),
-      childPidsJson: null,
-      finishedAt: new Date(),
-    },
-  });
-  return updated.count;
+  // Auto-retry transient runner timeouts up to BROWSER_JOB_MAX_ATTEMPTS by
+  // re-queueing instead of failing outright. claimQueuedBrowserActionJob
+  // increments attempts on every claim, so this is a true retry counter.
+  const retryable = staleJobs.filter((job) => job.attempts < BROWSER_JOB_MAX_ATTEMPTS);
+  const exhausted = staleJobs.filter((job) => job.attempts >= BROWSER_JOB_MAX_ATTEMPTS);
+
+  let updated = 0;
+  if (retryable.length) {
+    const requeued = await prisma.browserJob.updateMany({
+      where: {
+        id: { in: retryable.map((job) => job.id) },
+        status: "running",
+        updatedAt: { lt: threshold },
+      },
+      data: {
+        status: "queued",
+        currentStep: "Reclaimed after runner timeout, will retry",
+        claimedAt: null,
+        workerId: null,
+        childPidsJson: null,
+      },
+    });
+    updated += requeued.count;
+  }
+  if (exhausted.length) {
+    const failed = await prisma.browserJob.updateMany({
+      where: {
+        id: { in: exhausted.map((job) => job.id) },
+        status: "running",
+        updatedAt: { lt: threshold },
+      },
+      data: {
+        status: "failed",
+        currentStep: "Failed",
+        errorCode: "RUNNER_TIMEOUT",
+        errorMessage: `Browser job worker did not update this job for ${Math.round(staleAfterMs / 1000)}s after ${BROWSER_JOB_MAX_ATTEMPTS} attempt(s).`,
+        errorDetailsJson: JSON.stringify({
+          recommendedAction: "Retry manually; if it repeats, check browser worker logs and runner timeouts.",
+        }),
+        childPidsJson: null,
+        finishedAt: new Date(),
+      },
+    });
+    updated += failed.count;
+  }
+  return updated;
 }
 
 export async function getBrowserActionJob(userId: string, id: string): Promise<BrowserActionJob | null> {

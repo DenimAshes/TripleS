@@ -227,6 +227,7 @@ model TrackMatch {
   soundcloudServiceTrackId  String?
   confidence               Float
   status                   String
+  verifiedAt               DateTime?
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
   internalTrack            InternalTrack @relation(fields: [internalTrackId], references: [id], onDelete: Cascade)
@@ -257,9 +258,12 @@ model SyncJob {
   finishedAt    DateTime?
   statsJson     String
   errorMessage  String?
+  errorKind     String?
   childPidsJson String?
   syncRule      SyncRule      @relation(fields: [syncRuleId], references: [id], onDelete: Cascade)
   logs          SyncLog[]
+
+  @@index([status, errorKind])
 }
 
 model SyncLog {

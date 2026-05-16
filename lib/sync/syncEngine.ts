@@ -1019,6 +1019,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     await recordSuccessForRule([rule.sourceService, ...rule.destinations.map((destination) => destination.service)]).catch(() => {});
     return finished;
   } catch (error) {
+    const errorKind = classifyError(error);
     const failed = await prisma.syncJob.update({
       where: { id: job.id },
       data: {
@@ -1026,6 +1027,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         finishedAt: new Date(),
         statsJson: JSON.stringify(stats),
         errorMessage: error instanceof Error ? error.message : "Unknown sync error",
+        errorKind,
       },
     });
     await prisma.syncRule.update({
@@ -1040,7 +1042,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     // Surface auth failures on the ConnectedAccount so the UI can show a
     // "re-login" prompt instead of leaving the user wondering why every
     // sync fails. Best-effort: don't let bookkeeping mask the real error.
-    if (classifyError(error) === "auth") {
+    if (errorKind === "auth") {
       const affected = new Set([rule.sourceService, ...destServices]);
       for (const service of affected) {
         await prisma.connectedAccount
