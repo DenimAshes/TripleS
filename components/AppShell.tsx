@@ -1,5 +1,6 @@
 import { AppSidebar } from "./AppSidebar";
 import { BottomNav } from "./BottomNav";
+import { HealthIndicator } from "./HealthIndicator";
 
 export function AppShell({ children, title }: { children: React.ReactNode; title: string }) {
   return (
@@ -15,9 +16,12 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
               <div className="text-[10px] uppercase tracking-[0.4em] font-bold text-blue-500/60">System Core</div>
               <h1 className="mt-2 text-4xl font-black tracking-tighter text-white bg-gradient-to-r from-white via-white to-blue-500/50 bg-clip-text text-transparent">{title}</h1>
             </div>
-            <form action="/api/auth/logout" method="post">
-              <button className="btn btn-ghost">Logout</button>
-            </form>
+            <div className="flex items-center gap-4">
+              <HealthIndicator />
+              <form action="/api/auth/logout" method="post">
+                <button className="btn btn-ghost">Logout</button>
+              </form>
+            </div>
           </header>
           {children}
         </div>

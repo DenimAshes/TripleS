@@ -1,6 +1,6 @@
 "use client";
 
-import { Link2, Plus, X } from "lucide-react";
+import { Link2, ListMusic, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { pollBrowserJob, startBrowserJob } from "./browserJobClient";
@@ -12,6 +12,7 @@ export type SyncPlaylistOption = {
   trackCount: number;
   isWritable: boolean;
   isConnected: boolean;
+  imageUrl?: string | null;
 };
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -185,7 +186,19 @@ export function AddPlaylistSyncButton({
                           onChange={() => toggle(playlist.id)}
                           className="mt-1 !h-4 !w-4 accent-[var(--accent)]"
                         />
-                        <div className="min-w-0">
+                        {playlist.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={playlist.imageUrl}
+                            alt=""
+                            className="h-11 w-11 shrink-0 rounded-lg object-cover ring-1 ring-[var(--border-soft)]"
+                          />
+                        ) : (
+                          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-[var(--surface)] text-dim-fg ring-1 ring-[var(--border-soft)]">
+                            <ListMusic size={18} strokeWidth={1.5} />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
                           <div className="truncate font-medium">{playlist.name}</div>
                           <div className="mt-0.5 text-xs text-muted-fg">
                             <span className="tabular-nums">{playlist.trackCount}</span> songs

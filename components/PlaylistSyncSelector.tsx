@@ -14,6 +14,7 @@ export type PlaylistOption = {
   description: string | null;
   trackCount: number;
   isWritable: boolean;
+  imageUrl?: string | null;
 };
 
 type RuleWithDestinations = Pick<
@@ -150,8 +151,20 @@ export function PlaylistSyncSelector({
                   : "hover:border-[var(--border)]"
               }`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+              <div className="flex items-start gap-4">
+                {playlist.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={playlist.imageUrl}
+                    alt=""
+                    className="h-16 w-16 shrink-0 rounded-xl object-cover ring-1 ring-[var(--border-soft)]"
+                  />
+                ) : (
+                  <div className="grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-[var(--surface-2)] text-dim-fg ring-1 ring-[var(--border-soft)]">
+                    <ListMusic size={24} strokeWidth={1.5} />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
                   <h3 className="truncate font-semibold text-[var(--text)]">{playlist.name}</h3>
                   <p className="mt-1 truncate text-sm text-muted-fg">{playlist.description || "No description"}</p>
                   <p className="mt-2.5 text-xs font-medium text-dim-fg">

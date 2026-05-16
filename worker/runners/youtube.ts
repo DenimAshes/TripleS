@@ -259,38 +259,81 @@ export async function listYouTubePlaylists(): Promise<YtPlaylist[]> {
 
 async function extractVisiblePlaylists(page: Page): Promise<YtPlaylist[]> {
   return page.evaluate(() => {
-      const out: Array<{ id: string; name: string; trackCount: number; imageUrl?: string }> = [];
-      const seen = new Set<string>();
+    // Known auto-playlists and per-track collections that YT Music returns
+    // but the user never "owns" in a meaningful sense. We don't want them
+    // mixed into the regular playlist picker:
+    //   LM      — Liked Music
+    //   SE      — "Saved for later" / episode list
+    //   RD…     — radio / mix auto-playlists
+    //   OLAK5uy_— album-as-playlist surfaces from the artist
+    //   MPREb_  — auto-generated playlist for an album/release
+    //   AMPYM…  — auto-mixes
+    function isAutoPlaylistId(id: string): boolean {
+      if (id === "LM" || id === "SE") return true;
+      if (id.startsWith("RD")) return true;
+      if (id.startsWith("OLAK5uy_")) return true;
+      if (id.startsWith("MPREb_") || id.startsWith("MPLA")) return true;
+      if (id.startsWith("AMPYM") || id.startsWith("ALPL")) return true;
+      return false;
+    }
 
-      const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="playlist?list="]'));
-      for (const a of anchors) {
-        const m = a.href.match(/list=([A-Za-z0-9_-]+)/);
-        const id = m?.[1];
-        if (!id || seen.has(id)) continue;
+    // Heuristic: YT Music renders saved (someone-else's) playlists with a
+    // byline like "Playlist • <Author>" while owned ones either omit the
+    // author or show it as the current user's display name. We can't read
+    // the current user reliably from the page, so we treat *any* subtitle
+    // that names an author after the bullet as not-owned. False positives
+    // (an own playlist that YT decorates with the user's own name) are
+    // rare; sync still works on a per-playlist basis via the detail page.
+    function looksOwned(subtitle: string): boolean {
+      if (!subtitle) return true; // no byline at all — owned default
+      const parts = subtitle.split(/\s*[•·]\s*/).map((p) => p.trim()).filter(Boolean);
+      if (!parts.length) return true;
+      // If every segment is a media-type label, track-count text, or year, it's owned.
+      const ownedLike = parts.every((part) => {
+        if (/^(playlist|плейлист|atskaņošanas sarakst)/i.test(part)) return true;
+        if (/^\d+\s*(song|songs|track|tracks|ieraksts|ieraksti|dziesma|dziesmas)/i.test(part)) return true;
+        if (/^\d{4}$/.test(part)) return true;
+        if (/^(updated|обновлено)/i.test(part)) return true;
+        return false;
+      });
+      return ownedLike;
+    }
 
-        const card =
-          a.closest("ytmusic-two-row-item-renderer") ||
-          a.closest("ytmusic-responsive-list-item-renderer") ||
-          a.closest("ytmusic-grid-renderer");
-        const scope: Element = card || a;
-        const name = (
-          a.getAttribute("title") ||
-          scope.querySelector("yt-formatted-string.title a, .title a")?.textContent ||
-          scope.querySelector("yt-formatted-string.title, .title")?.textContent ||
-          ""
-        ).trim();
-        if (!name) continue;
+    const out: Array<{ id: string; name: string; trackCount: number; imageUrl?: string }> = [];
+    const seen = new Set<string>();
 
-        const subtitle = (scope.querySelector("yt-formatted-string.subtitle, .subtitle")?.textContent || "").trim();
-        const trackMatch = subtitle.match(/(\d+)\s*(song|songs|track|tracks|ieraksts|ieraksti|dziesma|dziesmas)/i);
-        const trackCount = trackMatch ? parseInt(trackMatch[1], 10) : 0;
-        const imageUrl = (scope.querySelector("img") as HTMLImageElement | null)?.src;
+    const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="playlist?list="]'));
+    for (const a of anchors) {
+      const m = a.href.match(/list=([A-Za-z0-9_-]+)/);
+      const id = m?.[1];
+      if (!id || seen.has(id)) continue;
+      if (isAutoPlaylistId(id)) continue;
 
-        seen.add(id);
-        out.push({ id, name, trackCount, imageUrl });
-      }
+      const card =
+        a.closest("ytmusic-two-row-item-renderer") ||
+        a.closest("ytmusic-responsive-list-item-renderer") ||
+        a.closest("ytmusic-grid-renderer");
+      const scope: Element = card || a;
+      const name = (
+        a.getAttribute("title") ||
+        scope.querySelector("yt-formatted-string.title a, .title a")?.textContent ||
+        scope.querySelector("yt-formatted-string.title, .title")?.textContent ||
+        ""
+      ).trim();
+      if (!name) continue;
 
-      return out;
+      const subtitle = (scope.querySelector("yt-formatted-string.subtitle, .subtitle")?.textContent || "").trim();
+      if (!looksOwned(subtitle)) continue;
+
+      const trackMatch = subtitle.match(/(\d+)\s*(song|songs|track|tracks|ieraksts|ieraksti|dziesma|dziesmas)/i);
+      const trackCount = trackMatch ? parseInt(trackMatch[1], 10) : 0;
+      const imageUrl = (scope.querySelector("img") as HTMLImageElement | null)?.src;
+
+      seen.add(id);
+      out.push({ id, name, trackCount, imageUrl });
+    }
+
+    return out;
   });
 }
 

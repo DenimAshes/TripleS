@@ -439,19 +439,25 @@ function normalizeTrack(track: SoundCloudApiTrack): NormalizedTrack | undefined 
 }
 
 async function listPlaylistsViaApi(page: Page, runtime: SoundCloudRuntime): Promise<SoundCloudPlaylist[]> {
+  // Only fetch playlists the current user owns. The `/playlist_likes` endpoint
+  // returns sets the user merely liked — those aren't ours to sync into and
+  // showing them mixed with owned ones confuses the picker.
   const owned = await apiGetCollection<SoundCloudApiPlaylist>(
     page,
     runtime,
     `/users/${runtime.userId}/playlists_without_albums?limit=50&linked_partitioning=1`,
   ).catch(() => []);
-  const liked = await apiGetCollection<{ playlist?: SoundCloudApiPlaylist } | SoundCloudApiPlaylist>(
-    page,
-    runtime,
-    `/users/${runtime.userId}/playlist_likes?limit=50&linked_partitioning=1`,
-  ).catch(() => []);
 
   const byId = new Map<string, SoundCloudPlaylist>();
-  for (const playlist of [...owned, ...liked]) {
+  for (const playlist of owned) {
+    // Defense in depth: even within the owned endpoint, double-check user_id
+    // matches in case the response includes anything else (e.g. collaborative).
+    if (
+      typeof (playlist as { user_id?: unknown }).user_id === "number" &&
+      (playlist as { user_id: number }).user_id !== runtime.userId
+    ) {
+      continue;
+    }
     const normalized = normalizePlaylist(playlist, runtime);
     if (normalized) byId.set(normalized.id, normalized);
   }

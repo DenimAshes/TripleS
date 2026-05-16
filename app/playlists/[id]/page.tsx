@@ -60,6 +60,7 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
     trackCount: item.trackCount,
     isWritable: item.isWritable,
     isConnected: connectedPlaylistIds.has(item.id),
+    imageUrl: item.imageUrl,
   }));
 
   const group = currentMember?.group || null;
