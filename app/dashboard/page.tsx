@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { PlaylistsAutoRefresh } from "@/components/PlaylistsAutoRefresh";
 import { ServiceCard } from "@/components/ServiceCard";
@@ -11,12 +12,13 @@ const WORKER_SERVICES = ["youtube", "spotify", "soundcloud"] as const;
 
 export default async function DashboardPage() {
   const session = await getSession();
-  const [accounts, rules, lastJob, playlists, sessionRows] = await Promise.all([
+  const [accounts, rules, lastJob, playlists, sessionRows, pendingReviewCount] = await Promise.all([
     prisma.connectedAccount.findMany({ where: { userId: session!.userId }, orderBy: { service: "asc" } }),
     prisma.syncRule.findMany({ where: { userId: session!.userId }, include: { destinations: true }, orderBy: { createdAt: "asc" } }),
     prisma.syncJob.findFirst({ where: { syncRule: { userId: session!.userId } }, orderBy: { startedAt: "desc" } }),
     prisma.playlist.findMany({ where: { userId: session!.userId }, select: { updatedAt: true } }),
     prisma.workerSessionState.findMany({ where: { service: { in: WORKER_SERVICES as unknown as string[] } } }),
+    prisma.manualMatchCandidate.count({ where: { userId: session!.userId, status: "PENDING" } }),
   ]);
   const sessionByService = new Map(sessionRows.map((row) => [row.service, row]));
   // eslint-disable-next-line react-hooks/purity
@@ -38,6 +40,22 @@ export default async function DashboardPage() {
     <AppShell title="Home">
       <PlaylistsAutoRefresh hasPlaylists={playlists.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
       <SessionStalenessBanner items={staleSessions} />
+      {pendingReviewCount > 0 ? (
+        <Link
+          href="/manual-match"
+          className="panel mb-4 flex items-center justify-between gap-4 border-amber-300 bg-amber-50 p-4 transition hover:bg-amber-100"
+        >
+          <div>
+            <div className="text-sm font-semibold text-amber-900">
+              {pendingReviewCount} {pendingReviewCount === 1 ? "song needs" : "songs need"} your review
+            </div>
+            <div className="text-xs text-amber-800">
+              Sync wasn&apos;t sure where to put them. Pick a match or skip.
+            </div>
+          </div>
+          <span className="text-sm font-medium text-amber-900">Review now →</span>
+        </Link>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-3">
         {["SPOTIFY", "YOUTUBE", "SOUNDCLOUD"].map((service) => {
           const account = accounts.find((item) => item.service === service);
@@ -71,7 +89,10 @@ export default async function DashboardPage() {
           <div className="rounded-md bg-[#f0f0ec] p-3"><div className="text-2xl font-semibold">{stats.synced}</div><div className="text-sm text-[#666a73]">added</div></div>
           <div className="rounded-md bg-[#f0f0ec] p-3"><div className="text-2xl font-semibold">{stats.alreadySynced || 0}</div><div className="text-sm text-[#666a73]">already there</div></div>
           <div className="rounded-md bg-[#f0f0ec] p-3"><div className="text-2xl font-semibold">{stats.notFound}</div><div className="text-sm text-[#666a73]">not found</div></div>
-          <div className="rounded-md bg-[#f0f0ec] p-3"><div className="text-2xl font-semibold">{stats.manualRequired}</div><div className="text-sm text-[#666a73]">review</div></div>
+          <Link href="/manual-match" className="rounded-md bg-[#f0f0ec] p-3 transition hover:bg-[#e6e6e0]">
+            <div className="text-2xl font-semibold">{pendingReviewCount}</div>
+            <div className="text-sm text-[#666a73]">review {stats.manualRequired ? `(${stats.manualRequired} last run)` : ""}</div>
+          </Link>
         </div>
         {bySourceEntries.length ? (
           <div className="mt-4">

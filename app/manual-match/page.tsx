@@ -11,7 +11,7 @@ export default async function ManualMatchPage() {
   });
   const enriched: ManualCandidateView[] = await Promise.all(matches.map(async (item) => {
     const alternatives = item.alternativesJson
-      ? (JSON.parse(item.alternativesJson) as Array<{ serviceTrackId: string; confidence: number }>)
+      ? (JSON.parse(item.alternativesJson) as Array<{ serviceTrackId: string; confidence: number; breakdown?: Record<string, number> }>)
       : [];
     const tracks = alternatives.length
       ? await prisma.serviceTrack.findMany({ where: { id: { in: alternatives.map((candidate) => candidate.serviceTrackId) } } })
@@ -23,7 +23,7 @@ export default async function ManualMatchPage() {
       alternatives: alternatives
         .map((candidate) => {
           const track = tracks.find((item) => item.id === candidate.serviceTrackId);
-          return track ? { track, confidence: candidate.confidence } : null;
+          return track ? { track, confidence: candidate.confidence, breakdown: candidate.breakdown } : null;
         })
         .filter(Boolean) as ManualCandidateView["alternatives"],
     };

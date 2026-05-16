@@ -119,7 +119,7 @@ function fuzzyArtistOverlap(a: Set<string>, b: Set<string>) {
   return hits / smaller.size;
 }
 
-type SimilarityBreakdown = {
+export type SimilarityBreakdown = {
   score: number;
   titleScore: number;
   artistScore: number;

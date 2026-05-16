@@ -324,7 +324,7 @@ async function upsertManualCandidate({
   targetService: string;
   candidateServiceTrackId: string;
   confidence: number;
-  alternatives?: Array<{ serviceTrackId: string; confidence: number }>;
+  alternatives?: Array<{ serviceTrackId: string; confidence: number; breakdown?: unknown }>;
 }) {
   const naturalKey = {
     userId,
@@ -804,6 +804,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
             ranked.map(async (candidate) => ({
               serviceTrack: await getTargetServiceTrack(candidate.track),
               confidence: candidate.confidence,
+              breakdown: "breakdown" in candidate ? candidate.breakdown : undefined,
             })),
           );
           const targetServiceTrack = alternativeTracks[0]?.serviceTrack || (await getTargetServiceTrack(match.track));
@@ -816,6 +817,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
             alternatives: alternativeTracks.map((candidate) => ({
               serviceTrackId: candidate.serviceTrack.id,
               confidence: candidate.confidence,
+              breakdown: candidate.breakdown,
             })),
           });
           if (manualCandidate.status === "REJECTED") {

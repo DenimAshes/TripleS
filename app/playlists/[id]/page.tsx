@@ -41,6 +41,17 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
     }),
   ]);
 
+  const sourceServiceTrackIds = states.map((state) => state.serviceTrackId);
+  const pendingReviewCount = sourceServiceTrackIds.length
+    ? await prisma.manualMatchCandidate.count({
+        where: {
+          userId: session.userId,
+          status: "PENDING",
+          sourceServiceTrackId: { in: sourceServiceTrackIds },
+        },
+      })
+    : 0;
+
   const connectedPlaylistIds = new Set(allGroupMembers.map((member) => member.playlistId));
   const syncOptions: SyncPlaylistOption[] = playlists.map((item) => ({
     id: item.id,
@@ -135,6 +146,21 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
       </div>
 
       <PlaylistDiagnosticsCard playlist={playlist} activeStates={states.length} />
+
+      {pendingReviewCount > 0 ? (
+        <Link
+          href="/manual-match"
+          className="panel mt-3 flex items-center justify-between gap-4 border-amber-300 bg-amber-50 p-3 transition hover:bg-amber-100"
+        >
+          <div className="text-sm">
+            <span className="font-semibold text-amber-900">
+              {pendingReviewCount} {pendingReviewCount === 1 ? "song from this playlist needs" : "songs from this playlist need"} review
+            </span>
+            <span className="text-amber-800"> — sync wasn&apos;t sure which match to use.</span>
+          </div>
+          <span className="text-sm font-medium text-amber-900">Review →</span>
+        </Link>
+      ) : null}
 
       {states.length === 0 ? (
         <div className="panel p-6 text-sm text-[#666a73]">No songs to show yet.</div>
