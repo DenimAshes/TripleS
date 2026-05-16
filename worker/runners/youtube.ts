@@ -7,6 +7,7 @@ import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
 import { humanDwell, humanHoverClick, sleep } from "../sleep";
 import { acquireSession, evictSession, sessionReuseEnabled } from "../sessionPool";
+import { isPersistentMode, runPersistentLoop } from "./_persistentLoop";
 import { pathToFileURL } from "node:url";
 
 export type YtPlaylist = {
@@ -610,6 +611,35 @@ export async function removeTrackFromPlaylist(playlistId: string, trackText: str
   });
 }
 
+async function dispatchCommand(command: string, args: unknown[]): Promise<unknown> {
+  const argStr = (i: number) => (typeof args[i] === "string" ? (args[i] as string) : "");
+  if (command === "list") return listYouTubePlaylists();
+  if (command === "tracks") {
+    const playlistId = argStr(0);
+    if (!playlistId) throw new Error('"tracks" requires a playlist id');
+    return listYouTubePlaylistTracks(playlistId);
+  }
+  if (command === "search") {
+    const query = args.map((a) => (typeof a === "string" ? a : "")).filter(Boolean).join(" ");
+    if (!query) throw new Error('"search" requires a query');
+    return searchYouTubeTracks(query);
+  }
+  if (command === "add") {
+    const playlist = argStr(0);
+    const query = args.slice(1).map((a) => (typeof a === "string" ? a : "")).filter(Boolean).join(" ");
+    if (!playlist || !query) throw new Error('"add" requires a playlist and a query');
+    return addFirstSearchResultToPlaylistIfMissing(query, playlist);
+  }
+  if (command === "remove") {
+    const playlistId = argStr(0);
+    const trackText = args.slice(1).map((a) => (typeof a === "string" ? a : "")).filter(Boolean).join(" ");
+    if (!playlistId || !trackText) throw new Error('"remove" requires a playlist and a track text');
+    await removeTrackFromPlaylist(playlistId, trackText);
+    return { removed: true };
+  }
+  throw new Error(`Unknown command: ${command}`);
+}
+
 async function main() {
   const command = process.argv[2] || "list";
 
@@ -672,6 +702,14 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (isPersistentMode()) {
+    runPersistentLoop(dispatchCommand)
+      .then(() => process.exit(0))
+      .catch((err) => {
+        console.error(err);
+        process.exit(1);
+      });
+  } else {
   const watchdog = setTimeout(() => {
     console.error(new Error(`YouTube runner hard timeout after ${RUNNER_TIMEOUT_MS}ms`));
     process.exit(1);
@@ -686,4 +724,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       console.error(err);
       process.exit(1);
     });
+  }
 }

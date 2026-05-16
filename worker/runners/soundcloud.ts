@@ -6,6 +6,7 @@ import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
 import { sleep } from "../sleep";
 import { acquireSession, evictSession, sessionReuseEnabled } from "../sessionPool";
+import { isPersistentMode, runPersistentLoop } from "./_persistentLoop";
 import { pathToFileURL } from "node:url";
 
 export type SoundCloudPlaylist = {
@@ -655,6 +656,57 @@ export async function searchSoundCloudTracks(query: string): Promise<NormalizedT
   }, { humanize: false });
 }
 
+// Shared command dispatcher used by both one-shot CLI mode and the
+// persistent stdin/stdout loop. Returns the JSON-able result; callers
+// stringify and route to wherever the response should go.
+async function dispatchCommand(command: string, args: unknown[]): Promise<unknown> {
+  const argStr = (i: number) => (typeof args[i] === "string" ? (args[i] as string) : "");
+
+  if (command === "list") {
+    return listSoundCloudPlaylists();
+  }
+  if (command === "tracks") {
+    const playlist = argStr(0);
+    if (!playlist) throw new Error('"tracks" requires a playlist id or url');
+    return listSoundCloudPlaylistTracks(
+      normalizeSoundCloudPath(playlist.startsWith("http") ? playlist : `https://soundcloud.com/${playlist}`),
+    );
+  }
+  if (command === "search") {
+    const query = args.map((a) => (typeof a === "string" ? a : "")).filter(Boolean).join(" ");
+    if (!query) throw new Error('"search" requires a query');
+    return searchSoundCloudTracks(query);
+  }
+  if (command === "add") {
+    const playlist = argStr(0);
+    const track = argStr(1);
+    if (!playlist || !track) throw new Error('"add" requires a playlist and a track');
+    return addSoundCloudTrackToPlaylist(playlist, track);
+  }
+  if (command === "create") {
+    const name = args.map((a) => (typeof a === "string" ? a : "")).filter(Boolean).join(" ");
+    if (!name) throw new Error('"create" requires a playlist name');
+    return createSoundCloudPlaylist(name);
+  }
+  if (command === "create-b64") {
+    const encoded = argStr(0);
+    if (!encoded) throw new Error('"create-b64" requires a base64 name');
+    return createSoundCloudPlaylist(Buffer.from(encoded, "base64").toString("utf8"));
+  }
+  if (command === "delete") {
+    const playlist = argStr(0);
+    if (!playlist) throw new Error('"delete" requires a playlist id or url');
+    return deleteSoundCloudPlaylist(playlist);
+  }
+  if (command === "remove") {
+    const playlist = argStr(0);
+    const track = argStr(1);
+    if (!playlist || !track) throw new Error('"remove" requires a playlist and a track');
+    return removeSoundCloudTrackFromPlaylist(playlist, track);
+  }
+  throw new Error(`Unknown command: ${command}`);
+}
+
 async function main() {
   const command = process.argv[2] || "list";
 
@@ -729,18 +781,30 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const watchdog = setTimeout(() => {
-    console.error(new Error(`SoundCloud runner hard timeout after ${RUNNER_TIMEOUT_MS}ms`));
-    process.exit(1);
-  }, RUNNER_TIMEOUT_MS + 5_000);
-  main()
-    .then(() => {
-      clearTimeout(watchdog);
-      setImmediate(() => process.exit(0));
-    })
-    .catch((err) => {
-      clearTimeout(watchdog);
-      console.error(err);
+  if (isPersistentMode()) {
+    // No watchdog in persistent mode — the parent process controls lifetime
+    // by closing stdin. RUNNER_TIMEOUT_MS is the per-command ceiling enforced
+    // by withContext, which still applies.
+    runPersistentLoop(dispatchCommand)
+      .then(() => process.exit(0))
+      .catch((err) => {
+        console.error(err);
+        process.exit(1);
+      });
+  } else {
+    const watchdog = setTimeout(() => {
+      console.error(new Error(`SoundCloud runner hard timeout after ${RUNNER_TIMEOUT_MS}ms`));
       process.exit(1);
-    });
+    }, RUNNER_TIMEOUT_MS + 5_000);
+    main()
+      .then(() => {
+        clearTimeout(watchdog);
+        setImmediate(() => process.exit(0));
+      })
+      .catch((err) => {
+        clearTimeout(watchdog);
+        console.error(err);
+        process.exit(1);
+      });
+  }
 }

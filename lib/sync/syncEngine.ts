@@ -1,6 +1,11 @@
 import type { Prisma, ServiceTrack, SyncJob } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
+import {
+  closeAllPersistentRunners,
+  ensurePersistentRunner,
+  persistentRunnersEnabled,
+} from "@/lib/services/persistentRunnerRegistry";
 import { syncPlaylistTracksToDb } from "@/lib/services/playlistTracksStore";
 import type { NormalizedTrack, ServiceKey } from "./syncTypes";
 import { findMatch, prewarmLocalCatalog, type LocalCatalogPool } from "./matchEngine";
@@ -427,6 +432,23 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     },
   });
   bindCurrentJob(job.id);
+
+  // Pre-warm persistent runners for the services this rule touches when the
+  // feature flag is on. Each subsequent adapter call within this run skips
+  // the cloak browser cold-start (~15-20s) — biggest win for runs with many
+  // SoundCloud searches. Failure to spawn is non-fatal; runnerInvoker falls
+  // back to the one-shot CLI path automatically.
+  if (persistentRunnersEnabled()) {
+    const services = new Set<string>([rule.sourceService, ...rule.destinations.map((d) => d.service)]);
+    for (const service of services) {
+      const key = serviceKey(service);
+      if (key === "youtube" || key === "soundcloud") {
+        await ensurePersistentRunner(key).catch((err) => {
+          log.warn("failed to start persistent runner", { service: key, error: err instanceof Error ? err.message : String(err) });
+        });
+      }
+    }
+  }
 
   type PerDestinationStats = {
     synced: number;
@@ -1064,6 +1086,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       killChildPids(remainingPids);
     }
     bindCurrentJob(null);
+    await closeAllPersistentRunners().catch(() => {});
     await releaseAllSessions().catch(() => {});
     await releaseLock();
   }
