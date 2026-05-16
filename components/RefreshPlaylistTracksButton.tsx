@@ -34,18 +34,13 @@ export function RefreshPlaylistTracksButton({ playlistId }: { playlistId: string
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <button
-        type="button"
-        onClick={refresh}
-        disabled={loading}
-        className="inline-flex items-center gap-2 rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm disabled:opacity-60"
-      >
+    <div className="flex flex-col items-end gap-1.5">
+      <button type="button" onClick={refresh} disabled={loading} className="btn btn-ghost">
         <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
         {loading ? "Updating..." : "Update"}
       </button>
-      {status ? <p className="max-w-80 text-right text-xs text-[#666a73]">{status}</p> : null}
-      {error ? <p className="max-w-80 text-right text-xs text-red-700">{error}</p> : null}
+      {status ? <p className="max-w-80 text-right text-xs text-muted-fg">{status}</p> : null}
+      {error ? <p className="max-w-80 text-right text-xs text-[#fca5a5]">{error}</p> : null}
     </div>
   );
 }

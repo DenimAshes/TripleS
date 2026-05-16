@@ -24,22 +24,20 @@ export function SessionStalenessBanner({ items }: { items: SessionStaleness[] })
 
   const ranked = [...items].sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity]);
   const worst = ranked[0].severity;
-  const tone =
-    worst === "stale"
-      ? "border-red-300 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-100"
-      : worst === "missing"
-        ? "border-neutral-300 bg-neutral-50 text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-        : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100";
+  // Tone via the panel pills, not full bg-color — keeps the banner consistent
+  // with the rest of the dark theme.
+  const accentColor =
+    worst === "stale" ? "text-[#fca5a5]" : worst === "missing" ? "text-muted-fg" : "text-[#fcd34d]";
 
   return (
-    <div className={`mt-4 flex items-start gap-3 rounded-md border p-3 text-sm ${tone}`}>
-      <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+    <div className="mb-6 flex items-start gap-3 panel p-4 text-sm">
+      <AlertTriangle size={18} className={`mt-0.5 shrink-0 ${accentColor}`} />
       <div className="flex-1">
-        <div className="font-medium">Worker sessions need attention</div>
-        <ul className="mt-1 text-xs">
+        <div className={`font-medium ${accentColor}`}>Worker sessions need attention</div>
+        <ul className="mt-1.5 space-y-0.5 text-xs text-muted-fg">
           {ranked.map(({ service, severity, daysOld }) => (
             <li key={service} className="capitalize">
-              {service}:{" "}
+              <span className="text-[var(--text)]">{service}</span>:{" "}
               {severity === "missing"
                 ? "no saved session"
                 : severity === "stale"
@@ -48,7 +46,7 @@ export function SessionStalenessBanner({ items }: { items: SessionStaleness[] })
             </li>
           ))}
         </ul>
-        <Link href="/admin/sessions" className="mt-2 inline-block text-xs font-medium underline">
+        <Link href="/admin/sessions" className="mt-2 inline-block text-xs font-medium text-[var(--accent)] hover:underline">
           Refresh sessions →
         </Link>
       </div>

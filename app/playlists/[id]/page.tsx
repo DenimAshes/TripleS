@@ -150,15 +150,15 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
       {pendingReviewCount > 0 ? (
         <Link
           href="/manual-match"
-          className="panel mt-3 flex items-center justify-between gap-4 border-amber-300 bg-amber-50 p-3 transition hover:bg-amber-100"
+          className="panel-accent mt-4 flex items-center justify-between gap-4 p-3 transition hover:brightness-110"
         >
           <div className="text-sm">
-            <span className="font-semibold text-amber-900">
-              {pendingReviewCount} {pendingReviewCount === 1 ? "song from this playlist needs" : "songs from this playlist need"} review
+            <span className="font-semibold text-[var(--text)]">
+              {pendingReviewCount} {pendingReviewCount === 1 ? "song needs" : "songs need"} review
             </span>
-            <span className="text-amber-800"> — sync wasn&apos;t sure which match to use.</span>
+            <span className="text-muted-fg"> — sync wasn&apos;t sure which match to use.</span>
           </div>
-          <span className="text-sm font-medium text-amber-900">Review →</span>
+          <span className="shrink-0 text-sm font-medium text-[var(--accent)]">Review →</span>
         </Link>
       ) : null}
 

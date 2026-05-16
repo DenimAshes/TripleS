@@ -11,6 +11,7 @@ function statusFor({
   isMock?: boolean;
   connectionStatus?: string;
 }) {
+  if (connectionStatus === "NEEDS_LOGIN") return "needs_login";
   if (connectionStatus === "LIMITED") return "limited";
   if (connectionStatus === "ERROR") return "error";
   if (isMock || connectionStatus === "MOCK") return "mock";
@@ -27,6 +28,15 @@ function serviceLabel(name: string) {
   return labels[name] || name;
 }
 
+function serviceTint(name: string): string {
+  const tints: Record<string, string> = {
+    SPOTIFY: "from-emerald-500/25 to-emerald-500/0",
+    YOUTUBE: "from-rose-500/25 to-rose-500/0",
+    SOUNDCLOUD: "from-orange-500/25 to-orange-500/0",
+  };
+  return tints[name] || "from-[var(--accent)]/25 to-[var(--accent)]/0";
+}
+
 export function ServiceCard({
   name,
   username,
@@ -41,20 +51,29 @@ export function ServiceCard({
   lastError?: string | null;
 }) {
   const status = statusFor({ username, isMock, connectionStatus });
-  const limitedMessage = status === "limited" ? "Some account features are unavailable." : null;
+  const statusMessage =
+    status === "needs_login"
+      ? "Session expired — re-login required."
+      : status === "limited"
+      ? "Some account features are unavailable."
+      : null;
   return (
-    <div className="panel min-w-0 p-4">
-      <div className="flex items-start justify-between gap-3">
+    <div className="panel relative min-w-0 overflow-hidden p-5">
+      {/* Soft service-themed glow in the top corner — keeps cards visually
+          distinguishable from each other at a glance without leaning on
+          loud brand colors. */}
+      <div className={`pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-gradient-to-br ${serviceTint(name)} blur-3xl`} />
+      <div className="relative flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#18181b] text-white">
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] text-[var(--text)]">
             <Music2 size={18} />
           </div>
           <div className="min-w-0">
-            <div className="font-medium">{serviceLabel(name)}</div>
-            <div className="truncate text-sm text-[#666a73]">{username || "Connect your account"}</div>
-            {limitedMessage ? (
-              <div className="mt-1 text-xs text-orange-700" title={lastError || undefined}>
-                {limitedMessage}
+            <div className="text-base font-semibold">{serviceLabel(name)}</div>
+            <div className="truncate text-sm text-muted-fg">{username || "Connect your account"}</div>
+            {statusMessage ? (
+              <div className="mt-1 text-xs text-[#fcd34d]" title={lastError || undefined}>
+                {statusMessage}
               </div>
             ) : null}
           </div>

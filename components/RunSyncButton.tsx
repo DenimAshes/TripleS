@@ -37,12 +37,12 @@ export function RunSyncButton({ ruleId, children }: { ruleId: string; children: 
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <button onClick={run} disabled={running} className="inline-flex items-center justify-center gap-2 rounded-md bg-[#18181b] px-3 py-2 text-sm font-medium text-white disabled:opacity-60">
+    <div className="flex flex-col items-end gap-1.5">
+      <button onClick={run} disabled={running} className="btn btn-primary">
         {running ? "Running..." : children}
       </button>
-      {status ? <p className="max-w-80 text-right text-xs text-[#666a73]">{status}</p> : null}
-      {error ? <p className="max-w-80 text-right text-xs text-red-700">{error}</p> : null}
+      {status ? <p className="max-w-80 text-right text-xs text-muted-fg">{status}</p> : null}
+      {error ? <p className="max-w-80 text-right text-xs text-[#fca5a5]">{error}</p> : null}
     </div>
   );
 }

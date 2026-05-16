@@ -17,25 +17,28 @@ export function PlaylistDiagnosticsCard({ playlist, activeStates }: { playlist: 
   const ratio = expected > 0 ? Math.min(1, activeStates / expected) : 0;
 
   return (
-    <div className={`panel mb-4 p-4 text-sm ${partial ? "border-amber-300 bg-amber-50/40" : ""}`}>
+    <div className="panel mb-4 p-4 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="font-medium">Track cache</div>
-          <div className="text-xs text-[#666a73]">Last refreshed {formatRelative(playlist.lastFetchedAt)}</div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-dim-fg">Track cache</div>
+          <div className="mt-0.5 text-xs text-muted-fg">
+            Last refreshed <span className="text-[var(--text)]">{formatRelative(playlist.lastFetchedAt)}</span>
+          </div>
         </div>
         <div className="text-right">
-          <div className={`text-base font-semibold ${partial ? "text-amber-800" : ""}`}>
-            {activeStates}/{expected || "-"} tracks
+          <div className={`text-lg font-semibold tabular-nums ${partial ? "text-[#fcd34d]" : "text-[var(--text)]"}`}>
+            {activeStates}
+            <span className="text-dim-fg">/{expected || "-"}</span>
           </div>
-          <div className={`text-xs ${partial ? "text-amber-800" : "text-[#666a73]"}`}>
-            {partial ? "Partial cache" : `${activeStates} active rows in DB`}
+          <div className={`text-xs ${partial ? "text-[#fcd34d]" : "text-muted-fg"}`}>
+            {partial ? "Partial cache" : `${activeStates} active rows`}
           </div>
         </div>
       </div>
       {expected > 0 ? (
-        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#f0f0ec]">
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-2)]">
           <div
-            className={`h-full ${partial ? "bg-amber-500" : "bg-emerald-500"}`}
+            className={`h-full rounded-full ${partial ? "bg-[#f59e0b]" : "bg-emerald-500"}`}
             style={{ width: `${Math.round(ratio * 100)}%` }}
           />
         </div>

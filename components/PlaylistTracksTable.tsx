@@ -97,62 +97,62 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
 
   return (
     <div className="space-y-3">
-      <label className="flex max-w-md items-center gap-2 rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm">
-        <Search size={16} className="text-[#666a73]" />
+      <label className="flex max-w-md items-center gap-2 rounded-xl border border-[var(--border-soft)] bg-[var(--surface)] px-3 py-2 text-sm focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-ring)] transition">
+        <Search size={16} className="text-dim-fg" />
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Find a song"
-          className="w-full bg-transparent outline-none"
+          className="w-full !border-0 !bg-transparent !p-0 !shadow-none focus:!shadow-none"
         />
       </label>
 
       {filtered.length === 0 ? (
-        <div className="panel p-6 text-sm text-[#666a73]">No songs found.</div>
+        <div className="panel p-6 text-sm text-muted-fg">No songs found.</div>
       ) : (
         <div className="panel overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-[#f0f0ec] text-left text-xs uppercase tracking-wide text-[#666a73]">
+            <thead className="bg-[var(--surface-2)] text-left text-[10px] uppercase tracking-[0.15em] text-dim-fg">
               <tr>
-                <th className="w-12 px-3 py-2">#</th>
-                <th className="px-3 py-2">Song</th>
-                <th className="hidden px-3 py-2 lg:table-cell">Connected</th>
-                <th className="hidden px-3 py-2 md:table-cell">Album</th>
-                <th className="w-16 px-3 py-2">Time</th>
-                <th className="w-10 px-3 py-2"></th>
+                <th className="w-12 px-3 py-2.5">#</th>
+                <th className="px-3 py-2.5">Song</th>
+                <th className="hidden px-3 py-2.5 lg:table-cell">Connected</th>
+                <th className="hidden px-3 py-2.5 md:table-cell">Album</th>
+                <th className="w-16 px-3 py-2.5">Time</th>
+                <th className="w-10 px-3 py-2.5"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((track) => (
-                <tr key={track.id} className="border-t border-[#deded8]">
-                  <td className="px-3 py-2 text-[#666a73]">{track.position}</td>
-                  <td className="px-3 py-2">
+                <tr key={track.id} className="border-t border-[var(--border-soft)] transition hover:bg-[var(--surface-2)]/60">
+                  <td className="px-3 py-2.5 text-dim-fg tabular-nums">{track.position}</td>
+                  <td className="px-3 py-2.5">
                     <div className="flex min-w-0 items-center gap-3">
                       {track.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={track.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
+                        <img src={track.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" />
                       ) : (
-                        <div className="h-10 w-10 shrink-0 rounded bg-[#f0f0ec]" />
+                        <div className="h-10 w-10 shrink-0 rounded-md bg-[var(--surface-2)]" />
                       )}
                       <div className="min-w-0">
                         <div className="truncate font-medium">{track.title}</div>
-                        <div className="truncate text-xs text-[#666a73]">{track.artists}</div>
+                        <div className="truncate text-xs text-muted-fg">{track.artists}</div>
                         {isExcluded(track) ? (
-                          <div className="mt-1 text-xs font-medium text-[#8a5a00]">Only in this playlist</div>
+                          <div className="mt-1 text-xs font-medium text-[#fcd34d]">Only in this playlist</div>
                         ) : null}
                       </div>
                     </div>
                   </td>
-                  <td className="hidden px-3 py-2 lg:table-cell">
-                    <div className="flex max-w-xs flex-wrap gap-1">
+                  <td className="hidden px-3 py-2.5 lg:table-cell">
+                    <div className="flex max-w-xs flex-wrap gap-1.5">
                       {(track.linkedServices || []).map((linkedService) => (
-                        <span key={linkedService} className="rounded bg-[#e8f3ec] px-2 py-1 text-xs text-[#235c36]">
+                        <span key={linkedService} className="pill pill-success">
                           {SERVICE_LABELS[linkedService] || linkedService}
                         </span>
                       ))}
                       {(track.missingServices || []).map((missingService) => (
-                        <span key={missingService} className="rounded bg-[#f2eee5] px-2 py-1 text-xs text-[#7a5a1f]">
-                          Choose {SERVICE_LABELS[missingService] || missingService}
+                        <span key={missingService} className="pill pill-warning normal-case">
+                          + {SERVICE_LABELS[missingService] || missingService}
                         </span>
                       ))}
                       {track.groupId ? (
@@ -161,7 +161,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                             type="button"
                             onClick={() => changeMatch(track)}
                             disabled={pending}
-                            className="rounded border border-[#deded8] bg-white px-2 py-1 text-xs text-[#333] hover:bg-[#f0f0ec]"
+                            className="rounded-md border border-[var(--border-soft)] bg-[var(--surface-2)] px-2 py-1 text-xs text-[var(--text)] transition hover:border-[color-mix(in_srgb,var(--accent)_30%,var(--border))] hover:bg-[var(--surface-hover)]"
                           >
                             Change match
                           </button>
@@ -169,7 +169,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                             type="button"
                             onClick={() => toggleExcluded(track)}
                             disabled={pending}
-                            className="rounded border border-[#deded8] bg-white px-2 py-1 text-xs text-[#333] hover:bg-[#f0f0ec]"
+                            className="rounded-md border border-[var(--border-soft)] bg-[var(--surface-2)] px-2 py-1 text-xs text-[var(--text)] transition hover:border-[color-mix(in_srgb,var(--accent)_30%,var(--border))] hover:bg-[var(--surface-hover)]"
                           >
                             {isExcluded(track) ? "Sync this song" : "Keep only here"}
                           </button>
@@ -177,15 +177,15 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                       ) : null}
                     </div>
                   </td>
-                  <td className="hidden px-3 py-2 text-[#666a73] md:table-cell">{track.album || "-"}</td>
-                  <td className="px-3 py-2 text-[#666a73]">{formatDuration(track.durationMs)}</td>
-                  <td className="px-3 py-2">
+                  <td className="hidden px-3 py-2.5 text-muted-fg md:table-cell">{track.album || "-"}</td>
+                  <td className="px-3 py-2.5 text-muted-fg tabular-nums">{formatDuration(track.durationMs)}</td>
+                  <td className="px-3 py-2.5">
                     {track.url ? (
                       <a
                         href={track.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-[#666a73] hover:text-[#18181b]"
+                        className="text-dim-fg transition hover:text-[var(--accent)]"
                         aria-label={`Open on ${service}`}
                       >
                         <ExternalLink size={14} />

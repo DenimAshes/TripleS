@@ -38,25 +38,27 @@ export function ManualMatchActions({ id, serviceTrackId, targetService }: { id: 
   return (
     <div className="flex flex-wrap gap-2">
       {serviceTrackId ? (
-        <button disabled={Boolean(busy)} onClick={useThis} className="rounded-md bg-[#18181b] px-3 py-2 text-sm text-white disabled:opacity-60">
+        <button disabled={Boolean(busy)} onClick={useThis} className="btn btn-primary">
           {busy === "use" ? "Saving..." : "Use this"}
         </button>
       ) : (
-        <button disabled={Boolean(busy)} onClick={() => act("accept")} className="rounded-md bg-[#18181b] px-3 py-2 text-sm text-white disabled:opacity-60">
+        <button disabled={Boolean(busy)} onClick={() => act("accept")} className="btn btn-primary">
           {busy === "accept" ? "Saving..." : "Use best"}
         </button>
       )}
       {!serviceTrackId ? (
         <>
-          <button disabled={Boolean(busy)} onClick={useLink} className="rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm disabled:opacity-60">
+          <button disabled={Boolean(busy)} onClick={useLink} className="btn btn-ghost">
             {busy === "link" ? "Saving..." : "Use link"}
           </button>
-          <button disabled={Boolean(busy)} onClick={() => act("exclude")} className="rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm disabled:opacity-60">
-            {busy === "exclude" ? "Saving..." : "Do not sync here"}
+          <button disabled={Boolean(busy)} onClick={() => act("exclude")} className="btn btn-ghost">
+            {busy === "exclude" ? "Saving..." : "Don't sync"}
           </button>
         </>
       ) : null}
-      <button disabled={Boolean(busy)} onClick={() => act("reject")} className="rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm disabled:opacity-60">{busy === "reject" ? "Skipping..." : "Skip"}</button>
+      <button disabled={Boolean(busy)} onClick={() => act("reject")} className="btn btn-ghost">
+        {busy === "reject" ? "Skipping..." : "Skip"}
+      </button>
     </div>
   );
 }

@@ -1,16 +1,55 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f7f4;
-  --foreground: #171717;
-  --card: #ffffff;
-  --border: #deded8;
-  --muted: #666a73;
+  /* Base surfaces — near-black with a faint blue undertone so it doesn't
+     read as a flat OLED dump but as a deliberate cool theme. */
+  --bg: #0a0b10;
+  --bg-gradient: radial-gradient(1200px 600px at 100% -10%, rgba(79, 141, 255, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 0% 100%, rgba(79, 141, 255, 0.04), transparent 55%),
+    var(--bg);
+  --surface: #11131a;
+  --surface-2: #171a23;
+  --surface-3: #1d2230;
+  --surface-hover: #1c2030;
+
+  --border: #232838;
+  --border-soft: #1a1e2a;
+
+  --text: #e6e7ec;
+  --text-muted: #8b8f9c;
+  --text-dim: #5b6171;
+
+  /* Electric blue accent — NeuroBank-ish. -soft for tinted backgrounds,
+     -hover slightly lighter for interactive states. */
+  --accent: #4f8dff;
+  --accent-hover: #6ea1ff;
+  --accent-active: #3b7bf0;
+  --accent-soft: rgba(79, 141, 255, 0.12);
+  --accent-ring: rgba(79, 141, 255, 0.35);
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.14);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.14);
+
+  /* Kept under the old names so existing components don't need a sweep. */
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface);
+  --muted: var(--text-muted);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border-strong: var(--border);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
   --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
 }
@@ -19,21 +58,216 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  background: var(--bg);
+}
+
 body {
   min-height: 100vh;
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg-gradient);
+  color: var(--text);
   font-family: "Geist", "Geist Fallback", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
+  color: inherit;
 }
 
-.panel {
+input,
+select,
+textarea {
+  background: var(--surface);
   border: 1px solid var(--border);
-  background: var(--card);
-  border-radius: 8px;
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  color: var(--text);
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-dim);
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Layout helpers */
+
+.panel {
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 8px 24px -16px rgba(0, 0, 0, 0.7);
+}
+
+.panel-flat {
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  border-radius: 14px;
+}
+
+.panel-inset {
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+}
+
+.panel-accent {
+  background: linear-gradient(180deg, var(--accent-soft), transparent 80%), var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  border-radius: 14px;
+}
+
+/* Buttons */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 60ms ease;
+  cursor: pointer;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #0a0b10;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-primary:disabled {
+  background: color-mix(in srgb, var(--accent) 60%, var(--text-dim));
+  color: rgba(10, 11, 16, 0.7);
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.btn-ghost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+  color: #fecaca;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 18%, var(--surface));
+}
+
+/* Status pills */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.pill-success {
+  background: var(--success-soft);
+  border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+  color: #6ee7b7;
+}
+
+.pill-warning {
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+  color: #fcd34d;
+}
+
+.pill-danger {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+  color: #fca5a5;
+}
+
+.pill-accent {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  color: #bfd4ff;
+}
+
+/* Misc text colors as utilities */
+
+.text-muted-fg {
+  color: var(--text-muted);
+}
+
+.text-dim-fg {
+  color: var(--text-dim);
+}
+
+.text-accent-fg {
+  color: var(--accent);
+}
+
+/* Subtle scrollbar styling so dark panels don't get blasted by a bright bar */
+@media (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 10px;
+    border: 2px solid var(--bg);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--accent) 50%, var(--border));
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }

@@ -47,19 +47,23 @@ export function SyncRuleCard({
   const lastRunRel = formatRelative(rule.lastRunAt);
   const nextRunRel = rule.isEnabled ? formatRelative(rule.nextRunAt) : null;
   return (
-    <div className="panel p-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="font-medium">{rule.name}</h3>
+    <div className="panel p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold">{rule.name}</h3>
             <StatusBadge status={rule.isEnabled ? "connected" : "not_connected"} />
           </div>
-          <p className="mt-1 text-sm text-[#666a73]">
-            {rule.sourceService} {"->"} {rule.destinations.map((item) => item.service).join(", ")} / {modeLabel(rule.mode)}
+          <p className="mt-1.5 text-sm text-muted-fg">
+            <span className="text-[var(--text)]">{rule.sourceService}</span>
+            <span className="mx-1.5 text-dim-fg">→</span>
+            <span className="text-[var(--text)]">{rule.destinations.map((item) => item.service).join(", ")}</span>
+            <span className="mx-1.5 text-dim-fg">·</span>
+            <span>{modeLabel(rule.mode)}</span>
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href={`/settings?rule=${rule.id}`} className="inline-flex items-center justify-center gap-2 rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm font-medium">
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Link href={`/settings?rule=${rule.id}`} className="btn btn-ghost">
             <Pencil size={16} /> Edit
           </Link>
           <RunSyncButton ruleId={rule.id}>
@@ -69,26 +73,30 @@ export function SyncRuleCard({
       </div>
 
       {progress && progress.sourceTotal > 0 ? (
-        <div className="mt-3 space-y-2">
+        <div className="mt-5 space-y-3">
           {progress.destinations.map((dest) => {
             const pct = Math.min(100, Math.round((dest.synced / progress.sourceTotal) * 100));
             const remaining = Math.max(0, progress.sourceTotal - dest.synced);
+            const complete = pct >= 100;
             return (
               <div key={`${dest.service}::${dest.playlistId}`} className="text-sm">
-                <div className="flex items-center justify-between gap-3 text-[#444851]">
-                  <span>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[var(--text)]">
                     {dest.service}
-                    {dest.playlistName ? <span className="text-[#666a73]"> · {dest.playlistName}</span> : null}
+                    {dest.playlistName ? <span className="text-muted-fg"> · {dest.playlistName}</span> : null}
                   </span>
-                  <span className="text-xs text-[#666a73]">
-                    {dest.synced} / {progress.sourceTotal} synced
-                    {remaining > 0 ? <span> · {remaining} to go</span> : null}
-                    {dest.pendingReview > 0 ? <span className="text-amber-700"> · {dest.pendingReview} need review</span> : null}
+                  <span className="text-xs text-muted-fg">
+                    <span className="text-[var(--text)]">{dest.synced}</span>
+                    <span className="text-dim-fg"> / {progress.sourceTotal}</span>
+                    {remaining > 0 ? <span className="text-dim-fg"> · {remaining} to go</span> : null}
+                    {dest.pendingReview > 0 ? (
+                      <span className="ml-1 text-[#fcd34d]">· {dest.pendingReview} need review</span>
+                    ) : null}
                   </span>
                 </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded bg-[#ececec]">
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]">
                   <div
-                    className={pct >= 100 ? "h-full bg-emerald-500" : "h-full bg-[#18181b]"}
+                    className={complete ? "h-full rounded-full bg-emerald-500" : "h-full rounded-full bg-[var(--accent)]"}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
@@ -99,9 +107,17 @@ export function SyncRuleCard({
       ) : null}
 
       {(lastRunRel || nextRunRel) ? (
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#666a73]">
-          {lastRunRel ? <span>Last run: {lastRunRel}</span> : null}
-          {nextRunRel ? <span>Next run: {nextRunRel}</span> : null}
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-fg">
+          {lastRunRel ? (
+            <span>
+              Last run <span className="text-[var(--text)]">{lastRunRel}</span>
+            </span>
+          ) : null}
+          {nextRunRel ? (
+            <span>
+              Next run <span className="text-[var(--text)]">{nextRunRel}</span>
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>
