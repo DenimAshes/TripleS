@@ -97,6 +97,17 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
   }
 
   const rollback = async (cause: unknown) => {
+    // Two-phase rollback per created destination:
+    //   1) best-effort delete on the remote service (SC playlist)
+    //   2) atomic DB cleanup that also removes any rows that would
+    //      otherwise FK-block the Playlist delete (group members,
+    //      track states). The DB step is wrapped in a transaction so
+    //      we never end up with a half-cleaned destination — either
+    //      the Playlist row and its dependents all go, or nothing does.
+    // If (1) fails the DB row is still removed and the orphan-cleanup
+    // script will pick the remote playlist up later (createdBySystem
+    // is still set on the row until this point).
+    const causeMessage = cause instanceof Error ? cause.message : String(cause);
     for (const item of rollbackCreated) {
       try {
         const adapter = getAdapter(item.service, userId);
@@ -105,10 +116,20 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
         }
       } catch (deleteError) {
         console.warn(
-          `[playlistGroupActions] failed to roll back ${item.service}:${item.servicePlaylistId} after error (${cause instanceof Error ? cause.message : String(cause)}): ${deleteError instanceof Error ? deleteError.message : String(deleteError)}`,
+          `[playlistGroupActions] remote rollback failed for ${item.service}:${item.servicePlaylistId} (cause: ${causeMessage}): ${deleteError instanceof Error ? deleteError.message : String(deleteError)}. DB row will still be removed; run "npm run cleanup:orphans" to sweep the leftover.`,
         );
       }
-      await prisma.playlist.delete({ where: { id: item.dbId } }).catch(() => undefined);
+      try {
+        await prisma.$transaction([
+          prisma.playlistGroupMember.deleteMany({ where: { playlistId: item.dbId } }),
+          prisma.playlistTrackState.deleteMany({ where: { playlistId: item.dbId } }),
+          prisma.playlist.delete({ where: { id: item.dbId } }),
+        ]);
+      } catch (dbError) {
+        console.warn(
+          `[playlistGroupActions] DB rollback failed for playlist ${item.dbId} (cause: ${causeMessage}): ${dbError instanceof Error ? dbError.message : String(dbError)}. Manual cleanup may be required.`,
+        );
+      }
     }
   };
 

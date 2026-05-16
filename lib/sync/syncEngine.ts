@@ -13,7 +13,7 @@ import {
   lookupStoredMatch,
   resolveInternalTrackId,
 } from "./matchContext";
-import { nextRunAfterFailure } from "./failureClassifier";
+import { classifyError, nextRunAfterFailure } from "./failureClassifier";
 import { recordCooldownForRule, recordSuccessForRule } from "./serviceCooldown";
 import { releaseAllSessions } from "@/worker/sessionPool";
 import { preflightSyncRule } from "./preflight";
@@ -993,6 +993,23 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     });
     const destServices = rule.destinations.map((destination) => destination.service);
     await recordCooldownForRule([rule.sourceService, ...destServices], error).catch(() => {});
+    // Surface auth failures on the ConnectedAccount so the UI can show a
+    // "re-login" prompt instead of leaving the user wondering why every
+    // sync fails. Best-effort: don't let bookkeeping mask the real error.
+    if (classifyError(error) === "auth") {
+      const affected = new Set([rule.sourceService, ...destServices]);
+      for (const service of affected) {
+        await prisma.connectedAccount
+          .updateMany({
+            where: { userId: rule.userId, service },
+            data: {
+              connectionStatus: "NEEDS_LOGIN",
+              lastError: error instanceof Error ? error.message : String(error),
+            },
+          })
+          .catch(() => undefined);
+      }
+    }
     return failed;
   } finally {
     if (wallClockTimer) clearTimeout(wallClockTimer);

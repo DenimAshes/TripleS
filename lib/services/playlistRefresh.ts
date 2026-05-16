@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getAdapter, serviceEnum } from "./adapterFactory";
+import { classifyError } from "@/lib/sync/failureClassifier";
 import type { ServiceKey } from "@/lib/sync/syncTypes";
 
 export async function refreshServicePlaylists(userId: string, service: ServiceKey) {
@@ -38,9 +39,13 @@ export async function refreshServicePlaylists(userId: string, service: ServiceKe
     items = await adapter.getPlaylists();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // Distinguish "session expired / not signed in" from other adapter
+    // failures so the UI can offer a re-login flow instead of a vague
+    // "LIMITED" badge that the user can't act on.
+    const status = classifyError(error) === "auth" ? "NEEDS_LOGIN" : "LIMITED";
     await prisma.connectedAccount.update({
       where: { id: account.id },
-      data: { connectionStatus: "LIMITED", lastError: message },
+      data: { connectionStatus: status, lastError: message },
     });
     throw error;
   }
