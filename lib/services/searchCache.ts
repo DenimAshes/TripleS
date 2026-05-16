@@ -4,7 +4,9 @@ import { prisma } from "@/lib/db/prisma";
 const DEFAULT_TTL_MS = Number(process.env.SEARCH_CACHE_TTL_MINUTES || 60) * 60_000;
 const PERSISTENT_TTL_MS = Number(process.env.SEARCH_CACHE_PERSIST_TTL_MINUTES || 60 * 24 * 7) * 60_000;
 const MAX_ENTRIES = Number(process.env.SEARCH_CACHE_MAX_ENTRIES || 500);
+const DB_MAX_ENTRIES = Number(process.env.SEARCH_CACHE_DB_MAX_ENTRIES || 50_000);
 const PERSIST_ENABLED = process.env.SEARCH_CACHE_PERSIST !== "false";
+const PRUNE_EVERY_N_LOOKUPS = Number(process.env.SEARCH_CACHE_PRUNE_EVERY || 200);
 
 type CacheEntry = {
   expiresAt: number;
@@ -51,6 +53,61 @@ function pruneCache() {
   }
 }
 
+let dbPruneInFlight: Promise<void> | null = null;
+let lookupsSinceLastPrune = 0;
+
+// Delete SearchCache rows older than PERSISTENT_TTL_MS, then trim by size
+// (oldest fetchedAt first) if we still exceed DB_MAX_ENTRIES. Returns the
+// number of rows removed. Safe to call from anywhere; concurrent calls are
+// coalesced via dbPruneInFlight so multiple sync runs don't stampede.
+export async function pruneSearchCacheDb(): Promise<number> {
+  if (!PERSIST_ENABLED) return 0;
+  if (dbPruneInFlight) {
+    await dbPruneInFlight;
+    return 0;
+  }
+  const run = async () => {
+    let removed = 0;
+    const expiredCutoff = new Date(Date.now() - PERSISTENT_TTL_MS);
+    const expired = await prisma.searchCache
+      .deleteMany({ where: { fetchedAt: { lt: expiredCutoff } } })
+      .catch(() => ({ count: 0 }));
+    removed += expired.count;
+    const total = await prisma.searchCache.count().catch(() => 0);
+    if (total > DB_MAX_ENTRIES) {
+      const excess = total - DB_MAX_ENTRIES;
+      const oldRows = await prisma.searchCache
+        .findMany({ orderBy: { fetchedAt: "asc" }, take: excess, select: { id: true } })
+        .catch(() => [] as Array<{ id: string }>);
+      if (oldRows.length) {
+        const trim = await prisma.searchCache
+          .deleteMany({ where: { id: { in: oldRows.map((row) => row.id) } } })
+          .catch(() => ({ count: 0 }));
+        removed += trim.count;
+      }
+    }
+    return removed;
+  };
+  let removedOut = 0;
+  dbPruneInFlight = (async () => {
+    removedOut = await run();
+  })();
+  try {
+    await dbPruneInFlight;
+    return removedOut;
+  } finally {
+    dbPruneInFlight = null;
+  }
+}
+
+function maybePruneDbAsync() {
+  if (!PERSIST_ENABLED) return;
+  lookupsSinceLastPrune += 1;
+  if (lookupsSinceLastPrune < PRUNE_EVERY_N_LOOKUPS) return;
+  lookupsSinceLastPrune = 0;
+  pruneSearchCacheDb().catch(() => undefined);
+}
+
 export async function cachedSearchTracks(
   service: ServiceKey,
   query: string,
@@ -58,6 +115,7 @@ export async function cachedSearchTracks(
   isrc?: string,
 ): Promise<NormalizedTrack[]> {
   pruneCache();
+  maybePruneDbAsync();
   const queryNorm = normalizeQuery(query);
   const dbQueryNorm = persistedQueryNorm(queryNorm, isrc);
   const key = cacheKey(service, queryNorm, isrc);

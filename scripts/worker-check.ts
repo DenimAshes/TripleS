@@ -1,8 +1,14 @@
 import fs from "node:fs";
 import { binaryInfo } from "cloakbrowser";
 import { prisma } from "@/lib/db/prisma";
-import { listSoundCloudPlaylistsCli } from "@/lib/services/soundcloud/soundCloudBrowserCli";
-import { listYouTubePlaylistsCli } from "@/lib/services/youtube/youtubeBrowserCli";
+import {
+  listSoundCloudPlaylistTracksCli,
+  listSoundCloudPlaylistsCli,
+} from "@/lib/services/soundcloud/soundCloudBrowserCli";
+import {
+  listYouTubePlaylistTracksCli,
+  listYouTubePlaylistsCli,
+} from "@/lib/services/youtube/youtubeBrowserCli";
 import { chromeProfilePath, stateFilePath, type ServiceId } from "@/worker/config";
 
 type CheckStatus = "ok" | "warn" | "fail";
@@ -176,6 +182,65 @@ async function checkSoundCloud(): Promise<CheckResult> {
   }
 }
 
+// Canary checks: hit a known playlist and confirm the scraper still returns
+// sane track records. Catches DOM regressions on YT/SC before they show up
+// as silent zero-match syncs. Configured via:
+//   WORKER_CHECK_YT_CANARY_PLAYLIST = "PL..."  (a playlist that always has tracks)
+//   WORKER_CHECK_SC_CANARY_PLAYLIST = "user/sets/slug"
+async function checkScraperCanary(
+  service: "youtube" | "soundcloud",
+  playlistRef: string,
+): Promise<CheckResult> {
+  try {
+    const tracks =
+      service === "youtube"
+        ? await listYouTubePlaylistTracksCli(playlistRef)
+        : await listSoundCloudPlaylistTracksCli(playlistRef);
+    if (!tracks.length) {
+      return {
+        service,
+        status: "fail",
+        message: `Canary playlist returned 0 tracks — scraper or session is broken.`,
+        details: { playlistRef, scope: "canary" },
+      };
+    }
+    const withoutTitle = tracks.filter((track) => !track.title).length;
+    const withoutArtist = tracks.filter(
+      (track) => !track.artists?.length || (track.artists.length === 1 && track.artists[0] === "Unknown artist"),
+    ).length;
+    const withoutDuration = tracks.filter((track) => !track.durationMs).length;
+    const hasFieldRot = withoutTitle > 0 || withoutArtist > tracks.length / 2 || withoutDuration > tracks.length / 2;
+    return {
+      service,
+      status: hasFieldRot ? "warn" : "ok",
+      message: hasFieldRot
+        ? `Canary parsed ${tracks.length} tracks but field quality is degraded — DOM may have shifted.`
+        : `Canary parsed ${tracks.length} tracks cleanly.`,
+      details: {
+        scope: "canary",
+        playlistRef,
+        trackCount: tracks.length,
+        withoutTitle,
+        withoutArtist,
+        withoutDuration,
+        sample: tracks.slice(0, 3).map((track) => ({
+          title: track.title,
+          artists: track.artists,
+          durationMs: track.durationMs,
+        })),
+      },
+    };
+  } catch (error) {
+    const classified = classifyError(error);
+    return {
+      service,
+      status: classified.status,
+      message: `Canary failed: ${classified.message}`,
+      details: { playlistRef, scope: "canary", error: error instanceof Error ? error.message : String(error) },
+    };
+  }
+}
+
 function printResult(result: CheckResult) {
   const marker = result.status === "ok" ? "OK" : result.status === "warn" ? "WARN" : "FAIL";
   console.log(`[${marker}] ${result.service}: ${result.message}`);
@@ -297,6 +362,15 @@ async function main() {
   } else {
     if (onlyService !== "soundcloud") checks.push(await checkYouTube());
     if (onlyService !== "youtube") checks.push(await checkSoundCloud());
+
+    const ytCanary = process.env.WORKER_CHECK_YT_CANARY_PLAYLIST;
+    if (onlyService !== "soundcloud" && ytCanary) {
+      checks.push(await checkScraperCanary("youtube", ytCanary));
+    }
+    const scCanary = process.env.WORKER_CHECK_SC_CANARY_PLAYLIST;
+    if (onlyService !== "youtube" && scCanary) {
+      checks.push(await checkScraperCanary("soundcloud", scCanary));
+    }
   }
 
   if (jsonOutput()) {
