@@ -80,17 +80,21 @@ export async function refreshServicePlaylists(userId: string, service: ServiceKe
     });
   }
 
+  // Drop cached rows that the service no longer reports as ours. After
+  // tightening the YT/SC adapters to return only owned playlists, this
+  // sweep is what actually removes "saved playlists I just liked" and
+  // similar non-owned entries that leaked into the cache earlier.
+  //
+  // Important guard: never delete a Playlist row that is still part of a
+  // PlaylistGroup — that would silently break the user's sync rules. If
+  // a connected playlist disappears from the upstream service, we leave
+  // the row in place and let the user resolve the rule manually.
   await prisma.playlist.deleteMany({
     where: {
       userId,
       service: serviceName,
       servicePlaylistId: { notIn: items.map((item) => item.id) },
-    },
-  });
-  await prisma.playlist.deleteMany({
-    where: {
-      userId,
-      service: service,
+      groupMembers: { none: {} },
     },
   });
 

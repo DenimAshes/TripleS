@@ -226,6 +226,41 @@ async function scrollToTop(page: Page): Promise<void> {
   await sleep(500);
 }
 
+async function applyByYouFilter(page: Page): Promise<boolean> {
+  // YT Music renders /library/playlists with a row of filter chips at the
+  // top. Clicking the one that says "By you" (or a localized equivalent)
+  // narrows the list to playlists the current user created. We use this
+  // instead of trying to identify ownership per-card from the DOM —
+  // ownership flags aren't reliably exposed and the chip is the same
+  // signal the UI itself uses.
+  return page.evaluate(() => {
+    const candidates = Array.from(
+      document.querySelectorAll<HTMLElement>("ytmusic-chip-cloud-chip-renderer, ytmusic-chip-cloud-chip, yt-chip-cloud-chip-renderer, a, button"),
+    );
+    const labels = [
+      /^by you$/i,
+      /^created by you$/i,
+      /^мои$/i,
+      /^мной$/i,
+      /^созданные мной$/i,
+      /^от меня$/i,
+      /^manis$/i,
+      /^paša izveidoti$/i,
+    ];
+    for (const el of candidates) {
+      const text = (el.textContent || "").trim();
+      if (!text) continue;
+      if (!labels.some((rx) => rx.test(text))) continue;
+      // Skip if it's already pressed/selected.
+      const pressed = el.getAttribute("aria-pressed") === "true" || el.getAttribute("aria-selected") === "true" || el.classList.contains("selected") || el.hasAttribute("selected");
+      if (pressed) return true;
+      (el as HTMLElement).click();
+      return true;
+    }
+    return false;
+  });
+}
+
 export async function listYouTubePlaylists(): Promise<YtPlaylist[]> {
   return withContext(async (_ctx, page) => {
     trace("list:goto:start");
@@ -236,6 +271,13 @@ export async function listYouTubePlaylists(): Promise<YtPlaylist[]> {
     await assertLoggedIn(page);
     trace("list:auth:done");
     await maybeDebug(page, "yt-playlists");
+
+    const filterApplied = await applyByYouFilter(page);
+    trace(`list:filter-by-you:${filterApplied ? "applied" : "not-found"}`);
+    if (filterApplied) {
+      await sleep(800);
+      await settle(page);
+    }
 
     const byId = new Map<string, YtPlaylist>();
     await scrollToTop(page);
@@ -277,27 +319,10 @@ async function extractVisiblePlaylists(page: Page): Promise<YtPlaylist[]> {
       return false;
     }
 
-    // Heuristic: YT Music renders saved (someone-else's) playlists with a
-    // byline like "Playlist • <Author>" while owned ones either omit the
-    // author or show it as the current user's display name. We can't read
-    // the current user reliably from the page, so we treat *any* subtitle
-    // that names an author after the bullet as not-owned. False positives
-    // (an own playlist that YT decorates with the user's own name) are
-    // rare; sync still works on a per-playlist basis via the detail page.
-    function looksOwned(subtitle: string): boolean {
-      if (!subtitle) return true; // no byline at all — owned default
-      const parts = subtitle.split(/\s*[•·]\s*/).map((p) => p.trim()).filter(Boolean);
-      if (!parts.length) return true;
-      // If every segment is a media-type label, track-count text, or year, it's owned.
-      const ownedLike = parts.every((part) => {
-        if (/^(playlist|плейлист|atskaņošanas sarakst)/i.test(part)) return true;
-        if (/^\d+\s*(song|songs|track|tracks|ieraksts|ieraksti|dziesma|dziesmas)/i.test(part)) return true;
-        if (/^\d{4}$/.test(part)) return true;
-        if (/^(updated|обновлено)/i.test(part)) return true;
-        return false;
-      });
-      return ownedLike;
-    }
+    // We rely on the "By you" filter chip applied before scraping to keep
+    // saved-from-someone-else playlists out of the list. Per-card subtitle
+    // heuristics were too aggressive and would drop legitimate owned
+    // playlists when YT Music annotated them with the user's display name.
 
     const out: Array<{ id: string; name: string; trackCount: number; imageUrl?: string }> = [];
     const seen = new Set<string>();
@@ -323,8 +348,6 @@ async function extractVisiblePlaylists(page: Page): Promise<YtPlaylist[]> {
       if (!name) continue;
 
       const subtitle = (scope.querySelector("yt-formatted-string.subtitle, .subtitle")?.textContent || "").trim();
-      if (!looksOwned(subtitle)) continue;
-
       const trackMatch = subtitle.match(/(\d+)\s*(song|songs|track|tracks|ieraksts|ieraksti|dziesma|dziesmas)/i);
       const trackCount = trackMatch ? parseInt(trackMatch[1], 10) : 0;
       const imageUrl = (scope.querySelector("img") as HTMLImageElement | null)?.src;
