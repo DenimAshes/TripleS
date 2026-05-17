@@ -91,9 +91,21 @@ function buildTotpUrl(baseUrl: string): string {
   return params.toString();
 }
 
-async function tryJsonEndpoint(spDcCookie: string): Promise<WebTokenResponse | null> {
+type EndpointAttempt = {
+  url: string;
+  status?: number;
+  bodySnippet?: string;
+  outcome: "ok" | "anonymous" | "non-ok" | "no-token" | "parse-error" | "fetch-error";
+  errorMessage?: string;
+};
+
+async function tryJsonEndpoint(
+  spDcCookie: string,
+  attempts: EndpointAttempt[],
+): Promise<WebTokenResponse | null> {
   for (const baseUrl of TOKEN_ENDPOINTS) {
     for (const url of [buildTotpUrl(baseUrl), baseUrl]) {
+      const attempt: EndpointAttempt = { url, outcome: "fetch-error" };
       try {
         const response = await fetch(url, {
           headers: browserHeaders(spDcCookie, {
@@ -108,10 +120,39 @@ async function tryJsonEndpoint(spDcCookie: string): Promise<WebTokenResponse | n
           }),
           redirect: "follow",
         });
-        if (!response.ok) continue;
-        const data = (await response.json()) as WebTokenResponse;
-        if (data.accessToken && !data.isAnonymous) return data;
-      } catch {
+        attempt.status = response.status;
+        if (!response.ok) {
+          const text = await response.text().catch(() => "");
+          attempt.bodySnippet = text.slice(0, 200);
+          attempt.outcome = "non-ok";
+          attempts.push(attempt);
+          continue;
+        }
+        let data: WebTokenResponse;
+        try {
+          data = (await response.json()) as WebTokenResponse;
+        } catch (parseError) {
+          attempt.outcome = "parse-error";
+          attempt.errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
+          attempts.push(attempt);
+          continue;
+        }
+        if (!data.accessToken) {
+          attempt.outcome = "no-token";
+          attempts.push(attempt);
+          continue;
+        }
+        if (data.isAnonymous) {
+          attempt.outcome = "anonymous";
+          attempts.push(attempt);
+          continue;
+        }
+        attempt.outcome = "ok";
+        attempts.push(attempt);
+        return data;
+      } catch (error) {
+        attempt.errorMessage = error instanceof Error ? error.message : String(error);
+        attempts.push(attempt);
         continue;
       }
     }
@@ -163,13 +204,28 @@ export async function getWebAccessToken(spDcCookie: string): Promise<string> {
     return cached.token;
   }
 
-  const data = (await tryJsonEndpoint(spDcCookie)) || (await tryHtmlScrape(spDcCookie));
+  const attempts: EndpointAttempt[] = [];
+  const data = (await tryJsonEndpoint(spDcCookie, attempts)) || (await tryHtmlScrape(spDcCookie));
 
   if (!data) {
-    throw new SpotifyWebAuthError(
-      "Could not extract access token from Spotify (cookie may be expired or Spotify blocked the request).",
-      403,
-    );
+    // Summarize what happened on each token endpoint so the UI can show a
+    // useful next step ("403 on every endpoint" → blocked/region issue;
+    // "anonymous" → cookie has expired; "non-ok 401" → cookie rejected).
+    const statuses = attempts.map((a) => `${a.outcome}${a.status ? `:${a.status}` : ""}`).join(", ");
+    const anonymous = attempts.some((a) => a.outcome === "anonymous");
+    const allForbidden = attempts.length > 0 && attempts.every((a) => a.status === 403);
+    const allUnauth = attempts.length > 0 && attempts.every((a) => a.status === 401);
+    let hint: string;
+    if (anonymous) {
+      hint = "Spotify replied with an anonymous token — the sp_dc cookie is expired or for a logged-out session. Open open.spotify.com in your browser, confirm you're logged in, and copy a fresh sp_dc.";
+    } else if (allUnauth) {
+      hint = "Spotify rejected the cookie (401 on every attempt). Copy a fresh sp_dc from a logged-in tab.";
+    } else if (allForbidden) {
+      hint = "Spotify blocked every token request (403). This usually means your server's IP is blocked or rate-limited — try again later or run the worker from a different network.";
+    } else {
+      hint = "Spotify returned an unexpected response on every attempt. Cookie may be expired, or Spotify changed the token endpoint.";
+    }
+    throw new SpotifyWebAuthError(`${hint} [attempts: ${statuses || "none"}]`, 403);
   }
   if (data.isAnonymous) {
     throw new SpotifyWebAuthError("sp_dc cookie is invalid or expired (anonymous token)", 401);

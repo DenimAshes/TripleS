@@ -35,7 +35,10 @@ export async function POST(request: Request) {
     me = await webGetMe(cookie);
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Cookie validation failed" },
+      {
+        error: err instanceof Error ? err.message : "Cookie validation failed",
+        hint: "Click Diagnose below to see exactly what Spotify returned (status codes, response bodies). If the value really is fresh from a logged-in tab, the host's IP may be blocked.",
+      },
       { status: 400 },
     );
   }

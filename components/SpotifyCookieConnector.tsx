@@ -31,7 +31,7 @@ export function SpotifyCookieConnector({ hasCookie, serviceUsername, connectionS
       });
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error || `Failed (${response.status})`);
+        setError([data.error || `Failed (${response.status})`, data.hint].filter(Boolean).join(" · "));
       } else {
         setMessage(`Connected as ${data.profile.username}. Imported ${data.playlistCount} playlists.${data.refreshError ? ` Warning: ${data.refreshError}` : ""}`);
         setCookie("");
