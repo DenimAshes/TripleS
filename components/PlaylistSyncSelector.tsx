@@ -1,9 +1,9 @@
 "use client";
 
 import type { SyncDestination, SyncRule } from "@prisma/client";
-import { Check, ListMusic, Save } from "lucide-react";
+import { Check, Eye, EyeOff, ListMusic, Save } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 export type PlaylistOption = {
@@ -15,6 +15,7 @@ export type PlaylistOption = {
   trackCount: number;
   isWritable: boolean;
   imageUrl?: string | null;
+  hidden?: boolean;
 };
 
 type RuleWithDestinations = Pick<
@@ -40,12 +41,33 @@ export function PlaylistSyncSelector({
     () => new Set(rule?.destinations.filter((item) => item.isEnabled).map((item) => item.playlistId) || []),
   );
   const [saving, setSaving] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+  const [pendingHide, startHideTransition] = useTransition();
 
   const sourcePlaylist = playlists.find((playlist) => playlist.servicePlaylistId === sourcePlaylistId);
   const activePlaylists = useMemo(
-    () => playlists.filter((playlist) => playlist.service === activeService),
+    () =>
+      playlists.filter(
+        (playlist) => playlist.service === activeService && (showHidden || !playlist.hidden),
+      ),
+    [activeService, playlists, showHidden],
+  );
+  const hiddenCount = useMemo(
+    () => playlists.filter((playlist) => playlist.service === activeService && playlist.hidden).length,
     [activeService, playlists],
   );
+
+  async function toggleHidden(playlist: PlaylistOption) {
+    const next = !playlist.hidden;
+    const response = await fetch(`/api/playlists/${playlist.id}/hide`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hidden: next }),
+    });
+    if (response.ok) {
+      startHideTransition(() => router.refresh());
+    }
+  }
 
   function selectSource(playlist: PlaylistOption) {
     setSourcePlaylistId(playlist.servicePlaylistId);
@@ -117,7 +139,7 @@ export function PlaylistSyncSelector({
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {services.map((service) => {
           const active = activeService === service;
           return (
@@ -135,6 +157,17 @@ export function PlaylistSyncSelector({
             </button>
           );
         })}
+        {hiddenCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setShowHidden((v) => !v)}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
+            title={showHidden ? "Hide hidden playlists" : "Show hidden playlists"}
+          >
+            {showHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+            {showHidden ? `Hiding ${hiddenCount}` : `Show ${hiddenCount} hidden`}
+          </button>
+        ) : null}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -173,7 +206,7 @@ export function PlaylistSyncSelector({
                 </div>
                 {highlight ? <Check className="shrink-0 text-[var(--accent)]" size={20} strokeWidth={2.5} /> : null}
               </div>
-              <div className="mt-5 flex flex-wrap gap-2">
+              <div className="mt-5 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => selectSource(playlist)}
@@ -196,6 +229,16 @@ export function PlaylistSyncSelector({
                 <Link href={`/playlists/${playlist.id}`} className="btn btn-ghost">
                   <ListMusic size={14} /> Songs
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => toggleHidden(playlist)}
+                  disabled={pendingHide}
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-soft)] bg-transparent px-2.5 py-1 text-xs text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)] disabled:opacity-60"
+                  title={playlist.hidden ? "Show in picker" : "Hide from picker"}
+                >
+                  {playlist.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                  {playlist.hidden ? "Show" : "Hide"}
+                </button>
               </div>
             </div>
           );

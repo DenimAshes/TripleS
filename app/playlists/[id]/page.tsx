@@ -28,7 +28,7 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
   const [states, playlists, currentMember, allGroupMembers] = await Promise.all([
     getCachedPlaylistTracks(playlist.id),
     prisma.playlist.findMany({
-      where: { userId: session.userId },
+      where: { userId: session.userId, hidden: false },
       orderBy: [{ service: "asc" }, { name: "asc" }],
     }),
     prisma.playlistGroupMember.findUnique({

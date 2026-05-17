@@ -15,7 +15,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const session = await getSession();
   const params = await searchParams;
   const [playlists, rules, spotifyAccount, spotifyCookie] = await Promise.all([
-    prisma.playlist.findMany({ where: { userId: session!.userId }, orderBy: [{ service: "asc" }, { name: "asc" }] }),
+    prisma.playlist.findMany({ where: { userId: session!.userId, hidden: false }, orderBy: [{ service: "asc" }, { name: "asc" }] }),
     prisma.syncRule.findMany({ where: { userId: session!.userId }, include: { destinations: true }, orderBy: { createdAt: "desc" } }),
     prisma.connectedAccount.findUnique({ where: { userId_service: { userId: session!.userId, service: "SPOTIFY" } } }),
     getSpotifyWebCookie(session!.userId),

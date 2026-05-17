@@ -51,6 +51,9 @@ export async function refreshServicePlaylists(userId: string, service: ServiceKe
   }
 
   for (const item of items) {
+    // Note: we deliberately do not touch `hidden` on update. The user (or a
+    // backfill migration) sets it manually, and a refresh shouldn't undo
+    // their decision to keep an upstream playlist out of the picker.
     await prisma.playlist.upsert({
       where: { service_servicePlaylistId: { service: serviceName, servicePlaylistId: item.id } },
       update: {

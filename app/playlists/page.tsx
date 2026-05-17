@@ -26,6 +26,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
     trackCount: playlist.trackCount,
     isWritable: playlist.isWritable,
     imageUrl: playlist.imageUrl,
+    hidden: playlist.hidden,
   }));
 
   return (
