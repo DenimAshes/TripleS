@@ -22,10 +22,18 @@ export function serviceEnum(service: ServiceKey): string {
 export function getAdapter(service: string, userId?: string): MusicServiceAdapter {
   const key = typeof service === "string" && service === service.toUpperCase() ? service.toLowerCase() : service;
   if (key === "spotify") {
-    if (!process.env.SPOTIFY_CLIENT_ID) {
-      log.debug("spotify adapter resolved", { mode: "mock" });
+    // SpotifyAdapter handles both OAuth (when SPOTIFY_CLIENT_ID is set) and
+    // the sp_dc web-cookie path (no OAuth credentials needed). Falling back
+    // to the mock when SPOTIFY_CLIENT_ID is missing — like we used to —
+    // silently dropped users who set up the cookie connector but never
+    // configured an OAuth app, returning empty playlists no matter what.
+    // The mock is only useful when neither userId nor any account data is
+    // available, e.g. dry-run scripts that pass no userId.
+    if (!userId && !process.env.SPOTIFY_CLIENT_ID) {
+      log.debug("spotify adapter resolved", { mode: "mock", reason: "no userId and no OAuth" });
       return new SpotifyMockAdapter();
     }
+    log.debug("spotify adapter resolved", { mode: "live", oauth: Boolean(process.env.SPOTIFY_CLIENT_ID) });
     return new SpotifyAdapter(userId);
   }
   if (key === "youtube") {
