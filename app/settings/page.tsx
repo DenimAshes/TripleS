@@ -1,24 +1,22 @@
+import Link from "next/link";
+import { KeyRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SyncRuleForm } from "@/components/SyncRuleForm";
 import { SyncRuleCard } from "@/components/SyncRuleCard";
 import { DeleteRuleButton } from "@/components/DeleteRuleButton";
-import { SpotifyCookieConnector } from "@/components/SpotifyCookieConnector";
 import { YouTubeBrowserConnector } from "@/components/YouTubeBrowserConnector";
 import { SoundCloudConnector } from "@/components/SoundCloudConnector";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
-import { getSpotifyWebCookie } from "@/lib/services/spotify/spotifyCookieStore";
 import { stateFilePath } from "@/worker/config";
 import fs from "node:fs";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ rule?: string; new?: string }> }) {
   const session = await getSession();
   const params = await searchParams;
-  const [playlists, rules, spotifyAccount, spotifyCookie] = await Promise.all([
+  const [playlists, rules] = await Promise.all([
     prisma.playlist.findMany({ where: { userId: session!.userId, hidden: false }, orderBy: [{ service: "asc" }, { name: "asc" }] }),
     prisma.syncRule.findMany({ where: { userId: session!.userId }, include: { destinations: true }, orderBy: { createdAt: "desc" } }),
-    prisma.connectedAccount.findUnique({ where: { userId_service: { userId: session!.userId, service: "SPOTIFY" } } }),
-    getSpotifyWebCookie(session!.userId),
   ]);
   const selectedRule = params.new ? undefined : rules.find((rule) => rule.id === params.rule) || rules[0];
 
@@ -26,12 +24,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <AppShell title="Settings">
       <div className="grid gap-8 lg:grid-cols-[1fr_420px]">
         <div className="space-y-4">
-          <SpotifyCookieConnector
-            hasCookie={Boolean(spotifyCookie)}
-            serviceUsername={spotifyAccount?.serviceUsername}
-            connectionStatus={spotifyAccount?.connectionStatus}
-            lastError={spotifyAccount?.lastError}
-          />
+          <Link
+            href="/admin/sessions"
+            className="panel-inset flex items-center justify-between gap-4 p-4 text-sm transition hover:border-[var(--border)]"
+          >
+            <div className="flex items-center gap-3">
+              <div className="grid h-9 w-9 place-items-center rounded-lg bg-[var(--surface)] text-[var(--accent)]">
+                <KeyRound size={16} />
+              </div>
+              <div>
+                <div className="font-semibold text-[var(--text)]">Service credentials moved</div>
+                <div className="mt-0.5 text-xs text-muted-fg">
+                  Spotify cookie and YouTube / SoundCloud sessions now live on the Worker Sessions page.
+                </div>
+              </div>
+            </div>
+            <span className="text-xs font-medium text-[var(--accent)]">Open →</span>
+          </Link>
           <YouTubeBrowserConnector
             hasState={fs.existsSync(stateFilePath("youtube"))}
             isBrowserAutomationEnabled={process.env.YOUTUBE_BROWSER_AUTOMATION === "true"}

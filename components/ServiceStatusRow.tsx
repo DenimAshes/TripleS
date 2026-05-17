@@ -122,22 +122,22 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
         {state === "missing" ? (
           <div className="mt-1.5 text-xs text-[#fcd34d]">
             Paste your {SERVICE_LABELS[props.service] || props.service} cookie in{" "}
-            <Link href="/settings" className="font-medium text-[var(--accent)] hover:underline">
-              Settings
+            <Link href="/admin/sessions" className="font-medium text-[var(--accent)] hover:underline">
+              Worker Sessions
             </Link>
             .
           </div>
         ) : null}
         {state === "needs_login" || state === "warn" ? (
           <div className="mt-1.5 text-xs text-[#fcd34d]">
-            {props.lastError ? props.lastError.slice(0, 200) : "Session needs attention. Re-login in Settings."}
+            {props.lastError ? props.lastError.slice(0, 200) : "Session needs attention. Re-login in Worker Sessions."}
           </div>
         ) : null}
         {state === "mock" ? (
           <div className="mt-1.5 text-xs text-[#fcd34d]">
             Account is still flagged as mock — re-paste the cookie in{" "}
-            <Link href="/settings" className="font-medium text-[var(--accent)] hover:underline">
-              Settings
+            <Link href="/admin/sessions" className="font-medium text-[var(--accent)] hover:underline">
+              Worker Sessions
             </Link>{" "}
             to switch to live mode.
           </div>
