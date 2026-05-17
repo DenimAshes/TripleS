@@ -29,7 +29,14 @@ export async function refreshServicePlaylists(userId: string, service: ServiceKe
     });
   }
 
-  if (!account || (account.isMock && !usesBrowser)) {
+  // Spotify uses the sp_dc web cookie instead of OAuth. If the cookie is
+  // saved we must let the adapter run even if the row is still flagged as
+  // mock from earlier — the early-return below would otherwise lock the
+  // user into mock mode forever the first time they pasted a cookie
+  // before the isMock-flip fix shipped.
+  const hasSpotifyCookie = service === "spotify" && Boolean(account?.webCookieEncrypted);
+
+  if (!account || (account.isMock && !usesBrowser && !hasSpotifyCookie)) {
     return 0;
   }
 
@@ -101,13 +108,18 @@ export async function refreshServicePlaylists(userId: string, service: ServiceKe
     },
   });
 
+  // Reaching this point means a real upstream fetch succeeded, so the row
+  // is definitively not mock. Heal isMock for everyone (browser services
+  // AND Spotify cookie mode) — the previous version only cleared the flag
+  // for browser services, leaving Spotify cookie users stuck in mock mode
+  // forever after their first successful refresh.
   if (account.isMock || account.connectionStatus !== "CONNECTED" || account.lastError) {
     await prisma.connectedAccount.update({
       where: { id: account.id },
       data: {
         serviceUserId: usesYouTubeBrowser ? "youtube_browser_user" : usesSoundCloudBrowser ? "soundcloud_browser_user" : account.serviceUserId,
         serviceUsername: usesYouTubeBrowser ? "YouTube Music" : usesSoundCloudBrowser ? "SoundCloud" : account.serviceUsername,
-        isMock: usesBrowser ? false : account.isMock,
+        isMock: false,
         connectionStatus: "CONNECTED",
         lastError: null,
       },
