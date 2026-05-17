@@ -95,9 +95,47 @@ type EndpointAttempt = {
   url: string;
   status?: number;
   bodySnippet?: string;
-  outcome: "ok" | "anonymous" | "non-ok" | "no-token" | "parse-error" | "fetch-error";
+  outcome: "ok" | "anonymous" | "non-ok" | "no-token" | "parse-error" | "fetch-error" | "edge-blocked";
   errorMessage?: string;
 };
+
+function looksLikeEdgeBlock(bodySnippet: string | undefined): boolean {
+  if (!bodySnippet) return false;
+  return /URL Blocked|Error 54113|Varnish cache server/i.test(bodySnippet);
+}
+
+// Optional HTTP(S) proxy for outbound Spotify requests. Spotify's edge
+// (Varnish, IAD region) blocks most cloud/datacenter ASNs — Vercel,
+// Cloudflare Workers, etc. — so a server-side webGetMe can fail with
+// "403 URL Blocked" even when the cookie is perfectly valid. Setting
+// SPOTIFY_HTTP_PROXY=http://user:pass@host:port (or HTTPS_PROXY as a
+// generic fallback) routes our fetches through a residential / clean-IP
+// proxy and bypasses the edge block.
+let cachedProxyAgent: unknown = null;
+let proxyAgentResolved = false;
+async function resolveProxyAgent(): Promise<unknown> {
+  if (proxyAgentResolved) return cachedProxyAgent;
+  proxyAgentResolved = true;
+  const url = process.env.SPOTIFY_HTTP_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+  if (!url) return null;
+  try {
+    // Dynamic import so the dependency stays optional. Node 18+ ships undici.
+    const undici = (await import("undici")) as { ProxyAgent?: new (url: string) => unknown };
+    if (!undici.ProxyAgent) return null;
+    cachedProxyAgent = new undici.ProxyAgent(url);
+    return cachedProxyAgent;
+  } catch {
+    return null;
+  }
+}
+
+async function spotifyFetch(url: string, init: RequestInit): Promise<Response> {
+  const agent = await resolveProxyAgent();
+  if (agent) {
+    return fetch(url, { ...init, dispatcher: agent } as RequestInit & { dispatcher: unknown });
+  }
+  return fetch(url, init);
+}
 
 async function tryJsonEndpoint(
   spDcCookie: string,
@@ -107,7 +145,7 @@ async function tryJsonEndpoint(
     for (const url of [buildTotpUrl(baseUrl), baseUrl]) {
       const attempt: EndpointAttempt = { url, outcome: "fetch-error" };
       try {
-        const response = await fetch(url, {
+        const response = await spotifyFetch(url, {
           headers: browserHeaders(spDcCookie, {
             Accept: "application/json",
             "App-Platform": "WebPlayer",
@@ -124,7 +162,7 @@ async function tryJsonEndpoint(
         if (!response.ok) {
           const text = await response.text().catch(() => "");
           attempt.bodySnippet = text.slice(0, 200);
-          attempt.outcome = "non-ok";
+          attempt.outcome = looksLikeEdgeBlock(text) ? "edge-blocked" : "non-ok";
           attempts.push(attempt);
           continue;
         }
@@ -161,7 +199,7 @@ async function tryJsonEndpoint(
 }
 
 async function tryHtmlScrape(spDcCookie: string): Promise<WebTokenResponse | null> {
-  const response = await fetch(HOME_PAGE, {
+  const response = await spotifyFetch(HOME_PAGE, {
     headers: browserHeaders(spDcCookie, {
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
     }),
@@ -215,8 +253,14 @@ export async function getWebAccessToken(spDcCookie: string): Promise<string> {
     const anonymous = attempts.some((a) => a.outcome === "anonymous");
     const allForbidden = attempts.length > 0 && attempts.every((a) => a.status === 403);
     const allUnauth = attempts.length > 0 && attempts.every((a) => a.status === 401);
+    const allEdgeBlocked = attempts.length > 0 && attempts.every((a) => a.outcome === "edge-blocked");
+    const usingProxy = Boolean(process.env.SPOTIFY_HTTP_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY);
     let hint: string;
-    if (anonymous) {
+    if (allEdgeBlocked) {
+      hint = usingProxy
+        ? "Spotify's edge (Varnish, 'URL Blocked' Error 54113) is rejecting requests even through your configured proxy. The proxy IP is also flagged — try a different exit / residential proxy."
+        : "Spotify's edge blocked every request (Varnish 'URL Blocked', Error 54113). This is an IP block, not a cookie problem — your server is on Spotify's denylist (typical for Vercel / cloud datacenter IPs). Set SPOTIFY_HTTP_PROXY=http://user:pass@host:port to route through a residential / clean-IP proxy, or run the worker from a different network.";
+    } else if (anonymous) {
       hint = "Spotify replied with an anonymous token — the sp_dc cookie is expired or for a logged-out session. Open open.spotify.com in your browser, confirm you're logged in, and copy a fresh sp_dc.";
     } else if (allUnauth) {
       hint = "Spotify rejected the cookie (401 on every attempt). Copy a fresh sp_dc from a logged-in tab.";
