@@ -52,6 +52,7 @@ export async function POST(request: Request) {
     data: {
       serviceUserId: me.id,
       serviceUsername: me.username,
+      isMock: false,
       connectionStatus: "CONNECTED",
       lastError: null,
     },

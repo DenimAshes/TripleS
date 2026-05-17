@@ -5,6 +5,9 @@ import { Check, Eye, EyeOff, ListMusic, Save } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ServiceStatusRow, type ServiceStatusRowProps } from "./ServiceStatusRow";
+
+export type ServiceStatus = ServiceStatusRowProps;
 
 export type PlaylistOption = {
   id: string;
@@ -30,9 +33,11 @@ const services = ["SPOTIFY", "YOUTUBE", "SOUNDCLOUD"];
 export function PlaylistSyncSelector({
   playlists,
   rule,
+  serviceStatuses,
 }: {
   playlists: PlaylistOption[];
   rule?: RuleWithDestinations;
+  serviceStatuses?: Record<string, ServiceStatus>;
 }) {
   const router = useRouter();
   const [activeService, setActiveService] = useState(rule?.sourceService || "SPOTIFY");
@@ -169,6 +174,8 @@ export function PlaylistSyncSelector({
           </button>
         ) : null}
       </div>
+
+      {serviceStatuses?.[activeService] ? <ServiceStatusRow {...serviceStatuses[activeService]} /> : null}
 
       <div className="grid gap-4 md:grid-cols-2">
         {activePlaylists.map((playlist) => {

@@ -83,7 +83,21 @@ export async function ensureSpotifyAccountForCookie(params: {
   const existing = await prisma.connectedAccount.findUnique({
     where: { userId_service: { userId: params.userId, service: "SPOTIFY" } },
   });
-  if (existing) return existing;
+  // Flip isMock=false and clear errors on existing rows too — without this,
+  // an account left over from an earlier mock-mode init keeps isMock=true
+  // and refreshServicePlaylists silently returns 0 for Spotify.
+  if (existing) {
+    return prisma.connectedAccount.update({
+      where: { id: existing.id },
+      data: {
+        serviceUserId: params.serviceUserId,
+        serviceUsername: params.serviceUsername,
+        isMock: false,
+        connectionStatus: "CONNECTED",
+        lastError: null,
+      },
+    });
+  }
   return prisma.connectedAccount.create({
     data: {
       userId: params.userId,
