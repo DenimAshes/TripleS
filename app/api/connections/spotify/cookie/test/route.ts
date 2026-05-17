@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { requireAuth } from "@/lib/auth/session";
+import { parseSpotifySpDc } from "@/lib/services/spotify/spotifyCookieStore";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
@@ -40,7 +41,9 @@ export async function POST(request: Request) {
   const session = await requireAuth(request);
   void session;
   const body = await request.json().catch(() => ({}));
-  const cookie = typeof body.cookie === "string" ? body.cookie.trim() : "";
+  // Same parser as POST /cookie so Diagnose works with the same input the
+  // user typed/pasted, whether raw value or JSON.
+  const cookie = parseSpotifySpDc(typeof body.cookie === "string" ? body.cookie : "");
   if (!cookie) return NextResponse.json({ error: "Provide cookie" }, { status: 400 });
 
   const results: Record<string, unknown> = {};

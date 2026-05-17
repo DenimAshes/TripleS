@@ -114,7 +114,7 @@ export function SpotifyCookieConnector({ hasCookie, serviceUsername, connectionS
         </li>
         <li className="flex items-start gap-2">
           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white/5 text-[10px] text-blue-400">3</span>
-          Вставь значение <code className="text-blue-300">sp_dc</code> ниже.
+          Вставь значение <code className="text-blue-300">sp_dc</code> ниже. Также подойдёт JSON-экспорт из Cookie-Editor — мы сами выдернем нужное.
         </li>
       </ol>
 
