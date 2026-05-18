@@ -195,8 +195,11 @@ export function calculateSimilarityWithBreakdown(a: NormalizedTrack, b: Normaliz
   const titleB = normalizeTitle(stripLeadingArtist(b.title, allArtists));
   const artistA = normalizeArtist(a.artists[0] || "");
   const artistB = normalizeArtist(b.artists[0] || "");
-  const artistsA = normalizedArtistSet(a.artists);
-  const artistsB = normalizedArtistSet(b.artists);
+  // Pass titles too so "Сосед (piedalās Гера Джио)" contributes "Гера
+  // Джио" to the artist set even if the artists field only lists the
+  // primary. Same trick handles "Track (feat. X)" / "Track (ft. X)".
+  const artistsA = normalizedArtistSet(a.artists, a.title);
+  const artistsB = normalizedArtistSet(b.artists, b.title);
 
   const titleScore = textScore(titleA, titleB);
   const primaryArtistScore = textScore(artistA, artistB);

@@ -21,10 +21,51 @@ const VARIANT_PATTERNS_BRACKET_ONLY: { tag: string; regex: RegExp }[] = [
 
 const DECORATIONS_RE = /\b(official|video|audio|lyrics?|lyric|remaster(?:ed)?|visualizer|music|clip|hd|hq|4k|8k|mv|m\/v|topic|free\s*download|out\s*now|premiere)\b/gi;
 const TRAILING_VARIANT_RE = /\s*[-–—]\s*[^\-–—()\[\]{}]*\b(sped\s*up|speed\s*up|spedup|slowed(?:\s*(?:down|reverb|&\s*reverb))?|reverb|nightcore|bass\s*boost(?:ed)?|remix|edit|mashup|cover|acoustic|instrumental|karaoke|stripped|demo|extended\s+(?:mix|version|edit)|radio\s+(?:mix|version|edit)|club\s+mix|original\s+mix|dub\s+mix|vip\s+mix|rework|piano\s+version|orchestral\s+version|alternate\s+version)\b[^()\[\]{}]*$/i;
-const CREDIT_RE = /\b(prod\.?|produced|by|feat\.?|ft\.?|featuring|with|w\/)\b/gi;
+const CREDIT_RE = /\b(prod\.?|produced|by|feat\.?|ft\.?|featuring|with|w\/|piedalās|при\s+уч(?:астии)?\.?|при\s+участии)\b/giu;
 const BRACKETS_RE = /\((?:[^)]*)\)|\[(?:[^\]]*)\]|\{(?:[^}]*)\}/g;
 const PUNCT_RE = /[^\p{L}\p{N}\s]/gu;
 const WS_RE = /\s+/g;
+
+// Collaboration markers we recognize inside titles, both Latin and the
+// localized variants the YouTube Music / SoundCloud taggers tend to leave
+// in (Latvian "piedalās", Russian "при уч./при участии"). Capture group 1
+// is the name (or comma/&-separated list of names) that follows.
+const FEATURED_MARKER_SOURCE =
+  "(?:feat\\.?|ft\\.?|featuring|piedalās|при\\s+уч(?:астии)?\\.?|при\\s+участии|w\\/|with)";
+const FEATURED_IN_TEXT_RE = new RegExp(
+  `${FEATURED_MARKER_SOURCE}\\s+([^()\\[\\]{}|]+?)(?=$|[()\\[\\]{}|;]|\\s*[-–—]\\s)`,
+  "giu",
+);
+const FEATURED_IN_BRACKETS_RE = new RegExp(
+  `[(\\[{]\\s*${FEATURED_MARKER_SOURCE}\\s+([^)\\]}]+)[)\\]}]`,
+  "giu",
+);
+
+// Pull featured-artist names out of a title. Recognises Latin
+// (feat/ft/featuring/with), Latvian (piedalās) and Russian (при уч./при
+// участии) markers, both bare in the title and inside brackets. The
+// extracted names go through splitArtists later so "feat. A & B" yields
+// ["A", "B"].
+export function extractFeaturedArtists(title: string): string[] {
+  if (!title) return [];
+  const found = new Set<string>();
+  for (const match of title.matchAll(FEATURED_IN_BRACKETS_RE)) {
+    const raw = match[1]?.trim();
+    if (raw) found.add(raw);
+  }
+  for (const match of title.matchAll(FEATURED_IN_TEXT_RE)) {
+    const raw = match[1]?.trim();
+    if (raw) found.add(raw);
+  }
+  const out: string[] = [];
+  for (const entry of found) {
+    for (const piece of splitArtists(entry)) {
+      const trimmed = piece.trim();
+      if (trimmed) out.push(trimmed);
+    }
+  }
+  return out;
+}
 
 export function extractVariantTag(title: string): string | undefined {
   const lower = title.toLowerCase();
@@ -155,9 +196,16 @@ export function normalizeArtist(artist: string) {
   );
 }
 
-export function normalizedArtistSet(artists: string[]): Set<string> {
+export function normalizedArtistSet(artists: string[], title?: string): Set<string> {
   const out = new Set<string>();
-  for (const artist of splitArtists(artists)) {
+  const pool = splitArtists(artists);
+  if (title) {
+    // Pull featured artists out of the title so a track tagged just
+    // "Каспийский Груз" with title "Сосед (piedalās Гера Джио)" still
+    // matches against a candidate tagged with both names.
+    pool.push(...extractFeaturedArtists(title));
+  }
+  for (const artist of pool) {
     const norm = normalizeArtist(artist);
     if (norm) out.add(norm);
     const translit = transliterateCyrillic(norm);
