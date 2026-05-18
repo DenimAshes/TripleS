@@ -1,10 +1,17 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { SessionUploader } from "@/components/SessionUploader";
 import { SpotifyCookieConnector } from "@/components/SpotifyCookieConnector";
+import { SpotifyOAuthSetup } from "@/components/SpotifyOAuthSetup";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { getSpotifyWebCookie } from "@/lib/services/spotify/spotifyCookieStore";
+import {
+  getSpotifyRedirectUri,
+  hasSpotifyCredentials,
+  validateSpotifyRedirectUri,
+} from "@/lib/services/spotify/spotifyAuth";
 
 // Browser-storage-state-backed services. Spotify is intentionally left out
 // — it uses the sp_dc web cookie (handled by SpotifyCookieConnector below)
@@ -24,6 +31,26 @@ export default async function AdminSessionsPage() {
     }),
     getSpotifyWebCookie(session.userId),
   ]);
+
+  // Compute the redirect URI the user must paste into Spotify Developer
+  // Dashboard. Prefer the deployed env value; if missing, fall back to the
+  // current origin so users on Vercel see a copy-pasteable URL out of the
+  // box (the one Spotify will accept once redeployed).
+  const hdrs = await headers();
+  const host = hdrs.get("x-forwarded-host") || hdrs.get("host") || "";
+  const proto = hdrs.get("x-forwarded-proto") || "https";
+  const fallbackRedirect = host ? `${proto}://${host}/api/oauth/spotify/callback` : "";
+  const redirectUri = process.env.SPOTIFY_REDIRECT_URI || fallbackRedirect || "http://127.0.0.1:3000/api/oauth/spotify/callback";
+  const redirectValidation = process.env.SPOTIFY_REDIRECT_URI ? validateSpotifyRedirectUri() : { ok: true, error: null };
+  const spotifyOAuth = {
+    hasCredentials: hasSpotifyCredentials(),
+    redirectUri,
+    redirectUriValid: redirectValidation.ok,
+    redirectUriError: redirectValidation.error,
+    isConnected: Boolean(spotifyAccount) && spotifyAccount?.connectionStatus === "CONNECTED" && !spotifyAccount?.isMock,
+    serviceUsername: spotifyAccount?.serviceUsername,
+    lastError: spotifyAccount?.lastError,
+  };
 
   const byService = new Map(rows.map((r) => [r.service, r]));
   const browserSessions = BROWSER_SERVICES.map((service) => {
@@ -89,7 +116,20 @@ export default async function AdminSessionsPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Spotify (sp_dc cookie)</h2>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Spotify</h2>
+          <SpotifyOAuthSetup {...spotifyOAuth} />
+        </section>
+
+        <section>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">
+            Spotify (sp_dc cookie — fallback)
+          </h2>
+          <div className="panel-inset mb-3 p-3 text-xs text-muted-fg">
+            <strong className="text-[#fcd34d]">Note:</strong> The cookie flow is blocked at Spotify&apos;s Varnish
+            edge for Vercel and most datacenter IPs (response is{" "}
+            <code className="rounded bg-[var(--surface)] px-1 py-0.5">403 URL Blocked, Error 54113</code>). Use it
+            only if you&apos;re running the app from a residential IP / proxy. Otherwise stick with OAuth above.
+          </div>
           <SpotifyCookieConnector
             hasCookie={Boolean(spotifyCookie)}
             serviceUsername={spotifyAccount?.serviceUsername}
