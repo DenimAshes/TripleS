@@ -10,25 +10,40 @@ export default async function ManualMatchPage() {
     where: { userId: session!.userId, status: "PENDING" },
     orderBy: { createdAt: "desc" },
   });
-  const enriched: ManualCandidateView[] = await Promise.all(matches.map(async (item) => {
-    const alternatives = item.alternativesJson
-      ? (JSON.parse(item.alternativesJson) as Array<{ serviceTrackId: string; confidence: number; breakdown?: Record<string, number> }>)
-      : [];
-    const tracks = alternatives.length
-      ? await prisma.serviceTrack.findMany({ where: { id: { in: alternatives.map((candidate) => candidate.serviceTrackId) } } })
-      : [];
+
+  type Alt = { serviceTrackId: string; confidence: number; breakdown?: Record<string, number> };
+  const alternativesByCandidate = new Map<string, Alt[]>();
+  const trackIds = new Set<string>();
+  for (const item of matches) {
+    trackIds.add(item.sourceServiceTrackId);
+    trackIds.add(item.candidateServiceTrackId);
+    if (item.alternativesJson) {
+      try {
+        const alts = JSON.parse(item.alternativesJson) as Alt[];
+        alternativesByCandidate.set(item.id, alts);
+        for (const alt of alts) trackIds.add(alt.serviceTrackId);
+      } catch {}
+    }
+  }
+  const tracks = trackIds.size
+    ? await prisma.serviceTrack.findMany({ where: { id: { in: Array.from(trackIds) } } })
+    : [];
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+
+  const enriched: ManualCandidateView[] = matches.map((item) => {
+    const alternatives = alternativesByCandidate.get(item.id) ?? [];
     return {
       ...item,
-      source: await prisma.serviceTrack.findUnique({ where: { id: item.sourceServiceTrackId } }),
-      candidate: await prisma.serviceTrack.findUnique({ where: { id: item.candidateServiceTrackId } }),
+      source: trackById.get(item.sourceServiceTrackId) ?? null,
+      candidate: trackById.get(item.candidateServiceTrackId) ?? null,
       alternatives: alternatives
-        .map((candidate) => {
-          const track = tracks.find((item) => item.id === candidate.serviceTrackId);
-          return track ? { track, confidence: candidate.confidence, breakdown: candidate.breakdown } : null;
+        .map((alt) => {
+          const track = trackById.get(alt.serviceTrackId);
+          return track ? { track, confidence: alt.confidence, breakdown: alt.breakdown } : null;
         })
         .filter(Boolean) as ManualCandidateView["alternatives"],
     };
-  }));
+  });
 
   return (
     <AppShell title="Review songs">
