@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { BulkAcceptControls } from "@/components/BulkAcceptControls";
 import { ManualMatchDialog, type ManualCandidateView } from "@/components/ManualMatchDialog";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
@@ -31,6 +32,7 @@ export default async function ManualMatchPage() {
 
   return (
     <AppShell title="Review songs">
+      <BulkAcceptControls totalPending={enriched.length} />
       <div className="space-y-4">
         {enriched.map((item) => <ManualMatchDialog key={item.id} item={item} />)}
         {!enriched.length ? <div className="panel p-8 text-center text-sm text-muted-fg">All songs are synced. Nothing to review!</div> : null}
