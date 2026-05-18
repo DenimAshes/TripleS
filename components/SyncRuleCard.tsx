@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Pencil, Play } from "lucide-react";
 import { RunSyncButton } from "./RunSyncButton";
 import { StatusBadge } from "./StatusBadge";
+import { SyncRuleHistory } from "./SyncRuleHistory";
 
 function modeLabel(mode: string) {
   const labels: Record<string, string> = {
@@ -121,6 +122,8 @@ export function SyncRuleCard({
           ) : null}
         </div>
       ) : null}
+
+      <SyncRuleHistory ruleId={rule.id} />
     </div>
   );
 }
