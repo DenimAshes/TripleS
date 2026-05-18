@@ -26,7 +26,7 @@ import { recordCooldownForRule, recordSuccessForRule } from "./serviceCooldown";
 import { releaseAllSessions } from "@/worker/sessionPool";
 import { preflightSyncRule } from "./preflight";
 import { bindCurrentJob, killChildPids, listKnownChildPids } from "@/worker/childPidRegistry";
-import { throwIfActiveJobAborted } from "@/lib/jobs/activeJobContext";
+import { CancelledError, throwIfActiveJobAborted } from "@/lib/jobs/activeJobContext";
 
 const WRITE_THROTTLE_MIN_MS = Number(process.env.WORKER_WRITE_THROTTLE_MIN_MS ?? 4000);
 const WRITE_THROTTLE_SPREAD_MS = Number(process.env.WORKER_WRITE_THROTTLE_SPREAD_MS ?? 8000);
@@ -771,9 +771,21 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       const checkpointStats = async () => {
         if (Date.now() - lastStatsCheckpointAt < 30_000) return;
         lastStatsCheckpointAt = Date.now();
-        await prisma.syncJob
-          .update({ where: { id: job.id }, data: { statsJson: JSON.stringify(stats) } })
-          .catch(() => undefined);
+        // Two things in one round-trip: write our latest stats AND read
+        // back the row so we notice if a user clicked Cancel via the API.
+        // When the engine and the cancel route live in different processes
+        // (Vercel function vs the worker), this DB poll is the only way
+        // the engine knows the user wants to stop.
+        const fresh = await prisma.syncJob
+          .update({
+            where: { id: job.id },
+            data: { statsJson: JSON.stringify(stats) },
+            select: { status: true },
+          })
+          .catch(() => null);
+        if (fresh?.status === "CANCELLED") {
+          throw new CancelledError("Sync cancelled by user");
+        }
       };
 
       try {
@@ -1041,11 +1053,17 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     await recordSuccessForRule([rule.sourceService, ...rule.destinations.map((destination) => destination.service)]).catch(() => {});
     return finished;
   } catch (error) {
-    const errorKind = classifyError(error);
+    const isCancelled = error instanceof CancelledError;
+    const errorKind = isCancelled ? "cancelled" : classifyError(error);
     const failed = await prisma.syncJob.update({
       where: { id: job.id },
       data: {
-        status: "FAILED",
+        // Preserve the CANCELLED status the cancel route set — overwriting
+        // it with FAILED would lose the distinction between "user stopped
+        // it" and "it actually broke". The route already wrote
+        // finishedAt + errorMessage, but rewriting them here keeps stats
+        // consistent (we have a final stats snapshot to attach).
+        status: isCancelled ? "CANCELLED" : "FAILED",
         finishedAt: new Date(),
         statsJson: JSON.stringify(stats),
         errorMessage: error instanceof Error ? error.message : "Unknown sync error",

@@ -1,6 +1,7 @@
 import type { SyncDestination, SyncRule } from "@prisma/client";
 import Link from "next/link";
 import { Pencil, Play } from "lucide-react";
+import { CancelSyncButton } from "./CancelSyncButton";
 import { RunSyncButton } from "./RunSyncButton";
 import { StatusBadge } from "./StatusBadge";
 import { SyncRuleHistory } from "./SyncRuleHistory";
@@ -41,9 +42,11 @@ export type SyncRuleCardProgress = {
 export function SyncRuleCard({
   rule,
   progress,
+  runningJob,
 }: {
   rule: SyncRule & { destinations: SyncDestination[] };
   progress?: SyncRuleCardProgress;
+  runningJob?: { id: string; startedAt: string } | null;
 }) {
   const lastRunRel = formatRelative(rule.lastRunAt);
   const nextRunRel = rule.isEnabled ? formatRelative(rule.nextRunAt) : null;
@@ -69,9 +72,13 @@ export function SyncRuleCard({
           <Link href={`/settings?rule=${rule.id}`} className="rounded-xl bg-white/5 px-4 py-2 text-xs font-bold text-slate-400 transition-all hover:bg-white/10 hover:text-white">
             <Pencil size={16} /> Edit
           </Link>
-          <RunSyncButton ruleId={rule.id}>
-            <Play size={16} /> Run now
-          </RunSyncButton>
+          {runningJob ? (
+            <CancelSyncButton jobId={runningJob.id} startedAt={runningJob.startedAt} />
+          ) : (
+            <RunSyncButton ruleId={rule.id}>
+              <Play size={16} /> Run now
+            </RunSyncButton>
+          )}
         </div>
       </div>
       {progress && progress.sourceTotal > 0 ? (

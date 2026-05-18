@@ -119,14 +119,22 @@ async function computeRuleProgress(
 
 export default async function DashboardPage() {
   const session = await getSession();
-  const [accounts, rules, lastJob, playlists, sessionRows, pendingReviewCount] = await Promise.all([
+  const [accounts, rules, lastJob, playlists, sessionRows, pendingReviewCount, runningJobs] = await Promise.all([
     prisma.connectedAccount.findMany({ where: { userId: session!.userId }, orderBy: { service: "asc" } }),
     prisma.syncRule.findMany({ where: { userId: session!.userId }, include: { destinations: true }, orderBy: { createdAt: "asc" } }),
     prisma.syncJob.findFirst({ where: { syncRule: { userId: session!.userId } }, orderBy: { startedAt: "desc" } }),
     prisma.playlist.findMany({ where: { userId: session!.userId }, select: { updatedAt: true } }),
     prisma.workerSessionState.findMany({ where: { service: { in: WORKER_SERVICES as unknown as string[] } } }),
     prisma.manualMatchCandidate.count({ where: { userId: session!.userId, status: "PENDING" } }),
+    prisma.syncJob.findMany({
+      where: { status: "RUNNING", syncRule: { userId: session!.userId } },
+      select: { id: true, syncRuleId: true, startedAt: true },
+      orderBy: { startedAt: "desc" },
+    }),
   ]);
+  const runningByRule = new Map(
+    runningJobs.map((job) => [job.syncRuleId, { id: job.id, startedAt: job.startedAt.toISOString() }]),
+  );
 
   // Per-rule progress: how many tracks of the source playlist have already
   // been written into each destination. The sync engine bounds runs by
@@ -193,7 +201,12 @@ export default async function DashboardPage() {
         </div>
         {rules.length ? (
           rules.map((rule) => (
-            <SyncRuleCard key={rule.id} rule={rule} progress={ruleProgress.get(rule.id)} />
+            <SyncRuleCard
+              key={rule.id}
+              rule={rule}
+              progress={ruleProgress.get(rule.id)}
+              runningJob={runningByRule.get(rule.id) ?? null}
+            />
           ))
         ) : (
           <div className="panel p-8 text-center text-sm text-muted-fg">
