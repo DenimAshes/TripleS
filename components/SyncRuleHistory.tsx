@@ -43,19 +43,35 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || jobs !== null || loading) return;
-    setLoading(true);
-    fetch(`/api/sync-rules/${ruleId}/history`)
-      .then(async (res) => {
+    if (!open) return;
+    let aborted = false;
+
+    async function load(showSpinner: boolean) {
+      if (showSpinner) setLoading(true);
+      try {
+        const res = await fetch(`/api/sync-rules/${ruleId}/history`);
         if (!res.ok) {
           throw new Error((await res.json().catch(() => null))?.error || `Failed (${res.status})`);
         }
         const data = await res.json();
+        if (aborted) return;
         setJobs(Array.isArray(data.jobs) ? data.jobs : []);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "Could not load history"))
-      .finally(() => setLoading(false));
-  }, [open, jobs, loading, ruleId]);
+        setError(null);
+      } catch (err) {
+        if (aborted) return;
+        setError(err instanceof Error ? err.message : "Could not load history");
+      } finally {
+        if (!aborted && showSpinner) setLoading(false);
+      }
+    }
+
+    if (jobs === null) void load(true);
+    const id = window.setInterval(() => void load(false), 10_000);
+    return () => {
+      aborted = true;
+      window.clearInterval(id);
+    };
+  }, [open, jobs, ruleId]);
 
   return (
     <div className="mt-4 border-t border-[var(--border-soft)] pt-3">
