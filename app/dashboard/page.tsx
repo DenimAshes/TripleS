@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { PlaylistsAutoRefresh } from "@/components/PlaylistsAutoRefresh";
+import { RunningJobsAutoRefresh } from "@/components/RunningJobsAutoRefresh";
 import { ServiceCard } from "@/components/ServiceCard";
 import { SessionStalenessBanner, classifySession, type SessionStaleness } from "@/components/SessionStalenessBanner";
 import { SyncRuleCard } from "@/components/SyncRuleCard";
@@ -161,6 +162,7 @@ export default async function DashboardPage() {
   return (
     <AppShell title="Home">
       <PlaylistsAutoRefresh hasPlaylists={playlists.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
+      <RunningJobsAutoRefresh runningCount={runningJobs.length} />
       <SessionStalenessBanner items={staleSessions} />
       {pendingReviewCount > 0 ? (
         <Link
