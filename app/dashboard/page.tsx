@@ -83,18 +83,19 @@ async function computeRuleProgress(
       where: { playlistId: { in: sourceIds }, removedAt: null },
       select: { playlistId: true, serviceTrackId: true },
     });
-    const trackIdsByPlaylist = new Map<string, string[]>();
+    const allTrackIds = stateByPlaylist.map((row) => row.serviceTrackId);
+    const candidates = allTrackIds.length
+      ? await prisma.manualMatchCandidate.groupBy({
+          by: ["sourceServiceTrackId"],
+          where: { userId, status: "PENDING", sourceServiceTrackId: { in: allTrackIds } },
+          _count: { _all: true },
+        })
+      : [];
+    const pendingCountByTrack = new Map(candidates.map((row) => [row.sourceServiceTrackId, row._count._all]));
     for (const row of stateByPlaylist) {
-      const list = trackIdsByPlaylist.get(row.playlistId) ?? [];
-      list.push(row.serviceTrackId);
-      trackIdsByPlaylist.set(row.playlistId, list);
-    }
-    for (const [playlistId, ids] of trackIdsByPlaylist) {
-      if (!ids.length) continue;
-      const count = await prisma.manualMatchCandidate.count({
-        where: { userId, status: "PENDING", sourceServiceTrackId: { in: ids } },
-      });
-      pendingBySource.set(playlistId, count);
+      const n = pendingCountByTrack.get(row.serviceTrackId);
+      if (!n) continue;
+      pendingBySource.set(row.playlistId, (pendingBySource.get(row.playlistId) ?? 0) + n);
     }
   }
 
