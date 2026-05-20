@@ -57,7 +57,7 @@ export class PersistentRunner {
 
   static async spawn(service: PersistentRunnerService, options?: { signal?: AbortSignal }): Promise<PersistentRunner> {
     const script = path.join(/*turbopackIgnore: true*/ process.cwd(), "worker", "runners", SCRIPT_BY_SERVICE[service]);
-    const env = { ...sanitizeRunnerEnv(process.env), PERSISTENT_RUNNER: "true" } as unknown as NodeJS.ProcessEnv;
+    const env: NodeJS.ProcessEnv = { ...sanitizeRunnerEnv(process.env), PERSISTENT_RUNNER: "true" };
     const child = spawn(process.execPath, [tsxCliPath(), script, "--persistent"], {
       cwd: /*turbopackIgnore: true*/ process.cwd(),
       env,

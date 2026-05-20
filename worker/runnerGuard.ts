@@ -4,6 +4,10 @@ export type RunnerGuardOptions = {
 
 const NEXT_RUNTIME_MARKERS = ["NEXT_RUNTIME", "NEXT_PHASE"] as const;
 
+function nodeEnv(value: string | undefined): NodeJS.ProcessEnv["NODE_ENV"] {
+  return value === "production" || value === "test" ? value : "development";
+}
+
 export function isRunnerCli(env: Record<string, string | undefined> = process.env): boolean {
   return env.WORKER_RUNNER_CLI === "true";
 }
@@ -30,9 +34,10 @@ export function assertRunnerCli(options: RunnerGuardOptions = {}): void {
 
 export function sanitizeRunnerEnv(
   parentEnv: Record<string, string | undefined> = process.env,
-): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = {
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
     ...parentEnv,
+    NODE_ENV: nodeEnv(parentEnv.NODE_ENV ?? process.env.NODE_ENV),
     WORKER_RUNNER_CLI: "true",
   };
   for (const marker of NEXT_RUNTIME_MARKERS) delete env[marker];

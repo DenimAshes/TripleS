@@ -71,7 +71,7 @@ export function runBrowserRunnerCli({
     const startedAt = Date.now();
     const child = spawn(process.execPath, [tsxCliPath(), script, ...args], {
       cwd: /*turbopackIgnore: true*/ process.cwd(),
-      env: sanitizeRunnerEnv() as NodeJS.ProcessEnv,
+      env: sanitizeRunnerEnv(),
       windowsHide: true,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
