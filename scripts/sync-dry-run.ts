@@ -1,4 +1,4 @@
-import type { ServiceTrack } from "@prisma/client";
+import type { Playlist, ServiceTrack } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getAdapter, serviceKey } from "@/lib/services/adapterFactory";
 import type { MusicServiceAdapter } from "@/lib/services/MusicServiceAdapter";
@@ -114,11 +114,13 @@ async function loadSourceTracks({
   sourceService,
   sourcePlaylistId,
   forceRefresh,
+  playlist,
 }: {
   userId: string;
   sourceService: string;
   sourcePlaylistId: string;
   forceRefresh: boolean;
+  playlist?: Playlist | null;
 }): Promise<{
   tracks: NormalizedTrack[];
   source: "cache" | "live";
@@ -126,9 +128,6 @@ async function loadSourceTracks({
   partial?: boolean;
   expected?: number;
 }> {
-  const playlist = await prisma.playlist.findUnique({
-    where: { service_servicePlaylistId: { service: sourceService, servicePlaylistId: sourcePlaylistId } },
-  });
   if (playlist && !forceRefresh) {
     const cached = await cachedPlaylistTracks(playlist.id);
     const age = cacheAgeHours(playlist.lastFetchedAt);
@@ -162,15 +161,14 @@ async function loadDestinationTracks({
   service,
   playlistId,
   forceRefresh,
+  playlist,
 }: {
   userId: string;
   service: string;
   playlistId: string;
   forceRefresh: boolean;
+  playlist?: Playlist | null;
 }): Promise<{ tracks: NormalizedTrack[]; source: "cache" | "live"; warning?: string }> {
-  const playlist = await prisma.playlist.findUnique({
-    where: { service_servicePlaylistId: { service, servicePlaylistId: playlistId } },
-  });
   if (playlist && !forceRefresh) {
     const cached = await cachedPlaylistTracks(playlist.id);
     return {
@@ -238,11 +236,27 @@ async function main(): Promise<void> {
   if (!rule) throw new Error(`SyncRule not found: ${syncRuleId}`);
   if (!rule.destinations.length) throw new Error(`SyncRule has no enabled destinations: ${syncRuleId}`);
 
+  const sourcePlaylistRow = await prisma.playlist.findUnique({
+    where: { service_servicePlaylistId: { service: rule.sourceService, servicePlaylistId: rule.sourcePlaylistId } },
+  });
+  const destinationPlaylistRows = await prisma.playlist.findMany({
+    where: {
+      OR: rule.destinations.map((destination) => ({
+        service: destination.service,
+        servicePlaylistId: destination.playlistId,
+      })),
+    },
+  });
+  const destinationPlaylistByKey = new Map(
+    destinationPlaylistRows.map((playlist) => [`${playlist.service}::${playlist.servicePlaylistId}`, playlist]),
+  );
+
   const sourceLoad = await loadSourceTracks({
     userId: rule.userId,
     sourceService: rule.sourceService,
     sourcePlaylistId: rule.sourcePlaylistId,
     forceRefresh,
+    playlist: sourcePlaylistRow,
   });
   if (sourceLoad.warning) console.log(`[dry-run] ${sourceLoad.warning}`);
   if (sourceLoad.partial && failOnPartial) {
@@ -251,9 +265,6 @@ async function main(): Promise<void> {
     );
   }
 
-  const sourcePlaylistRow = await prisma.playlist.findUnique({
-    where: { service_servicePlaylistId: { service: rule.sourceService, servicePlaylistId: rule.sourcePlaylistId } },
-  });
   const sourceGroupMember = sourcePlaylistRow
     ? await prisma.playlistGroupMember.findUnique({ where: { playlistId: sourcePlaylistRow.id } })
     : null;
@@ -313,17 +324,14 @@ async function main(): Promise<void> {
       service: destination.service,
       playlistId: destination.playlistId,
       forceRefresh: forceDestinationRefresh,
+      playlist: destinationPlaylistByKey.get(`${destination.service}::${destination.playlistId}`),
     });
     if (destinationLoad.warning) console.log(`[dry-run] ${destinationLoad.warning}`);
     console.log(
       `[dry-run] Destination ${destination.service}:${destination.playlistId} loaded ${destinationLoad.tracks.length} tracks from ${destinationLoad.source}.`,
     );
     const destinationTracks = destinationLoad.tracks;
-    const destinationPlaylistRow = await prisma.playlist.findUnique({
-      where: {
-        service_servicePlaylistId: { service: destination.service, servicePlaylistId: destination.playlistId },
-      },
-    });
+    const destinationPlaylistRow = destinationPlaylistByKey.get(`${destination.service}::${destination.playlistId}`);
     const destinationExcludedSet = new Set(
       groupId && destinationPlaylistRow
         ? (
