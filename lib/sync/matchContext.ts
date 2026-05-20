@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
 import type { NormalizedTrack, ServiceKey } from "./syncTypes";
 import { extractVariantTag, normalizeArtist, normalizeTitle, splitArtists } from "@/lib/utils/normalizeTrack";
+import { parseArtistsJson } from "@/lib/utils/parseArtists";
 
 const STORED_MATCH_WINDOW_DAYS = Math.max(0, Number(process.env.MATCH_STORED_MATCH_WINDOW_DAYS ?? 365));
 const FINGERPRINT_MERGE_ENABLED = process.env.MATCH_FINGERPRINT_MERGE_ENABLED !== "false";
@@ -181,7 +182,7 @@ export function lookupIsrcMatch(ctx: MatchContext, source: NormalizedTrack): Nor
   if (!track) return undefined;
   return {
     title: track.title,
-    artists: JSON.parse(track.artistsJson),
+    artists: parseArtistsJson(track.artistsJson),
     album: track.album || undefined,
     durationMs: track.durationMs || undefined,
     isrc: track.isrc || undefined,
@@ -452,7 +453,7 @@ export function lookupStoredMatch(ctx: MatchContext, internalTrackId: string) {
   return {
     track: {
       title: track.title,
-      artists: JSON.parse(track.artistsJson) as string[],
+      artists: parseArtistsJson(track.artistsJson),
       album: track.album || undefined,
       durationMs: track.durationMs || undefined,
       isrc: track.isrc || undefined,

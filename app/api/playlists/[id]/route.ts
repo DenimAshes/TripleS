@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { getCachedPlaylistTracks } from "@/lib/services/playlistTracksStore";
+import { parseArtistsJson } from "@/lib/utils/parseArtists";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await requireAuth(request);
@@ -23,11 +24,12 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       service: state.serviceTrack.service,
       serviceTrackId: state.serviceTrack.serviceTrackId,
       title: state.serviceTrack.title,
-      artists: JSON.parse(state.serviceTrack.artistsJson) as string[],
+      artists: parseArtistsJson(state.serviceTrack.artistsJson),
       album: state.serviceTrack.album,
       durationMs: state.serviceTrack.durationMs,
       isrc: state.serviceTrack.isrc,
       url: state.serviceTrack.url,
+      imageUrl: state.serviceTrack.imageUrl,
     },
   }));
 

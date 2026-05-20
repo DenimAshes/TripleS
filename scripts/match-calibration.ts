@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { serviceKey } from "@/lib/services/adapterFactory";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import { calculateSimilarityWithBreakdown } from "@/lib/utils/similarity";
+import { parseArtistsJson } from "@/lib/utils/parseArtists";
 import type { ServiceTrack } from "@prisma/client";
 
 const thresholds = [0.65, 0.7, 0.72, 0.75, 0.78, 0.8, 0.82, 0.85, 0.88, 0.9, 0.93, 0.95];
@@ -9,7 +10,7 @@ const thresholds = [0.65, 0.7, 0.72, 0.75, 0.78, 0.8, 0.82, 0.85, 0.88, 0.9, 0.9
 function toTrack(track: ServiceTrack): NormalizedTrack {
   return {
     title: track.title,
-    artists: JSON.parse(track.artistsJson) as string[],
+    artists: parseArtistsJson(track.artistsJson),
     album: track.album || undefined,
     durationMs: track.durationMs || undefined,
     isrc: track.isrc || undefined,
@@ -46,8 +47,8 @@ async function main() {
       label: row.status === "ACCEPTED",
       status: row.status,
       score: breakdown.score,
-      source: `${source.title} - ${JSON.parse(source.artistsJson).join(", ")}`,
-      candidate: `${candidate.title} - ${JSON.parse(candidate.artistsJson).join(", ")}`,
+      source: `${source.title} - ${parseArtistsJson(source.artistsJson).join(", ")}`,
+      candidate: `${candidate.title} - ${parseArtistsJson(candidate.artistsJson).join(", ")}`,
       targetService: row.targetService,
       breakdown,
     }];

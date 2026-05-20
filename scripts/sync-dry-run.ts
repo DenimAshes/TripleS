@@ -12,6 +12,7 @@ import {
 } from "@/lib/sync/matchContext";
 import { findMatch, prewarmLocalCatalog } from "@/lib/sync/matchEngine";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
+import { parseArtistsJson } from "@/lib/utils/parseArtists";
 
 type Decision = {
   source: string;
@@ -83,7 +84,7 @@ function isReadComplete(received: number, expected: number): boolean {
 function serviceTrackToNormalized(track: ServiceTrack): NormalizedTrack {
   return {
     title: track.title,
-    artists: JSON.parse(track.artistsJson) as string[],
+    artists: parseArtistsJson(track.artistsJson),
     album: track.album || undefined,
     durationMs: track.durationMs || undefined,
     isrc: track.isrc || undefined,

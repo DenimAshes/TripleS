@@ -12,6 +12,7 @@ import {
   splitArtists,
 } from "@/lib/utils/normalizeTrack";
 import { calculateSimilarityWithBreakdown } from "@/lib/utils/similarity";
+import { parseArtistsJson } from "@/lib/utils/parseArtists";
 
 const LOCAL_FIRST_ACCEPT = Number(process.env.MATCH_LOCAL_FIRST_THRESHOLD ?? 0.88);
 const LOCAL_FIRST_ACCEPT_WITH_ISRC = Number(process.env.MATCH_LOCAL_FIRST_THRESHOLD_ISRC ?? 0.82);
@@ -35,7 +36,7 @@ type ServiceTrackRow = {
 function rowToTrack(row: ServiceTrackRow): NormalizedTrack {
   return {
     title: row.title,
-    artists: JSON.parse(row.artistsJson) as string[],
+    artists: parseArtistsJson(row.artistsJson),
     album: row.album || undefined,
     durationMs: row.durationMs || undefined,
     isrc: row.isrc || undefined,
@@ -311,7 +312,7 @@ export async function findMatch(
       return {
         track: {
           title: dbMatch.title,
-          artists: JSON.parse(dbMatch.artistsJson),
+          artists: parseArtistsJson(dbMatch.artistsJson),
           album: dbMatch.album || undefined,
           durationMs: dbMatch.durationMs || undefined,
           isrc: dbMatch.isrc || undefined,

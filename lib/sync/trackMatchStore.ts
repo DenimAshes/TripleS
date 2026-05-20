@@ -2,6 +2,7 @@ import { Prisma, type ServiceTrack } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { NormalizedTrack } from "./syncTypes";
 import { serviceKey } from "@/lib/services/adapterFactory";
+import { parseArtistsJson } from "@/lib/utils/parseArtists";
 
 function trackMatchField(service: string) {
   if (service === "SPOTIFY") return "spotifyServiceTrackId";
@@ -12,7 +13,7 @@ function trackMatchField(service: string) {
 function normalizedFromServiceTrack(track: ServiceTrack): NormalizedTrack {
   return {
     title: track.title,
-    artists: JSON.parse(track.artistsJson),
+    artists: parseArtistsJson(track.artistsJson),
     album: track.album || undefined,
     durationMs: track.durationMs || undefined,
     isrc: track.isrc || undefined,

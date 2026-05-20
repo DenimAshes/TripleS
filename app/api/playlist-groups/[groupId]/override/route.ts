@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
+import { parseArtistsJson } from "@/lib/utils/parseArtists";
 
 const SERVICE_FROM_HOST: Array<[RegExp, string]> = [
   [/spotify\.com$/i, "SPOTIFY"],
@@ -62,7 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
     return NextResponse.json({ error: "Source song not found." }, { status: 404 });
   }
 
-  const artists = JSON.parse(sourceTrack.artistsJson) as string[];
+  const artists = parseArtistsJson(sourceTrack.artistsJson);
   const serviceTrackId = trackIdFromUrl(url.toString(), targetService);
   const internal = await prisma.internalTrack.upsert({
     where: { id: `${targetService}_${serviceTrackId}` },

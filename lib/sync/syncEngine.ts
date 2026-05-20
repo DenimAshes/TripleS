@@ -18,6 +18,7 @@ import {
   lookupStoredMatch,
 } from "./matchContext";
 import { isReadComplete, PartialSourceReadError, writePlaylistSnapshot } from "./snapshot";
+import { parseArtistsJson } from "@/lib/utils/parseArtists";
 import { classifyError, nextRunAfterFailure } from "./failureClassifier";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -104,7 +105,7 @@ async function upsertServiceTrack(track: NormalizedTrack): Promise<ServiceTrack>
 function normalizedFromServiceTrack(track: ServiceTrack): NormalizedTrack {
   return {
     title: track.title,
-    artists: JSON.parse(track.artistsJson),
+    artists: parseArtistsJson(track.artistsJson),
     album: track.album || undefined,
     durationMs: track.durationMs || undefined,
     isrc: track.isrc || undefined,
