@@ -136,6 +136,7 @@ export default async function ConnectionsPage() {
                 Spotify is handled by secure login. YouTube Music and SoundCloud stay ready through a saved browser
                 session JSON.
               </p>
+              <ServiceActivityStrip connectedCount={connectedCount} healthyCount={healthyCount} />
             </div>
             <div className="flex flex-col gap-3 sm:flex-row lg:items-center">
               <span className="pill pill-accent surface-lift justify-center">
@@ -186,6 +187,23 @@ export default async function ConnectionsPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function ServiceActivityStrip({ connectedCount, healthyCount }: { connectedCount: number; healthyCount: number }) {
+  return (
+    <div className="mt-6 max-w-2xl" aria-label="Connection activity">
+      <div className="connection-activity-track">
+        <span className="connection-activity-segment bg-[#1ed760]" style={{ animationDelay: "0ms" }} />
+        <span className="connection-activity-segment bg-[#ff0033]" style={{ animationDelay: "900ms" }} />
+        <span className="connection-activity-segment bg-[#ff7700]" style={{ animationDelay: "1800ms" }} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-dim-fg">
+        <span>{connectedCount}/3 connected</span>
+        <span className="text-[var(--border)]">/</span>
+        <span>{healthyCount}/3 healthy</span>
+      </div>
+    </div>
   );
 }
 
@@ -361,11 +379,19 @@ function ServiceConnectionCard({
 }) {
   const meta = serviceMeta(service);
   const connected = status === "connected";
+  const glowClass =
+    meta.key === "SPOTIFY"
+      ? "service-glow-spotify"
+      : meta.key === "YOUTUBE"
+        ? "service-glow-youtube"
+        : meta.key === "SOUNDCLOUD"
+          ? "service-glow-soundcloud"
+          : "";
 
   return (
     <section
       id={id}
-      className={`panel group surface-lift animated-gradient-frame animated-sheen relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] md:scroll-mt-8 xl:min-h-[420px]`}
+      className={`panel group surface-lift animated-gradient-frame animated-sheen ${glowClass} relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] md:scroll-mt-8 xl:min-h-[420px]`}
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-80" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_at_20%_0%,rgba(255,255,255,0.045),transparent_55%)] opacity-0 transition duration-500 group-hover:opacity-100" />

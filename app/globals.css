@@ -206,6 +206,80 @@ a {
   opacity: 1;
 }
 
+.connection-activity-track {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(30, 215, 96, 0.12), rgba(255, 0, 51, 0.1), rgba(255, 119, 0, 0.12)),
+    var(--surface-2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.connection-activity-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  animation: activity-scan 3.8s ease-in-out infinite;
+}
+
+.connection-activity-segment {
+  position: absolute;
+  top: 2px;
+  left: -22%;
+  height: 4px;
+  width: 22%;
+  border-radius: 999px;
+  opacity: 0.95;
+  filter: saturate(1.15);
+  animation: activity-segment 4.8s ease-in-out infinite;
+}
+
+.service-glow-spotify,
+.service-glow-youtube,
+.service-glow-soundcloud {
+  --service-glow: rgba(79, 141, 255, 0.12);
+  --service-wash: rgba(79, 141, 255, 0.055);
+}
+
+.service-glow-spotify {
+  --service-glow: rgba(30, 215, 96, 0.2);
+  --service-wash: rgba(30, 215, 96, 0.07);
+}
+
+.service-glow-youtube {
+  --service-glow: rgba(255, 0, 51, 0.2);
+  --service-wash: rgba(255, 0, 51, 0.065);
+}
+
+.service-glow-soundcloud {
+  --service-glow: rgba(255, 119, 0, 0.22);
+  --service-wash: rgba(255, 119, 0, 0.07);
+}
+
+.service-glow-spotify::after,
+.service-glow-youtube::after,
+.service-glow-soundcloud::after {
+  background:
+    linear-gradient(135deg, var(--service-wash), transparent 46%),
+    linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255, 255, 255, 0.08) 48%, transparent 58%, transparent 100%);
+}
+
+.service-glow-spotify:hover,
+.service-glow-youtube:hover,
+.service-glow-soundcloud:hover,
+.service-glow-spotify:focus-within,
+.service-glow-youtube:focus-within,
+.service-glow-soundcloud:focus-within {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 28px 70px -46px var(--service-glow),
+    0 0 28px -14px var(--service-glow);
+}
+
 .panel-flat {
   border: 1px solid var(--border-soft);
   background: var(--surface);
@@ -464,6 +538,38 @@ a {
   }
   to {
     transform: translateX(55%);
+  }
+}
+
+@keyframes activity-scan {
+  0%,
+  18% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  42% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes activity-segment {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(560%);
+    opacity: 0;
   }
 }
 

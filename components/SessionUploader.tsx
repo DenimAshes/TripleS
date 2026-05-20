@@ -65,6 +65,8 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   const level = staleLevel(info.exists, info.updatedAt);
   const badge = STALE_BADGE[level];
   const browseHref = browserRoute(info.service);
+  const glowClass =
+    meta.key === "YOUTUBE" ? "service-glow-youtube" : meta.key === "SOUNDCLOUD" ? "service-glow-soundcloud" : "service-glow-spotify";
 
   async function uploadText(text: string, sourceLabel: string) {
     setBusy(true);
@@ -135,7 +137,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   return (
     <section
       id={cardId}
-      className={`panel group surface-lift animated-gradient-frame animated-sheen relative flex scroll-mt-24 flex-col overflow-hidden p-5 md:scroll-mt-8 xl:min-h-[420px] ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] ${
+      className={`panel group surface-lift animated-gradient-frame animated-sheen ${glowClass} relative flex scroll-mt-24 flex-col overflow-hidden p-5 md:scroll-mt-8 xl:min-h-[420px] ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] ${
         dragOver ? "scale-[1.01] border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring),0_28px_70px_-46px_var(--accent-glow)]" : ""
       }`}
       onDragOver={(e) => {
