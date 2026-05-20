@@ -112,15 +112,22 @@ export async function preflightSyncRule(
     }
   }
 
-  for (const destination of enabledDestinations) {
-    const playlist = await prisma.playlist.findUnique({
-      where: {
-        service_servicePlaylistId: {
-          service: destination.service,
-          servicePlaylistId: destination.playlistId,
+  const destinationPlaylists = enabledDestinations.length
+    ? await prisma.playlist.findMany({
+        where: {
+          OR: enabledDestinations.map((destination) => ({
+            service: destination.service,
+            servicePlaylistId: destination.playlistId,
+          })),
         },
-      },
-    });
+      })
+    : [];
+  const destinationPlaylistByKey = new Map(
+    destinationPlaylists.map((playlist) => [`${playlist.service}::${playlist.servicePlaylistId}`, playlist]),
+  );
+
+  for (const destination of enabledDestinations) {
+    const playlist = destinationPlaylistByKey.get(`${destination.service}::${destination.playlistId}`);
     if (!playlist) {
       reasons.push(`Destination playlist ${destination.service}:${destination.playlistId} is not cached in database.`);
     } else if (!playlist.isWritable) {
