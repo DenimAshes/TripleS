@@ -59,10 +59,6 @@ function cacheAgeHours(lastFetchedAt: Date | null): number | null {
   return (Date.now() - lastFetchedAt.getTime()) / 3_600_000;
 }
 
-async function playlistStateCount(playlistId: string): Promise<number> {
-  return prisma.playlistTrackState.count({ where: { playlistId, removedAt: null } });
-}
-
 async function main(): Promise<void> {
   const syncRuleId = process.argv[2];
   const liveMode = process.argv.includes("--live");
@@ -126,13 +122,29 @@ async function main(): Promise<void> {
     });
   }
 
-  const sourcePlaylist = await prisma.playlist.findUnique({
-    where: { service_servicePlaylistId: { service: rule.sourceService, servicePlaylistId: rule.sourcePlaylistId } },
-  });
+  const playlistRefs = [
+    { service: rule.sourceService, servicePlaylistId: rule.sourcePlaylistId },
+    ...rule.destinations.map((destination) => ({
+      service: destination.service,
+      servicePlaylistId: destination.playlistId,
+    })),
+  ];
+  const playlists = await prisma.playlist.findMany({ where: { OR: playlistRefs } });
+  const playlistByKey = new Map(playlists.map((playlist) => [`${playlist.service}::${playlist.servicePlaylistId}`, playlist]));
+  const activeCounts = playlists.length
+    ? await prisma.playlistTrackState.groupBy({
+        by: ["playlistId"],
+        where: { playlistId: { in: playlists.map((playlist) => playlist.id) }, removedAt: null },
+        _count: { _all: true },
+      })
+    : [];
+  const activeCountByPlaylistId = new Map(activeCounts.map((row) => [row.playlistId, row._count._all]));
+
+  const sourcePlaylist = playlistByKey.get(`${rule.sourceService}::${rule.sourcePlaylistId}`);
   if (!sourcePlaylist) {
     checks.push({ status: "FAIL", name: "source playlist row", detail: `${rule.sourceService}:${rule.sourcePlaylistId} missing in DB` });
   } else {
-    const states = await playlistStateCount(sourcePlaylist.id);
+    const states = activeCountByPlaylistId.get(sourcePlaylist.id) ?? 0;
     const age = cacheAgeHours(sourcePlaylist.lastFetchedAt);
     const complete = sourcePlaylist.trackCount <= 0 || states >= sourcePlaylist.trackCount;
     const fresh = SOURCE_CACHE_TTL_HOURS <= 0 || (age !== null && age <= SOURCE_CACHE_TTL_HOURS);
@@ -144,14 +156,12 @@ async function main(): Promise<void> {
   }
 
   for (const destination of rule.destinations) {
-    const playlist = await prisma.playlist.findUnique({
-      where: { service_servicePlaylistId: { service: destination.service, servicePlaylistId: destination.playlistId } },
-    });
+    const playlist = playlistByKey.get(`${destination.service}::${destination.playlistId}`);
     if (!playlist) {
       checks.push({ status: "FAIL", name: `${destination.service} destination row`, detail: `${destination.playlistId} missing in DB` });
       continue;
     }
-    const states = await playlistStateCount(playlist.id);
+    const states = activeCountByPlaylistId.get(playlist.id) ?? 0;
     checks.push({
       status: playlist.isWritable ? "OK" : "FAIL",
       name: `${destination.service} destination`,
@@ -205,9 +215,7 @@ async function main(): Promise<void> {
       }
     }
     for (const destination of rule.destinations) {
-      const playlist = await prisma.playlist.findUnique({
-        where: { service_servicePlaylistId: { service: destination.service, servicePlaylistId: destination.playlistId } },
-      });
+      const playlist = playlistByKey.get(`${destination.service}::${destination.playlistId}`);
       try {
         const adapter = getAdapter(destination.service, rule.userId);
         const live = await withTimeout(
