@@ -150,7 +150,7 @@ export default async function ConnectionsPage() {
         </section>
 
         <section
-          className="z-20 grid gap-2 border-y border-[var(--border-soft)] bg-[rgba(10,11,16,0.72)] py-3 backdrop-blur-xl animate-slide-in-up lg:grid-cols-3 lg:sticky lg:top-3"
+          className="animated-sheen z-20 grid gap-2 border-y border-[var(--border-soft)] bg-[rgba(10,11,16,0.72)] py-3 backdrop-blur-xl animate-slide-in-up lg:grid-cols-3 lg:sticky lg:top-3"
           aria-label="Connection status"
           style={{ animationDelay: "60ms" }}
         >
@@ -210,7 +210,7 @@ function SetupAssistant({
 
   return (
     <section
-      className="panel group surface-lift relative overflow-hidden p-5 animate-slide-in-up md:p-6"
+      className="panel group surface-lift animated-gradient-frame animated-sheen relative overflow-hidden p-5 animate-slide-in-up md:p-6"
       aria-label="Connection setup assistant"
       style={{ animationDelay: "100ms" }}
     >
@@ -228,7 +228,7 @@ function SetupAssistant({
           </p>
           <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--surface-2)]">
             <div
-              className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-hover))] shadow-[0_0_18px_var(--accent-glow)] transition-[width] duration-700"
+              className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-hover),var(--success),var(--accent))] bg-[length:220%_100%] shadow-[0_0_18px_var(--accent-glow)] transition-[width] duration-700 animate-gradient-pan"
               style={{ width: `${percent}%` }}
             />
           </div>
@@ -274,7 +274,7 @@ function SetupTaskRow({
   return (
     <a
       href={href}
-      className="group surface-lift relative grid gap-3 overflow-hidden rounded-xl border border-transparent px-2 py-3 hover:border-[var(--border-soft)] hover:bg-[var(--surface-2)] hover:shadow-[0_18px_36px_-30px_var(--accent-glow)] focus-visible:shadow-[0_0_0_3px_var(--accent-ring)] xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center"
+      className="group surface-lift animated-sheen relative grid gap-3 overflow-hidden rounded-xl border border-transparent px-2 py-3 hover:border-[var(--border-soft)] hover:bg-[var(--surface-2)] hover:shadow-[0_18px_36px_-30px_var(--accent-glow)] focus-visible:shadow-[0_0_0_3px_var(--accent-ring)] xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center"
       aria-label={`${action}: ${meta.label}`}
     >
       <span className={`pointer-events-none absolute inset-y-3 left-0 w-1 rounded-full opacity-0 transition duration-300 group-hover:opacity-100 ${meta.bg}`} />
@@ -325,7 +325,7 @@ function ConnectionOverviewItem({
     <a
       href={href}
       aria-label={`Jump to ${meta.label} connection setup`}
-      className="group surface-lift relative flex min-w-0 items-center justify-between gap-3 overflow-hidden rounded-xl px-2 py-2 hover:bg-[var(--surface-2)] hover:shadow-[0_14px_30px_-28px_var(--accent-glow)] focus-visible:shadow-[0_0_0_3px_var(--accent-ring)]"
+      className="group surface-lift animated-sheen relative flex min-w-0 items-center justify-between gap-3 overflow-hidden rounded-xl px-2 py-2 hover:bg-[var(--surface-2)] hover:shadow-[0_14px_30px_-28px_var(--accent-glow)] focus-visible:shadow-[0_0_0_3px_var(--accent-ring)]"
     >
       <span className={`pointer-events-none absolute inset-x-3 bottom-0 h-px opacity-0 transition duration-300 group-hover:opacity-80 ${meta.bg}`} />
       <div className="flex min-w-0 items-center gap-3">
@@ -365,7 +365,7 @@ function ServiceConnectionCard({
   return (
     <section
       id={id}
-      className={`panel group surface-lift relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] md:scroll-mt-8 xl:min-h-[420px]`}
+      className={`panel group surface-lift animated-gradient-frame animated-sheen relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] md:scroll-mt-8 xl:min-h-[420px]`}
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-80" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_at_20%_0%,rgba(255,255,255,0.045),transparent_55%)] opacity-0 transition duration-500 group-hover:opacity-100" />

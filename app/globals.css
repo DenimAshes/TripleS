@@ -158,6 +158,54 @@ a {
   transform: translateY(-2px);
 }
 
+.animated-gradient-frame {
+  position: relative;
+}
+
+.animated-gradient-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(120deg, rgba(79, 141, 255, 0), rgba(79, 141, 255, 0.72), rgba(52, 211, 153, 0.55), rgba(245, 158, 11, 0.5), rgba(79, 141, 255, 0));
+  background-size: 260% 260%;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 260ms ease;
+}
+
+.animated-gradient-frame:hover::before,
+.animated-gradient-frame:focus-within::before {
+  animation: gradient-frame-pan 4s linear infinite;
+  opacity: 0.9;
+}
+
+.animated-sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.animated-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255, 255, 255, 0.08) 48%, transparent 58%, transparent 100%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-45%);
+}
+
+.animated-sheen:hover::after,
+.animated-sheen:focus-within::after {
+  animation: sheen-pass 1.35s ease-out;
+  opacity: 1;
+}
+
 .panel-flat {
   border: 1px solid var(--border-soft);
   background: var(--surface);
@@ -401,6 +449,24 @@ a {
   }
 }
 
+@keyframes gradient-frame-pan {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 260% 50%;
+  }
+}
+
+@keyframes sheen-pass {
+  from {
+    transform: translateX(-55%);
+  }
+  to {
+    transform: translateX(55%);
+  }
+}
+
 .animate-pulse-soft {
   animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -415,6 +481,10 @@ a {
 
 .animate-fade-in {
   animation: fade-in 300ms ease-out;
+}
+
+.animate-gradient-pan {
+  animation: gradient-frame-pan 5s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
