@@ -11,11 +11,6 @@ type Props = {
   lastError?: string | null;
 };
 
-// Cloud-friendly Spotify connector. Unlike the sp_dc cookie flow (which is
-// blocked at Spotify's Varnish edge for cloud datacenter IPs — Vercel,
-// Cloudflare, etc.), the OAuth flow hits `accounts.spotify.com/api/token`
-// directly and works from any IP. The user just has to register a free
-// Spotify Developer App once.
 export function SpotifyOAuthSetup({
   hasCredentials,
   redirectUri,
@@ -33,10 +28,10 @@ export function SpotifyOAuthSetup({
             <Link2 size={16} />
           </div>
           <div>
-            <h2 className="text-base font-semibold">Spotify (OAuth — recommended for cloud)</h2>
+            <h2 className="text-base font-semibold">Spotify account connection</h2>
             <p className="text-xs text-muted-fg">
-              Works on Vercel / any cloud host. The sp_dc cookie flow is blocked at Spotify&apos;s edge for datacenter
-              IPs — OAuth bypasses that entirely.
+              Opens Spotify, asks for permission, and comes back here. This is the best option for Vercel and other
+              cloud hosts.
             </p>
           </div>
         </div>
@@ -47,7 +42,7 @@ export function SpotifyOAuthSetup({
         <div className="panel-inset flex items-center gap-2 p-3 text-sm">
           <CheckCircle2 size={16} className="text-emerald-400" />
           <span className="text-muted-fg">
-            Connected as <strong className="text-[var(--text)]">{serviceUsername}</strong> — playlists will refresh on
+            Connected as <strong className="text-[var(--text)]">{serviceUsername}</strong>. Playlists will refresh on
             schedule.
           </span>
         </div>
@@ -74,14 +69,12 @@ export function SpotifyOAuthSetup({
               {isConnected ? "Re-connect Spotify" : "Connect Spotify"}
             </button>
           </form>
-          <p className="text-xs text-dim-fg">
-            Will redirect to Spotify, ask you to authorize, then come back here.
-          </p>
+          <p className="text-xs text-dim-fg">Spotify will ask for playlist access, then return to this app.</p>
         </div>
       ) : (
         <div className="space-y-3 text-sm text-muted-fg">
           <p className="text-[#fcd34d]">
-            <strong className="font-semibold">Setup required.</strong> One-time, free, ~5 minutes.
+            <strong className="font-semibold">Setup required.</strong> One-time, free, about 5 minutes.
           </p>
           <ol className="ml-5 list-decimal space-y-2.5">
             <li>
@@ -106,36 +99,36 @@ export function SpotifyOAuthSetup({
               Check <strong className="text-[var(--text)]">Web API</strong> as the API used.
             </li>
             <li>
-              On the created app page → <strong className="text-[var(--text)]">Settings</strong>. Copy the{" "}
+              On the created app page, open <strong className="text-[var(--text)]">Settings</strong>. Copy the{" "}
               <strong className="text-[var(--text)]">Client ID</strong> and reveal +{" "}
               <strong className="text-[var(--text)]">Client secret</strong>.
             </li>
             <li>
-              In your Vercel project → <strong className="text-[var(--text)]">Settings → Environment Variables</strong>,
-              add three vars (any environment, prod is enough for now):
+              In your Vercel project, open <strong className="text-[var(--text)]">Settings / Environment Variables</strong>,
+              add three vars:
               <ul className="ml-5 mt-1.5 list-disc space-y-1 text-xs">
                 <li>
-                  <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5">SPOTIFY_CLIENT_ID</code> — paste the
+                  <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5">SPOTIFY_CLIENT_ID</code>: paste the
                   Client ID
                 </li>
                 <li>
-                  <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5">SPOTIFY_CLIENT_SECRET</code> — paste
+                  <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5">SPOTIFY_CLIENT_SECRET</code>: paste
                   the Client Secret
                 </li>
                 <li>
-                  <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5">SPOTIFY_REDIRECT_URI</code> — paste{" "}
+                  <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5">SPOTIFY_REDIRECT_URI</code>: paste{" "}
                   <code className="break-all">{redirectUri}</code>
                 </li>
               </ul>
             </li>
             <li>
-              Redeploy (Vercel does this automatically on env-var save). Come back to this page — you&apos;ll see a
-              big <strong className="text-[var(--text)]">Connect Spotify</strong> button. Click it, authorize, done.
+              Redeploy. Come back to this page and click{" "}
+              <strong className="text-[var(--text)]">Connect Spotify</strong>.
             </li>
           </ol>
           <p className="text-xs text-dim-fg">
-            OAuth tokens auto-refresh, so unlike sp_dc cookies you won&apos;t need to repaste anything. Disconnect
-            anytime from{" "}
+            OAuth tokens auto-refresh, so unlike sp_dc cookies you won&apos;t need to repaste anything. Manage playlists
+            from{" "}
             <Link href="/playlists" className="text-[var(--accent)] hover:underline">
               your playlists page
             </Link>

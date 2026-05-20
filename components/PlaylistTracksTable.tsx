@@ -26,6 +26,8 @@ const SERVICE_LABELS: Record<string, string> = {
   YOUTUBE: "YouTube Music",
   SOUNDCLOUD: "SoundCloud",
 };
+const INITIAL_VISIBLE_TRACKS = 100;
+const LOAD_MORE_TRACKS = 100;
 
 function formatDuration(ms?: number | null) {
   if (!ms) return "-";
@@ -38,6 +40,7 @@ function formatDuration(ms?: number | null) {
 export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrackRow[]; service: string }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [visibleState, setVisibleState] = useState({ key: "", count: INITIAL_VISIBLE_TRACKS });
   const [pending, startTransition] = useTransition();
   const [excludedByTrack, setExcludedByTrack] = useState<Record<string, boolean>>({});
   const filtered = useMemo(() => {
@@ -45,6 +48,10 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
     if (!needle) return tracks;
     return tracks.filter((track) => `${track.title} ${track.artists} ${track.album || ""}`.toLowerCase().includes(needle));
   }, [query, tracks]);
+  const visibleKey = `${query}\0${tracks.length}`;
+  const visibleCount = visibleState.key === visibleKey ? visibleState.count : INITIAL_VISIBLE_TRACKS;
+  const visibleTracks = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount]);
+  const remainingCount = Math.max(0, filtered.length - visibleTracks.length);
 
   function isExcluded(track: PlaylistTrackRow) {
     return excludedByTrack[track.id] ?? Boolean(track.isExcluded);
@@ -123,14 +130,22 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-soft)]">
-              {filtered.map((track) => (
+              {visibleTracks.map((track, index) => (
                 <tr key={track.id} className="transition duration-200 hover:bg-[var(--surface-2)]/40">
                   <td className="text-dim-fg px-4 py-3.5 font-medium tabular-nums">{track.position}</td>
                   <td className="px-4 py-3.5">
                     <div className="flex min-w-0 items-center gap-3">
                       {track.imageUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={track.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-[var(--border-soft)] object-cover" />
+                        <img
+                          src={track.imageUrl}
+                          alt=""
+                          width={40}
+                          height={40}
+                          loading={index < 20 ? "eager" : "lazy"}
+                          decoding="async"
+                          className="h-10 w-10 shrink-0 rounded-lg border border-[var(--border-soft)] object-cover"
+                        />
                       ) : (
                         <div className="h-10 w-10 shrink-0 rounded-lg border border-[var(--border-soft)] bg-gradient-to-br from-[var(--surface-2)] to-[var(--surface-3)]" />
                       )}
@@ -196,6 +211,23 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
               ))}
             </tbody>
           </table>
+          {remainingCount > 0 ? (
+            <div className="border-t border-[var(--border-soft)] bg-[#0d0e12]/50 p-4 text-center">
+              <button
+                type="button"
+                onClick={() =>
+                  setVisibleState((current) => ({
+                    key: visibleKey,
+                    count: (current.key === visibleKey ? current.count : INITIAL_VISIBLE_TRACKS) + LOAD_MORE_TRACKS,
+                  }))
+                }
+                className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] transition hover:border-[var(--border-accent)]"
+              >
+                Load {Math.min(LOAD_MORE_TRACKS, remainingCount)} more
+                <span className="ml-2 text-xs font-normal text-muted-fg">{remainingCount} hidden</span>
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

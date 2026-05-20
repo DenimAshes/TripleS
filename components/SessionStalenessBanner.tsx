@@ -23,9 +23,9 @@ export function classifySession(
 }
 
 function describe(severity: SessionStaleness["severity"], daysOld: number | null): string {
-  if (severity === "missing") return " — integrity lost (missing token)";
-  if (severity === "stale") return ` — stale context (${daysOld}d old, refresh now)`;
-  return ` — ageing context (${daysOld}d)`;
+  if (severity === "missing") return "is not connected";
+  if (severity === "stale") return `has an old session (${daysOld}d old, refresh now)`;
+  return `session is ageing (${daysOld}d old)`;
 }
 
 export function SessionStalenessBanner({ items }: { items: SessionStaleness[] }) {
@@ -42,33 +42,22 @@ export function SessionStalenessBanner({ items }: { items: SessionStaleness[] })
     <div
       className={`relative mb-8 flex items-start gap-5 overflow-hidden rounded-2xl border ${borderColor} bg-[#0d0e12]/60 p-6 backdrop-blur-xl`}
     >
-      <div
-        className={`absolute inset-y-0 left-0 w-1 bg-gradient-to-b ${stripeColor} to-transparent`}
-      />
-      <AlertTriangle
-        size={24}
-        className={`shrink-0 ${accentColor} animate-pulse`}
-        strokeWidth={2.5}
-      />
+      <div className={`absolute inset-y-0 left-0 w-1 bg-gradient-to-b ${stripeColor} to-transparent`} />
+      <AlertTriangle size={24} className={`shrink-0 ${accentColor} animate-pulse`} strokeWidth={2.5} />
       <div className="min-w-0 flex-1">
-        <div
-          className={`text-xs font-black uppercase tracking-widest ${accentColor}`}
-        >
-          System Alert: Session Degraded
-        </div>
+        <div className={`text-xs font-black uppercase tracking-widest ${accentColor}`}>Connection Needs Attention</div>
         <ul className="mt-3 space-y-1.5 text-xs font-medium text-slate-400">
           {ranked.map(({ service, severity, daysOld }) => (
             <li key={service} className="capitalize">
-              <span className="font-bold text-white">{service}</span>
-              {describe(severity, daysOld)}
+              <span className="font-bold text-white">{service}</span> {describe(severity, daysOld)}
             </li>
           ))}
         </ul>
         <Link
-          href="/admin/sessions"
+          href="/connections"
           className="mt-4 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 transition-colors hover:text-blue-300"
         >
-          Re-authorize Nodes <span>→</span>
+          Open connections <span aria-hidden="true">-&gt;</span>
         </Link>
       </div>
     </div>

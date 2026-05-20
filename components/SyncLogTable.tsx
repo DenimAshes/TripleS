@@ -1,4 +1,5 @@
 import type { SyncLog } from "@prisma/client";
+import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 import { StatusBadge } from "./StatusBadge";
 
 function actionLabel(action: string) {
@@ -46,7 +47,12 @@ export function SyncLogTable({ logs }: { logs: SyncLog[] }) {
               className="transition duration-200 hover:bg-[var(--surface-2)]/40"
             >
               <td className="px-4 py-3.5 font-mono text-xs text-muted-fg whitespace-nowrap">{log.createdAt.toLocaleString()}</td>
-              <td className="px-4 py-3.5 font-medium text-[var(--text)]">{log.service}</td>
+              <td className="px-4 py-3.5 font-medium text-[var(--text)]">
+                <span className="inline-flex items-center gap-2">
+                  <ServiceIcon service={log.service} size="sm" className="h-6 w-6 rounded-md" />
+                  {serviceMeta(log.service).shortLabel}
+                </span>
+              </td>
               <td className="px-4 py-3.5 text-[var(--text)]">{log.trackTitle}</td>
               <td className="px-4 py-3.5 text-muted-fg">{actionLabel(log.action)}</td>
               <td className="px-4 py-3.5">

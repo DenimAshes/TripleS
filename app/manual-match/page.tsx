@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { BulkAcceptControls } from "@/components/BulkAcceptControls";
 import { ManualMatchDialog, type ManualCandidateView } from "@/components/ManualMatchDialog";
+import { ServicePill } from "@/components/ServiceBrand";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 
@@ -47,10 +48,31 @@ export default async function ManualMatchPage() {
 
   return (
     <AppShell title="Review songs">
+      <section className="panel mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex flex-wrap gap-2">
+            <ServicePill service="SPOTIFY" />
+            <ServicePill service="YOUTUBE" />
+            <ServicePill service="SOUNDCLOUD" />
+          </div>
+          <p className="mt-3 text-sm text-muted-fg">
+            Review only the songs where automatic matching was not confident enough.
+          </p>
+        </div>
+        <div className="text-right">
+          <div className="text-3xl font-black tabular-nums text-white">{enriched.length}</div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-fg">pending</div>
+        </div>
+      </section>
       <BulkAcceptControls totalPending={enriched.length} />
       <div className="space-y-4">
         {enriched.map((item) => <ManualMatchDialog key={item.id} item={item} />)}
-        {!enriched.length ? <div className="panel p-8 text-center text-sm text-muted-fg">All songs are synced. Nothing to review!</div> : null}
+        {!enriched.length ? (
+          <div className="panel p-10 text-center">
+            <div className="text-lg font-bold text-white">Nothing needs review</div>
+            <p className="mt-2 text-sm text-muted-fg">All pending matches are resolved.</p>
+          </div>
+        ) : null}
       </div>
     </AppShell>
   );

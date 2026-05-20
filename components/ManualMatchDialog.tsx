@@ -1,5 +1,6 @@
 import type { ManualMatchCandidate, ServiceTrack } from "@prisma/client";
 import { ManualMatchActions } from "./ManualMatchActions";
+import { ServiceIcon, ServicePill } from "./ServiceBrand";
 
 export type ManualCandidateView = ManualMatchCandidate & {
   source?: ServiceTrack | null;
@@ -26,9 +27,6 @@ function confidenceColor(score: number): string {
   return "text-[#fca5a5]";
 }
 
-// Small inline breakdown so the user can see WHY a match is uncertain —
-// e.g. "title 92% · artist 51% · duration ✓". Title/artist mismatches are
-// usually the reason; duration is mostly a sanity check.
 function MatchBreakdown({ breakdown }: { breakdown?: Record<string, number> }) {
   if (!breakdown) return null;
   const parts: Array<{ label: string; pct: number }> = [];
@@ -36,6 +34,7 @@ function MatchBreakdown({ breakdown }: { breakdown?: Record<string, number> }) {
   if (typeof breakdown.artistScore === "number") parts.push({ label: "artist", pct: Math.round(breakdown.artistScore * 100) });
   if (typeof breakdown.durationScore === "number") parts.push({ label: "duration", pct: Math.round(breakdown.durationScore * 100) });
   if (!parts.length) return null;
+
   return (
     <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-fg">
       {parts.map((part) => (
@@ -55,22 +54,26 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
   const candidates = item.alternatives?.length
     ? item.alternatives
     : item.candidate
-    ? [{ track: item.candidate, confidence: item.confidence, breakdown: undefined as Record<string, number> | undefined }]
-    : [];
+      ? [{ track: item.candidate, confidence: item.confidence, breakdown: undefined as Record<string, number> | undefined }]
+      : [];
+
   return (
     <div className="panel p-6">
       <div className="grid gap-6 md:grid-cols-[1fr_1.5fr_auto] md:items-start">
-        <div className="min-w-0 p-4 rounded-lg bg-gradient-to-br from-[var(--surface-2)] to-[var(--surface-3)] border border-[var(--border-soft)]">
-          <div className="text-xs font-semibold uppercase tracking-wider text-accent-fg">Original song</div>
+        <div className="min-w-0 rounded-lg border border-[var(--border-soft)] bg-gradient-to-br from-[var(--surface-2)] to-[var(--surface-3)] p-4">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-accent-fg">
+            <ServiceIcon service={item.source?.service || ""} size="sm" className="h-5 w-5 rounded-md" />
+            Original song
+          </div>
           <div className="mt-3 text-base font-bold leading-snug text-[var(--text)]">{item.source?.title || item.sourceServiceTrackId}</div>
           <div className="mt-2 text-sm text-muted-fg">
             {artists(item.source)}
-            {sourceDuration ? <span className="ml-2 text-xs text-dim-fg">· {sourceDuration}</span> : null}
+            {sourceDuration ? <span className="ml-2 text-xs text-dim-fg">/ {sourceDuration}</span> : null}
           </div>
         </div>
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wider text-accent-fg">
-            Possible matches on {item.targetService}
+            Possible matches <ServicePill service={item.targetService} className="ml-2 normal-case tracking-normal" />
           </div>
           <div className="mt-3 space-y-2">
             {candidates.map((candidate) => {
@@ -85,7 +88,7 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
                       <div className="truncate text-sm font-semibold text-[var(--text)]">{candidate.track.title}</div>
                       <div className="truncate text-xs text-muted-fg">
                         {artists(candidate.track)}
-                        {duration ? <span className="ml-2 text-dim-fg">· {duration}</span> : null}
+                        {duration ? <span className="ml-2 text-dim-fg">/ {duration}</span> : null}
                       </div>
                     </div>
                     <div className={`shrink-0 text-sm font-bold tabular-nums ${confidenceColor(candidate.confidence)}`}>

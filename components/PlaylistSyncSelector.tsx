@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ServiceStatusRow, type ServiceStatusRowProps } from "./ServiceStatusRow";
+import { ServiceIcon, ServicePill, serviceMeta } from "./ServiceBrand";
 
 export type ServiceStatus = ServiceStatusRowProps;
 
@@ -51,10 +52,7 @@ export function PlaylistSyncSelector({
 
   const sourcePlaylist = playlists.find((playlist) => playlist.servicePlaylistId === sourcePlaylistId);
   const activePlaylists = useMemo(
-    () =>
-      playlists.filter(
-        (playlist) => playlist.service === activeService && (showHidden || !playlist.hidden),
-      ),
+    () => playlists.filter((playlist) => playlist.service === activeService && (showHidden || !playlist.hidden)),
     [activeService, playlists, showHidden],
   );
   const hiddenCount = useMemo(
@@ -69,9 +67,7 @@ export function PlaylistSyncSelector({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ hidden: next }),
     });
-    if (response.ok) {
-      startHideTransition(() => router.refresh());
-    }
+    if (response.ok) startHideTransition(() => router.refresh());
   }
 
   function selectSource(playlist: PlaylistOption) {
@@ -86,11 +82,8 @@ export function PlaylistSyncSelector({
   function toggleDestination(playlist: PlaylistOption) {
     setDestinationIds((current) => {
       const next = new Set(current);
-      if (next.has(playlist.servicePlaylistId)) {
-        next.delete(playlist.servicePlaylistId);
-      } else {
-        next.add(playlist.servicePlaylistId);
-      }
+      if (next.has(playlist.servicePlaylistId)) next.delete(playlist.servicePlaylistId);
+      else next.add(playlist.servicePlaylistId);
       return next;
     });
   }
@@ -108,7 +101,7 @@ export function PlaylistSyncSelector({
       method: rule ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-            name: rule?.name || `${source.service} playlist selection`,
+        name: rule?.name || `${source.service} playlist selection`,
         sourceService: source.service,
         sourcePlaylistId: source.servicePlaylistId,
         mode: rule?.mode || "ADD_ONLY",
@@ -119,9 +112,7 @@ export function PlaylistSyncSelector({
     });
     const payload = await response.json();
     setSaving(false);
-    if (payload.rule?.id) {
-      router.push(`/playlists?rule=${payload.rule.id}`);
-    }
+    if (payload.rule?.id) router.push(`/playlists?rule=${payload.rule.id}`);
     router.refresh();
   }
 
@@ -132,11 +123,17 @@ export function PlaylistSyncSelector({
           <h2 className="text-2xl font-bold text-[var(--text)]">{rule ? rule.name : "Create new sync"}</h2>
           <p className="mt-2 text-sm text-muted-fg">
             Main:{" "}
-            <span className="font-semibold text-[var(--accent)]">
-              {sourcePlaylist ? `${sourcePlaylist.service} · ${sourcePlaylist.name}` : "not selected"}
-            </span>
-            <span className="mx-2 text-dim-fg">·</span>
-            <span className="tabular-nums font-semibold text-[var(--text)]">{destinationIds.size}</span> <span className="text-muted-fg">{destinationIds.size === 1 ? "copy" : "copies"}</span>
+            {sourcePlaylist ? (
+              <span className="inline-flex max-w-full items-center gap-2 font-semibold text-[var(--accent)]">
+                <ServiceIcon service={sourcePlaylist.service} size="sm" className="h-5 w-5 rounded-md" />
+                <span className="truncate">{sourcePlaylist.name}</span>
+              </span>
+            ) : (
+              <span className="font-semibold text-[var(--accent)]">not selected</span>
+            )}
+            <span className="mx-2 text-dim-fg">/</span>
+            <span className="tabular-nums font-semibold text-[var(--text)]">{destinationIds.size}</span>{" "}
+            <span className="text-muted-fg">{destinationIds.size === 1 ? "copy" : "copies"}</span>
           </p>
         </div>
         <button type="button" onClick={save} disabled={saving || !sourcePlaylistId} className="btn btn-primary whitespace-nowrap">
@@ -144,28 +141,37 @@ export function PlaylistSyncSelector({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         {services.map((service) => {
           const active = activeService === service;
+          const meta = serviceMeta(service);
+          const count = playlists.filter((playlist) => playlist.service === service && !playlist.hidden).length;
           return (
             <button
               type="button"
               key={service}
-              className={`rounded-lg border px-4 py-2 text-sm font-semibold transition duration-200 ${
+              className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition duration-200 ${
                 active
-                  ? "border-[var(--border-accent)] bg-gradient-to-r from-[var(--accent-soft)] to-transparent text-[var(--text)]"
+                  ? `${meta.border} bg-white/[0.06] text-[var(--text)] shadow-[0_0_24px_rgba(79,141,255,0.08)]`
                   : "border-[var(--border-soft)] bg-[var(--surface-2)] text-muted-fg hover:border-[var(--border-accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
               }`}
               onClick={() => setActiveService(service)}
             >
-              {service}
+              <span className="flex min-w-0 items-center gap-3">
+                <ServiceIcon service={service} size="sm" />
+                <span className="truncate">{meta.label}</span>
+              </span>
+              <span className="rounded-lg bg-black/20 px-2 py-1 text-xs tabular-nums">{count}</span>
             </button>
           );
         })}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
         {hiddenCount > 0 ? (
           <button
             type="button"
-            onClick={() => setShowHidden((v) => !v)}
+            onClick={() => setShowHidden((value) => !value)}
             className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
             title={showHidden ? "Hide hidden playlists" : "Show hidden playlists"}
           >
@@ -182,15 +188,18 @@ export function PlaylistSyncSelector({
           const isSource = playlist.servicePlaylistId === sourcePlaylistId;
           const isDestination = destinationIds.has(playlist.servicePlaylistId);
           const highlight = isSource || isDestination;
+          const meta = serviceMeta(playlist.service);
           return (
             <div
               key={playlist.id}
-              className={`panel p-5 transition duration-200 ${
-                highlight
-                  ? "border-[var(--border-accent)] shadow-[0_0_20px_rgba(79,141,255,0.1)]"
-                  : "hover:border-[var(--border)]"
+              className={`panel overflow-hidden p-5 transition duration-200 ${
+                highlight ? `${meta.border} shadow-[0_0_20px_rgba(79,141,255,0.1)]` : "hover:border-[var(--border)]"
               }`}
             >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <ServicePill service={playlist.service} />
+                {highlight ? <Check className="shrink-0 text-[var(--accent)]" size={20} strokeWidth={2.5} /> : null}
+              </div>
               <div className="flex items-start gap-4">
                 {playlist.imageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -211,25 +220,16 @@ export function PlaylistSyncSelector({
                     <span className="tabular-nums">{playlist.trackCount}</span> tracks
                   </p>
                 </div>
-                {highlight ? <Check className="shrink-0 text-[var(--accent)]" size={20} strokeWidth={2.5} /> : null}
               </div>
               <div className="mt-5 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => selectSource(playlist)}
-                  className={isSource ? "btn btn-primary" : "btn btn-ghost"}
-                >
+                <button type="button" onClick={() => selectSource(playlist)} className={isSource ? "btn btn-primary" : "btn btn-ghost"}>
                   Main
                 </button>
                 <button
                   type="button"
                   onClick={() => toggleDestination(playlist)}
                   disabled={isSource || !playlist.isWritable}
-                  className={
-                    isDestination
-                      ? "btn bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-60"
-                      : "btn btn-ghost"
-                  }
+                  className={isDestination ? "btn bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-60" : "btn btn-ghost"}
                 >
                   {isDestination ? "Copying" : "Copy to"}
                 </button>

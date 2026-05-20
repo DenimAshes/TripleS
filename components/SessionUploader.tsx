@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { UploadCloud } from "lucide-react";
+import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
 type SessionInfo = {
   service: string;
@@ -48,6 +50,7 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [pasted, setPasted] = useState("");
+  const meta = serviceMeta(info.service);
 
   async function uploadText(text: string) {
     setBusy(true);
@@ -111,7 +114,7 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
 
   return (
     <div
-      className={`panel p-5 transition ${
+      className={`panel p-5 transition ${meta.border} ${
         dragOver ? "border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring)]" : ""
       }`}
       onDragOver={(e) => {
@@ -126,8 +129,14 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
         if (file) upload(file);
       }}
     >
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold capitalize">{info.service}</h3>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <ServiceIcon service={info.service} />
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-semibold">{meta.label}</h3>
+            <p className="text-xs text-muted-fg">Browser session JSON</p>
+          </div>
+        </div>
         {(() => {
           const level = staleLevel(info.exists, info.updatedAt);
           const badge = STALE_BADGE[level];
@@ -148,7 +157,7 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
           <dd className="text-[var(--text)]">{info.updatedBy ?? "—"}</dd>
         </div>
       </dl>
-      <label className="mt-4 block cursor-pointer rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-4 text-center text-sm text-muted-fg transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">
+      <label className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">
         <input
           type="file"
           accept="application/json,.json"
@@ -160,7 +169,8 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
             e.target.value = "";
           }}
         />
-        {busy ? "Uploading…" : "Drop storageState.json or click"}
+        <UploadCloud size={20} />
+        {busy ? "Uploading..." : "Drop storageState.json or click"}
       </label>
       <details className="mt-3 text-xs text-muted-fg">
         <summary className="cursor-pointer select-none hover:text-[var(--text)]">Or paste JSON</summary>
@@ -187,7 +197,7 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
             disabled={busy || pasted.trim().length === 0}
             className="btn btn-primary text-xs"
           >
-            {busy ? "Uploading…" : "Upload pasted JSON"}
+            {busy ? "Uploading..." : "Upload pasted JSON"}
           </button>
           {pasted && (
             <button

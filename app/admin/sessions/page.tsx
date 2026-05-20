@@ -1,21 +1,16 @@
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { ServicePill } from "@/components/ServiceBrand";
 import { SessionUploader } from "@/components/SessionUploader";
 import { SpotifyCookieConnector } from "@/components/SpotifyCookieConnector";
 import { SpotifyOAuthSetup } from "@/components/SpotifyOAuthSetup";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { getSpotifyWebCookie } from "@/lib/services/spotify/spotifyCookieStore";
-import {
-  getSpotifyRedirectUri,
-  hasSpotifyCredentials,
-  validateSpotifyRedirectUri,
-} from "@/lib/services/spotify/spotifyAuth";
+import { hasSpotifyCredentials, validateSpotifyRedirectUri } from "@/lib/services/spotify/spotifyAuth";
 
-// Browser-storage-state-backed services. Spotify is intentionally left out
-// — it uses the sp_dc web cookie (handled by SpotifyCookieConnector below)
-// not a Playwright storageState dump.
 const BROWSER_SERVICES = ["youtube", "soundcloud"] as const;
 
 export default async function AdminSessionsPage() {
@@ -32,10 +27,6 @@ export default async function AdminSessionsPage() {
     getSpotifyWebCookie(session.userId),
   ]);
 
-  // Compute the redirect URI the user must paste into Spotify Developer
-  // Dashboard. Prefer the deployed env value; if missing, fall back to the
-  // current origin so users on Vercel see a copy-pasteable URL out of the
-  // box (the one Spotify will accept once redeployed).
   const hdrs = await headers();
   const host = hdrs.get("x-forwarded-host") || hdrs.get("host") || "";
   const proto = hdrs.get("x-forwarded-proto") || "https";
@@ -52,7 +43,7 @@ export default async function AdminSessionsPage() {
     lastError: spotifyAccount?.lastError,
   };
 
-  const byService = new Map(rows.map((r) => [r.service, r]));
+  const byService = new Map(rows.map((row) => [row.service, row]));
   const browserSessions = BROWSER_SERVICES.map((service) => {
     const row = byService.get(service);
     return {
@@ -65,70 +56,59 @@ export default async function AdminSessionsPage() {
   });
 
   return (
-    <AppShell title="Worker sessions">
+    <AppShell title="Ops: session storage">
       <div className="space-y-6">
         <section className="panel p-5 text-sm text-muted-fg">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">
-            How to refresh a session
-          </h2>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <ServicePill service="SPOTIFY" />
+            <ServicePill service="YOUTUBE" />
+            <ServicePill service="SOUNDCLOUD" />
+          </div>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Admin storage tools</h2>
+          <p className="mb-3 text-xs text-muted-fg">
+            Normal account setup lives on{" "}
+            <Link href="/connections" className="text-[var(--accent)] hover:underline">
+              Connections
+            </Link>
+            . This page is for inspecting and replacing the raw browser-session data used by background workers.
+          </p>
           <p className="mb-2 text-xs text-muted-fg">
-            <strong className="text-[var(--text)]">Spotify</strong> uses just one cookie value
-            (<code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-xs">sp_dc</code>) — paste it in the
-            Spotify card below.
+            <strong className="text-[var(--text)]">Spotify</strong> should use OAuth. The{" "}
+            <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-xs">sp_dc</code> cookie is only an
+            advanced local fallback.
           </p>
           <p className="mb-3 text-xs text-muted-fg">
             <strong className="text-[var(--text)]">YouTube Music</strong> and{" "}
-            <strong className="text-[var(--text)]">SoundCloud</strong> use a full Playwright storageState dump —
-            export it from Cookie-Editor:
+            <strong className="text-[var(--text)]">SoundCloud</strong> use a full Playwright storageState export from
+            your logged-in browser.
           </p>
           <ol className="ml-5 list-decimal space-y-1.5">
-            <li>
-              In your personal browser, log in to the service (e.g.{" "}
-              <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-xs">music.youtube.com</code>).
-            </li>
+            <li>Log in to the service in your personal browser.</li>
             <li>
               Install the free{" "}
-              <a
-                className="text-[var(--accent)] hover:underline"
-                href="https://cookie-editor.com/"
-                target="_blank"
-                rel="noreferrer"
-              >
+              <a className="text-[var(--accent)] hover:underline" href="https://cookie-editor.com/" target="_blank" rel="noreferrer">
                 Cookie-Editor
               </a>{" "}
-              extension (open source, MIT).
+              extension.
             </li>
             <li>
-              Open the extension on the logged-in tab → <strong className="text-[var(--text)]">Export</strong> →{" "}
-              <strong className="text-[var(--text)]">Export as Playwright</strong> if available, otherwise{" "}
-              <strong className="text-[var(--text)]">Export as JSON</strong> (bare cookie array also works).
+              Open Cookie-Editor on the logged-in tab, choose <strong className="text-[var(--text)]">Export</strong>,
+              then <strong className="text-[var(--text)]">Export as Playwright</strong> if available.
             </li>
-            <li>
-              Drop the downloaded JSON into the matching card below, or expand <em>Or paste JSON</em> and Ctrl+V the
-              contents.
-            </li>
-            <li>The next scheduled sync run will use the refreshed session.</li>
+            <li>Drop the downloaded JSON into the matching card below, or paste the JSON manually.</li>
           </ol>
-          <p className="mt-3 text-xs text-dim-fg">
-            State is stored gzipped in the database and read by the GitHub Actions sync worker on every run. Nothing
-            is written to disk on Vercel.
-          </p>
         </section>
 
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Spotify</h2>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Spotify OAuth</h2>
           <SpotifyOAuthSetup {...spotifyOAuth} />
         </section>
 
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">
-            Spotify (sp_dc cookie — fallback)
-          </h2>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Spotify sp_dc cookie fallback</h2>
           <div className="panel-inset mb-3 p-3 text-xs text-muted-fg">
-            <strong className="text-[#fcd34d]">Note:</strong> The cookie flow is blocked at Spotify&apos;s Varnish
-            edge for Vercel and most datacenter IPs (response is{" "}
-            <code className="rounded bg-[var(--surface)] px-1 py-0.5">403 URL Blocked, Error 54113</code>). Use it
-            only if you&apos;re running the app from a residential IP / proxy. Otherwise stick with OAuth above.
+            <strong className="text-[#fcd34d]">Note:</strong> Spotify blocks this cookie flow from Vercel and most
+            datacenter IPs. Use OAuth unless you are running from a residential IP or proxy.
           </div>
           <SpotifyCookieConnector
             hasCookie={Boolean(spotifyCookie)}
@@ -139,12 +119,10 @@ export default async function AdminSessionsPage() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">
-            Browser-automation sessions (YouTube / SoundCloud)
-          </h2>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Browser sessions</h2>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {browserSessions.map((s) => (
-              <SessionUploader key={s.service} initial={s} />
+            {browserSessions.map((item) => (
+              <SessionUploader key={item.service} initial={item} />
             ))}
           </div>
         </section>

@@ -23,6 +23,10 @@ import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("triples:persistent-runner");
 
+function tsxCliPath(): string {
+  return process.env.TSX_CLI_PATH || path.join(/*turbopackIgnore: true*/ process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
+}
+
 export type PersistentRunnerService = "youtube" | "soundcloud";
 
 type PendingRequest = {
@@ -32,9 +36,9 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
-const SCRIPT_BY_SERVICE: Record<PersistentRunnerService, string> = {
-  youtube: "worker/runners/youtube.ts",
-  soundcloud: "worker/runners/soundcloud.ts",
+const SCRIPT_BY_SERVICE: Record<PersistentRunnerService, "youtube.ts" | "soundcloud.ts"> = {
+  youtube: "youtube.ts",
+  soundcloud: "soundcloud.ts",
 };
 
 export class PersistentRunner {
@@ -51,11 +55,10 @@ export class PersistentRunner {
   private exitPromise: Promise<{ code: number | null; signal: NodeJS.Signals | null }> | null = null;
 
   static async spawn(service: PersistentRunnerService, options?: { signal?: AbortSignal }): Promise<PersistentRunner> {
-    const script = path.resolve(SCRIPT_BY_SERVICE[service]);
+    const script = path.join(/*turbopackIgnore: true*/ process.cwd(), "worker", "runners", SCRIPT_BY_SERVICE[service]);
     const env = { ...sanitizeRunnerEnv(process.env), PERSISTENT_RUNNER: "true" } as unknown as NodeJS.ProcessEnv;
-    const tsxCli = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
-    const child = spawn(process.execPath, [tsxCli, script, "--persistent"], {
-      cwd: process.cwd(),
+    const child = spawn(process.execPath, [tsxCliPath(), script, "--persistent"], {
+      cwd: /*turbopackIgnore: true*/ process.cwd(),
       env,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,

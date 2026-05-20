@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
 export type ServiceStatusRowProps = {
   service: string;
@@ -26,12 +27,6 @@ function formatRelative(iso: string | null): string {
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
-const SERVICE_LABELS: Record<string, string> = {
-  SPOTIFY: "Spotify",
-  YOUTUBE: "YouTube Music",
-  SOUNDCLOUD: "SoundCloud",
-};
-
 export function ServiceStatusRow(props: ServiceStatusRowProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -53,7 +48,7 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
           ok: true,
           message:
             data.count === 0
-              ? "Got 0 playlists — service returned an empty list."
+              ? "Got 0 playlists. The service returned an empty list."
               : `Fetched ${data.count} playlist${data.count === 1 ? "" : "s"}.`,
         });
         router.refresh();
@@ -65,10 +60,6 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
     }
   }
 
-  // Decide the headline pill text. The most actionable state for the user
-  // is "not connected" (paste the cookie) vs "connected but isMock" (a
-  // stale row from earlier mock init — we now fix this server-side, but
-  // call it out anyway).
   let state: "connected" | "needs_login" | "mock" | "missing" | "warn";
   let stateLabel: string;
   if (!props.connectionStatus) {
@@ -82,7 +73,7 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
     stateLabel = "mock mode";
   } else if (props.lastError) {
     state = "warn";
-    stateLabel = "issues";
+    stateLabel = "needs attention";
   } else {
     state = "connected";
     stateLabel = "connected";
@@ -96,23 +87,25 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
         : state === "warn"
           ? "pill pill-warning"
           : "pill";
+  const meta = serviceMeta(props.service);
 
   return (
     <div className="panel-inset flex flex-col gap-3 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-[var(--text)]">{SERVICE_LABELS[props.service] || props.service}</span>
+          <ServiceIcon service={props.service} size="sm" />
+          <span className="font-semibold text-[var(--text)]">{meta.label}</span>
           <span className={pillClass}>{stateLabel}</span>
         </div>
         <div className="mt-1 text-xs text-muted-fg">
           <span className="tabular-nums text-[var(--text)]">{props.playlistCount}</span>{" "}
           {props.playlistCount === 1 ? "playlist" : "playlists"}
-          {props.hiddenCount > 0 ? <span className="text-dim-fg"> · {props.hiddenCount} hidden</span> : null}
-          <span className="mx-2 text-dim-fg">·</span>
+          {props.hiddenCount > 0 ? <span className="text-dim-fg"> / {props.hiddenCount} hidden</span> : null}
+          <span className="mx-2 text-dim-fg">/</span>
           <span>last updated {formatRelative(props.lastFetchedAt)}</span>
           {props.service === "SPOTIFY" && props.hasCookie !== undefined ? (
             <>
-              <span className="mx-2 text-dim-fg">·</span>
+              <span className="mx-2 text-dim-fg">/</span>
               <span className={props.hasCookie ? "text-emerald-400" : "text-[#fcd34d]"}>
                 {props.hasCookie ? "cookie saved" : "no cookie saved"}
               </span>
@@ -121,23 +114,23 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
         </div>
         {state === "missing" ? (
           <div className="mt-1.5 text-xs text-[#fcd34d]">
-            Paste your {SERVICE_LABELS[props.service] || props.service} cookie in{" "}
-            <Link href="/admin/sessions" className="font-medium text-[var(--accent)] hover:underline">
-              Worker Sessions
+            Connect {meta.label} in{" "}
+            <Link href="/connections" className="font-medium text-[var(--accent)] hover:underline">
+              Connections
             </Link>
             .
           </div>
         ) : null}
         {state === "needs_login" || state === "warn" ? (
           <div className="mt-1.5 text-xs text-[#fcd34d]">
-            {props.lastError ? props.lastError.slice(0, 200) : "Session needs attention. Re-login in Worker Sessions."}
+            {props.lastError ? props.lastError.slice(0, 200) : "Session needs attention. Reconnect it in Connections."}
           </div>
         ) : null}
         {state === "mock" ? (
           <div className="mt-1.5 text-xs text-[#fcd34d]">
-            Account is still flagged as mock — re-paste the cookie in{" "}
-            <Link href="/admin/sessions" className="font-medium text-[var(--accent)] hover:underline">
-              Worker Sessions
+            Account is still flagged as mock. Reconnect it in{" "}
+            <Link href="/connections" className="font-medium text-[var(--accent)] hover:underline">
+              Connections
             </Link>{" "}
             to switch to live mode.
           </div>
@@ -156,7 +149,7 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
         className="btn btn-ghost shrink-0"
       >
         <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
-        {busy ? "Loading…" : "Refresh"}
+        {busy ? "Loading..." : "Refresh"}
       </button>
     </div>
   );

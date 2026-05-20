@@ -18,6 +18,7 @@ import {
 } from "./spotifyWebClient";
 import type {
   SpotifyPaged,
+  SpotifyImage,
   SpotifyPlaylist,
   SpotifyPlaylistTrackItem,
   SpotifyTrack,
@@ -26,6 +27,19 @@ import type {
 
 const API_BASE = "https://api.spotify.com/v1";
 const PAGE_LIMIT = 50;
+const TRACK_IMAGE_TARGET_SIZE = 64;
+
+function pickSpotifyImage(images?: SpotifyImage[]): string | undefined {
+  if (!Array.isArray(images) || images.length === 0) return undefined;
+  const withSize = images
+    .filter((image) => image?.url)
+    .map((image) => ({ ...image, size: Math.max(image.width ?? 0, image.height ?? 0) }))
+    .sort((a, b) => a.size - b.size);
+  return (
+    withSize.find((image) => image.size >= TRACK_IMAGE_TARGET_SIZE)?.url ||
+    withSize[withSize.length - 1]?.url
+  );
+}
 
 function normalizeSpotifyTrack(track: SpotifyTrack): NormalizedTrack {
   return {
@@ -37,10 +51,21 @@ function normalizeSpotifyTrack(track: SpotifyTrack): NormalizedTrack {
     sourceService: "spotify",
     sourceTrackId: track.id,
     url: track.external_urls?.spotify,
+    imageUrl: pickSpotifyImage(track.album?.images),
   };
 }
 
+function spotifyPlaylistTrackCount(playlist: SpotifyPlaylist): number {
+  return playlist.tracks?.total ?? playlist.items?.total ?? 0;
+}
+
+function canModifySpotifyPlaylist(playlist: SpotifyPlaylist, ownerId?: string | null): boolean {
+  return Boolean((ownerId && playlist.owner?.id === ownerId) || playlist.collaborative);
+}
+
 export class SpotifyAdapter implements MusicServiceAdapter {
+  private accessTokenCache: { token: string; expiresAt: number | null } | null = null;
+
   constructor(private userId?: string) {}
 
   private async getAccount() {
@@ -51,6 +76,13 @@ export class SpotifyAdapter implements MusicServiceAdapter {
   }
 
   private async getAccessToken() {
+    if (
+      this.accessTokenCache &&
+      (!this.accessTokenCache.expiresAt || this.accessTokenCache.expiresAt - Date.now() > 60_000)
+    ) {
+      return this.accessTokenCache.token;
+    }
+
     const account = await this.getAccount();
     if (!account || account.isMock) {
       throw new Error("Spotify account is not connected");
@@ -58,10 +90,13 @@ export class SpotifyAdapter implements MusicServiceAdapter {
 
     const shouldRefresh = account.expiresAt && account.expiresAt.getTime() - Date.now() < 60_000;
     if (!shouldRefresh) {
-      return decryptToken(account.accessTokenEncrypted);
+      const token = decryptToken(account.accessTokenEncrypted);
+      this.accessTokenCache = { token, expiresAt: account.expiresAt?.getTime() ?? null };
+      return token;
     }
 
     const refreshed = await this.refreshAccessToken();
+    this.accessTokenCache = { token: refreshed.accessToken, expiresAt: refreshed.expiresAt?.getTime() ?? null };
     return refreshed.accessToken;
   }
 
@@ -121,16 +156,16 @@ export class SpotifyAdapter implements MusicServiceAdapter {
     const account = await this.getAccount();
     const ownerId = account?.serviceUserId;
     const playlists = await this.fetchAllPages<SpotifyPlaylist>(`/me/playlists?limit=${PAGE_LIMIT}`);
-    return playlists.map((playlist) => ({
-      id: playlist.id,
-      name: playlist.name,
-      description: playlist.description || undefined,
-      imageUrl: playlist.images?.[0]?.url,
-      trackCount: playlist.tracks.total,
-      isWritable: Boolean(
-        (ownerId && playlist.owner?.id === ownerId) || playlist.collaborative,
-      ),
-    }));
+    return playlists
+      .filter((playlist) => canModifySpotifyPlaylist(playlist, ownerId))
+      .map((playlist) => ({
+        id: playlist.id,
+        name: playlist.name,
+        description: playlist.description || undefined,
+        imageUrl: playlist.images?.[0]?.url,
+        trackCount: spotifyPlaylistTrackCount(playlist),
+        isWritable: true,
+      }));
   }
 
   async createPlaylist(name: string, description?: string): Promise<NormalizedPlaylist> {
@@ -151,7 +186,7 @@ export class SpotifyAdapter implements MusicServiceAdapter {
       name: playlist.name,
       description: playlist.description || undefined,
       imageUrl: playlist.images?.[0]?.url,
-      trackCount: playlist.tracks.total,
+      trackCount: spotifyPlaylistTrackCount(playlist),
       isWritable: true,
     };
   }
@@ -161,12 +196,12 @@ export class SpotifyAdapter implements MusicServiceAdapter {
     if (cookie) {
       return webGetPlaylistTracks(cookie, playlistId);
     }
-    const fields = "items(track(id,uri,name,duration_ms,external_ids,external_urls,album(name),artists(name))),next";
+    const fields = "items(item(id,uri,name,duration_ms,external_ids,external_urls,album(name,images),artists(name))),next,total";
     const items = await this.fetchAllPages<SpotifyPlaylistTrackItem>(
-      `/playlists/${encodeURIComponent(playlistId)}/tracks?limit=${PAGE_LIMIT}&fields=${encodeURIComponent(fields)}`,
+      `/playlists/${encodeURIComponent(playlistId)}/items?limit=${PAGE_LIMIT}&fields=${encodeURIComponent(fields)}`,
     );
     return items
-      .map((item) => item.track)
+      .map((item) => item.track ?? item.item)
       .filter((track): track is SpotifyTrack => Boolean(track?.id))
       .map(normalizeSpotifyTrack);
   }

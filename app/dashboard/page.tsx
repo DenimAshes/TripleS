@@ -161,7 +161,7 @@ export default async function DashboardPage() {
   );
 
   return (
-    <AppShell title="Home">
+    <AppShell title="Dashboard">
       <PlaylistsAutoRefresh hasPlaylists={playlists.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
       <RunningJobsAutoRefresh runningCount={runningJobs.length} />
       <SessionStalenessBanner items={staleSessions} />

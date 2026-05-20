@@ -7,6 +7,7 @@ import { PlaylistDiagnosticsCard } from "@/components/PlaylistDiagnosticsCard";
 import { PlaylistTracksAutoRefresh } from "@/components/PlaylistTracksAutoRefresh";
 import { PlaylistTracksTable, type PlaylistTrackRow } from "@/components/PlaylistTracksTable";
 import { RefreshPlaylistTracksButton } from "@/components/RefreshPlaylistTracksButton";
+import { ServiceIcon, ServicePill, serviceMeta } from "@/components/ServiceBrand";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { getCachedPlaylistTracks } from "@/lib/services/playlistTracksStore";
@@ -113,36 +114,46 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
     ),
     isExcluded: excludedIds.has(state.serviceTrackId),
   }));
+  const meta = serviceMeta(playlist.service);
 
   return (
     <AppShell title={playlist.name}>
       <PlaylistTracksAutoRefresh
         playlistId={playlist.id}
         hasTracks={states.length > 0}
+        activeTracks={states.length}
+        expectedTracks={playlist.trackCount}
         lastFetchedAt={playlist.lastFetchedAt?.toISOString() || null}
       />
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-4">
-          {playlist.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={playlist.imageUrl} alt="" className="h-20 w-20 rounded-md object-cover" />
-          ) : null}
-          <div>
-            <Link href="/playlists" className="inline-flex items-center gap-1 text-sm text-[#666a73] hover:underline">
-              <ArrowLeft size={14} /> All playlists
-            </Link>
-            <h2 className="mt-1 text-xl font-semibold">{playlist.name}</h2>
-            <p className="mt-1 text-sm text-[#666a73]">
-              {playlist.service} · {playlist.trackCount} songs
-            </p>
-            {playlist.description ? (
-              <p className="mt-2 max-w-2xl text-sm text-[#666a73]">{playlist.description}</p>
-            ) : null}
+
+      <div className={`mb-6 overflow-hidden rounded-2xl border bg-[#0d0e12]/70 p-5 ${meta.border}`}>
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            {playlist.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={playlist.imageUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover ring-1 ring-[var(--border-soft)]" />
+            ) : (
+              <ServiceIcon service={playlist.service} size="lg" className="h-20 w-20 rounded-xl" />
+            )}
+            <div className="min-w-0">
+              <Link href="/playlists" className="inline-flex items-center gap-1 text-sm text-muted-fg hover:text-[var(--text)]">
+                <ArrowLeft size={14} /> All playlists
+              </Link>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <ServicePill service={playlist.service} />
+                <span className="pill">{playlist.trackCount} songs</span>
+                <span className={playlist.isWritable ? "pill pill-success" : "pill pill-warning"}>
+                  {playlist.isWritable ? "Writable" : "Read only"}
+                </span>
+              </div>
+              <h2 className="mt-3 truncate text-2xl font-black tracking-tight text-white">{playlist.name}</h2>
+              {playlist.description ? <p className="mt-2 max-w-2xl text-sm text-muted-fg">{playlist.description}</p> : null}
+            </div>
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <AddPlaylistSyncButton sourcePlaylistId={playlist.id} sourceService={playlist.service} playlists={syncOptions} />
-          <RefreshPlaylistTracksButton playlistId={playlist.id} />
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <AddPlaylistSyncButton sourcePlaylistId={playlist.id} sourceService={playlist.service} playlists={syncOptions} />
+            <RefreshPlaylistTracksButton playlistId={playlist.id} />
+          </div>
         </div>
       </div>
 
@@ -157,14 +168,14 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
             <span className="font-semibold text-[var(--text)]">
               {pendingReviewCount} {pendingReviewCount === 1 ? "song needs" : "songs need"} review
             </span>
-            <span className="text-muted-fg"> — sync wasn&apos;t sure which match to use.</span>
+            <span className="text-muted-fg"> - sync was not sure which match to use.</span>
           </div>
-          <span className="shrink-0 text-sm font-medium text-[var(--accent)]">Review →</span>
+          <span className="shrink-0 text-sm font-medium text-[var(--accent)]">Review</span>
         </Link>
       ) : null}
 
       {states.length === 0 ? (
-        <div className="panel p-6 text-sm text-[#666a73]">No songs to show yet.</div>
+        <div className="panel p-6 text-sm text-muted-fg">No songs to show yet.</div>
       ) : (
         <PlaylistTracksTable tracks={trackRows} service={playlist.service} />
       )}

@@ -1,7 +1,7 @@
 import type { BrowserJob as PrismaBrowserJob } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { serviceKey } from "@/lib/services/adapterFactory";
-import { syncPlaylistTracksToDb } from "@/lib/services/playlistTracksStore";
+import { syncPlaylistTracksToDb, type PlaylistTrackSyncProgress } from "@/lib/services/playlistTracksStore";
 import { connectPlaylistGroup, type ConnectPlaylistsInput } from "@/lib/services/playlistGroupActions";
 import { runSync } from "@/lib/sync/syncEngine";
 import { classifySyncError, type SyncErrorCode, type SyncErrorDetails } from "@/lib/sync/syncErrors";
@@ -147,6 +147,22 @@ function startRuntimeWatch(jobId: string, abortController: AbortController): () 
   };
 }
 
+function playlistTrackProgressStep(progress: PlaylistTrackSyncProgress): string {
+  const total = progress.total || 0;
+  if (progress.phase === "reading") {
+    if (progress.current > 0) {
+      return total > 0
+        ? `Still reading from service (${progress.current}s, ${total} expected)`
+        : `Still reading from service (${progress.current}s)`;
+    }
+    return total > 0 ? `Opening service playlist (${total} expected)` : "Opening service playlist";
+  }
+  if (progress.phase === "tracks") return `Read ${progress.current} tracks from service`;
+  if (progress.phase === "serviceTracks") return `Preparing track metadata (${progress.current}/${progress.total})`;
+  if (progress.phase === "cache") return `Caching tracks (${progress.current}/${progress.total})`;
+  return `Cached ${progress.current} tracks`;
+}
+
 async function runAction(job: BrowserActionJob) {
   bindCurrentBrowserJob(job.id);
   const abortController = new AbortController();
@@ -175,7 +191,12 @@ async function runAction(job: BrowserActionJob) {
         if (!playlist || playlist.userId !== job.userId) throw new Error("Playlist not found");
         if (await isTerminalJob(job.id)) return;
         await setJob(job.id, { currentStep: `Refreshing ${playlist.service} tracks` });
-        const result = await syncPlaylistTracksToDb(job.userId, serviceKey(playlist.service), playlist.servicePlaylistId);
+        const result = await syncPlaylistTracksToDb(
+          job.userId,
+          serviceKey(playlist.service),
+          playlist.servicePlaylistId,
+          (progress) => setJob(job.id, { currentStep: playlistTrackProgressStep(progress) }),
+        );
         if (await isTerminalJob(job.id)) return;
         await setJob(job.id, { status: "succeeded", result, currentStep: "Finished", finishedAt: new Date() });
         return;
@@ -225,7 +246,13 @@ export async function startBrowserActionJob(userId: string, type: BrowserActionT
     where: dedupeWhere(userId, type, normalizedInput),
     orderBy: { createdAt: "desc" },
   });
-  if (running) return toBrowserActionJob(running);
+  if (running) {
+    const job = toBrowserActionJob(running);
+    if (shouldRunInline() && job.status === "queued") {
+      void runAction(job);
+    }
+    return job;
+  }
 
   const row = await prisma.browserJob.create({
     data: {

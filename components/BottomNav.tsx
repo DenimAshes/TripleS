@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clock3, Gauge, ListMusic, Settings, Shuffle } from "lucide-react";
+import { Gauge, ListMusic, PlugZap, Settings, Shuffle } from "lucide-react";
 
 const items = [
   { href: "/dashboard", label: "Home", icon: Gauge },
+  { href: "/connections", label: "Connect", icon: PlugZap },
   { href: "/playlists", label: "Lists", icon: ListMusic },
   { href: "/manual-match", label: "Review", icon: Shuffle },
-  { href: "/history", label: "History", icon: Clock3 },
   { href: "/settings", label: "Rules", icon: Settings },
 ];
 

@@ -4,6 +4,10 @@ import { CancelledError, getActiveJobAbortSignal } from "@/lib/jobs/activeJobCon
 import { registerChildPid, unregisterChildPid } from "@/worker/childPidRegistry";
 import { sanitizeRunnerEnv } from "@/worker/runnerGuard";
 
+function tsxCliPath(): string {
+  return process.env.TSX_CLI_PATH || path.join(/*turbopackIgnore: true*/ process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
+}
+
 type RunBrowserRunnerOptions = {
   serviceName: string;
   script: string;
@@ -64,10 +68,9 @@ export function runBrowserRunnerCli({
 }: RunBrowserRunnerOptions): Promise<string> {
   return new Promise((resolve, reject) => {
     const abortSignal = signal ?? getActiveJobAbortSignal();
-    const tsxCli = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
     const startedAt = Date.now();
-    const child = spawn(process.execPath, [tsxCli, script, ...args], {
-      cwd: process.cwd(),
+    const child = spawn(process.execPath, [tsxCliPath(), script, ...args], {
+      cwd: /*turbopackIgnore: true*/ process.cwd(),
       env: sanitizeRunnerEnv() as NodeJS.ProcessEnv,
       windowsHide: true,
       detached: process.platform !== "win32",

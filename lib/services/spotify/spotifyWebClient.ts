@@ -5,6 +5,7 @@ import type {
   ServiceUser,
 } from "@/lib/sync/syncTypes";
 import type {
+  SpotifyImage,
   SpotifyPaged,
   SpotifyPlaylist,
   SpotifyPlaylistTrackItem,
@@ -19,6 +20,7 @@ const TOKEN_ENDPOINTS = [
 const HOME_PAGE = "https://open.spotify.com/";
 const API_BASE = "https://api.spotify.com/v1";
 const PAGE_LIMIT = 50;
+const TRACK_IMAGE_TARGET_SIZE = 64;
 
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
@@ -47,6 +49,16 @@ function browserHeaders(spDcCookie: string, extra?: Record<string, string>) {
     "Upgrade-Insecure-Requests": "1",
     ...extra,
   };
+}
+
+function pickSpotifyImage(images?: SpotifyImage[]): string | undefined {
+  if (!Array.isArray(images) || images.length === 0) return undefined;
+  const withSize = images
+    .filter((image) => image?.url)
+    .map((image) => ({ ...image, size: Math.max(image.width ?? 0, image.height ?? 0) }))
+    .sort((a, b) => a.size - b.size);
+
+  return withSize.find((image) => image.size >= TRACK_IMAGE_TARGET_SIZE)?.url || withSize.at(-1)?.url;
 }
 
 export class SpotifyWebAuthError extends Error {
@@ -119,8 +131,10 @@ async function resolveProxyAgent(): Promise<unknown> {
   const url = process.env.SPOTIFY_HTTP_PROXY || process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
   if (!url) return null;
   try {
-    // Dynamic import so the dependency stays optional. Node 18+ ships undici.
-    const undici = (await import("undici")) as { ProxyAgent?: new (url: string) => unknown };
+    const optionalImport = new Function("specifier", "return import(specifier)") as (
+      specifier: string,
+    ) => Promise<{ ProxyAgent?: new (url: string) => unknown }>;
+    const undici = await optionalImport("undici");
     if (!undici.ProxyAgent) return null;
     cachedProxyAgent = new undici.ProxyAgent(url);
     return cachedProxyAgent;
@@ -323,7 +337,16 @@ function normalizeTrack(track: SpotifyTrack): NormalizedTrack {
     sourceService: "spotify",
     sourceTrackId: track.id,
     url: track.external_urls?.spotify,
+    imageUrl: pickSpotifyImage(track.album?.images),
   };
+}
+
+function spotifyPlaylistTrackCount(playlist: SpotifyPlaylist): number {
+  return playlist.tracks?.total ?? playlist.items?.total ?? 0;
+}
+
+function canModifySpotifyPlaylist(playlist: SpotifyPlaylist, ownerId: string): boolean {
+  return playlist.owner?.id === ownerId || playlist.collaborative === true;
 }
 
 export async function webGetMe(spDcCookie: string): Promise<ServiceUser> {
@@ -337,24 +360,26 @@ export async function webGetMe(spDcCookie: string): Promise<ServiceUser> {
 export async function webGetMyPlaylists(spDcCookie: string): Promise<NormalizedPlaylist[]> {
   const me = await webFetch<SpotifyUser>(spDcCookie, "/me");
   const playlists = await fetchAllPages<SpotifyPlaylist>(spDcCookie, `/me/playlists?limit=${PAGE_LIMIT}`);
-  return playlists.map((playlist) => ({
-    id: playlist.id,
-    name: playlist.name,
-    description: playlist.description || undefined,
-    imageUrl: playlist.images?.[0]?.url,
-    trackCount: playlist.tracks.total,
-    isWritable: Boolean(playlist.owner?.id === me.id || playlist.collaborative),
-  }));
+  return playlists
+    .filter((playlist) => canModifySpotifyPlaylist(playlist, me.id))
+    .map((playlist) => ({
+      id: playlist.id,
+      name: playlist.name,
+      description: playlist.description || undefined,
+      imageUrl: playlist.images?.[0]?.url,
+      trackCount: spotifyPlaylistTrackCount(playlist),
+      isWritable: true,
+    }));
 }
 
 export async function webGetPlaylistTracks(spDcCookie: string, playlistId: string): Promise<NormalizedTrack[]> {
-  const fields = "items(track(id,uri,name,duration_ms,external_ids,external_urls,album(name),artists(name))),next";
+  const fields = "items(item(id,uri,name,duration_ms,external_ids,external_urls,album(name,images),artists(name))),next,total";
   const items = await fetchAllPages<SpotifyPlaylistTrackItem>(
     spDcCookie,
-    `/playlists/${encodeURIComponent(playlistId)}/tracks?limit=${PAGE_LIMIT}&fields=${encodeURIComponent(fields)}`,
+    `/playlists/${encodeURIComponent(playlistId)}/items?limit=${PAGE_LIMIT}&fields=${encodeURIComponent(fields)}`,
   );
   return items
-    .map((item) => item.track)
+    .map((item) => item.track ?? item.item)
     .filter((track): track is SpotifyTrack => Boolean(track?.id))
     .map(normalizeTrack);
 }

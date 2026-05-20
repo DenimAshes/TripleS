@@ -4,6 +4,7 @@ import { Link2, ListMusic, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { pollBrowserJob, startBrowserJob } from "./browserJobClient";
+import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
 export type SyncPlaylistOption = {
   id: string;
@@ -13,12 +14,6 @@ export type SyncPlaylistOption = {
   isWritable: boolean;
   isConnected: boolean;
   imageUrl?: string | null;
-};
-
-const SERVICE_LABELS: Record<string, string> = {
-  SPOTIFY: "Spotify",
-  YOUTUBE: "YouTube Music",
-  SOUNDCLOUD: "SoundCloud",
 };
 
 function serviceKey(service: string) {
@@ -130,7 +125,7 @@ export function AddPlaylistSyncButton({
             <div className="flex items-center justify-between border-b border-[var(--border-soft)] p-5">
               <div>
                 <h2 className="text-lg font-semibold">Connect playlist</h2>
-                <p className="mt-1 text-sm text-muted-fg">Choose where this playlist should copy songs.</p>
+                <p className="mt-1 text-sm text-muted-fg">Choose where new songs should be copied.</p>
               </div>
               <button
                 type="button"
@@ -146,6 +141,7 @@ export function AddPlaylistSyncButton({
               <div className="flex flex-wrap gap-2">
                 {services.map((service) => {
                   const active = activeService === service;
+                  const meta = serviceMeta(service);
                   return (
                     <button
                       type="button"
@@ -157,7 +153,10 @@ export function AddPlaylistSyncButton({
                           : "border-[var(--border-soft)] bg-[var(--surface)] text-muted-fg hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
                       }`}
                     >
-                      {SERVICE_LABELS[service] || service}
+                      <span className="inline-flex items-center gap-2">
+                        <ServiceIcon service={service} size="sm" className="h-5 w-5 rounded-md" />
+                        {meta.label}
+                      </span>
                     </button>
                   );
                 })}
@@ -202,8 +201,8 @@ export function AddPlaylistSyncButton({
                           <div className="truncate font-medium">{playlist.name}</div>
                           <div className="mt-0.5 text-xs text-muted-fg">
                             <span className="tabular-nums">{playlist.trackCount}</span> songs
-                            {playlist.isConnected ? <span className="text-dim-fg"> · already connected</span> : null}
-                            {!playlist.isWritable ? <span className="text-dim-fg"> · read-only</span> : null}
+                            {playlist.isConnected ? <span className="text-dim-fg"> / already connected</span> : null}
+                            {!playlist.isWritable ? <span className="text-dim-fg"> / read-only</span> : null}
                           </div>
                         </div>
                       </div>
@@ -216,7 +215,7 @@ export function AddPlaylistSyncButton({
                       <input
                         value={newPlaylistName}
                         onChange={(event) => setNewPlaylistName(event.target.value)}
-                        placeholder={`New ${SERVICE_LABELS[activeService] || activeService} playlist name`}
+                        placeholder={`New ${serviceMeta(activeService).label} playlist name`}
                         className="min-w-0 flex-1 text-sm"
                       />
                       <button

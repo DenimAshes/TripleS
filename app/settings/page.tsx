@@ -1,15 +1,11 @@
 import Link from "next/link";
-import { KeyRound } from "lucide-react";
+import { PlugZap } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SyncRuleForm } from "@/components/SyncRuleForm";
 import { SyncRuleCard } from "@/components/SyncRuleCard";
 import { DeleteRuleButton } from "@/components/DeleteRuleButton";
-import { YouTubeBrowserConnector } from "@/components/YouTubeBrowserConnector";
-import { SoundCloudConnector } from "@/components/SoundCloudConnector";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
-import { stateFilePath } from "@/worker/config";
-import fs from "node:fs";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ rule?: string; new?: string }> }) {
   const session = await getSession();
@@ -21,34 +17,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const selectedRule = params.new ? undefined : rules.find((rule) => rule.id === params.rule) || rules[0];
 
   return (
-    <AppShell title="Settings">
+    <AppShell title="Sync rules">
       <div className="grid gap-8 lg:grid-cols-[1fr_420px]">
         <div className="space-y-4">
           <Link
-            href="/admin/sessions"
+            href="/connections"
             className="panel-inset flex items-center justify-between gap-4 p-4 text-sm transition hover:border-[var(--border)]"
           >
             <div className="flex items-center gap-3">
               <div className="grid h-9 w-9 place-items-center rounded-lg bg-[var(--surface)] text-[var(--accent)]">
-                <KeyRound size={16} />
+                <PlugZap size={16} />
               </div>
               <div>
-                <div className="font-semibold text-[var(--text)]">Service credentials moved</div>
+                <div className="font-semibold text-[var(--text)]">Need to connect a platform?</div>
                 <div className="mt-0.5 text-xs text-muted-fg">
-                  Spotify cookie and YouTube / SoundCloud sessions now live on the Worker Sessions page.
+                  Spotify, YouTube Music and SoundCloud setup now lives on the Connections page.
                 </div>
               </div>
             </div>
             <span className="text-xs font-medium text-[var(--accent)]">Open →</span>
           </Link>
-          <YouTubeBrowserConnector
-            hasState={fs.existsSync(stateFilePath("youtube"))}
-            isBrowserAutomationEnabled={process.env.YOUTUBE_BROWSER_AUTOMATION === "true"}
-          />
-          <SoundCloudConnector
-            hasState={fs.existsSync(stateFilePath("soundcloud"))}
-            isEnabled={process.env.SOUNDCLOUD_BROWSER_AUTOMATION === "true"}
-          />
           <SyncRuleForm playlists={playlists} rule={selectedRule} />
           {selectedRule ? (
             <div className="panel flex items-center justify-between gap-4 p-6">
