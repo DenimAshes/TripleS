@@ -1,0 +1,16 @@
+# Normalize line endings: source is LF in the repo, working tree honors
+# core.autocrlf. Without this every commit on Windows warns about LF→CRLF
+# replacement.
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.woff binary
+*.woff2 binary

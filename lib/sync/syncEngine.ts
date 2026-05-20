@@ -972,7 +972,16 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
               lastError: error instanceof Error ? error.message : String(error),
             },
           })
-          .catch(() => undefined);
+          .catch((dbError) => {
+            // Don't let the bookkeeping write mask the real error returned
+            // from runSync, but DO log it — otherwise a broken DB leaves
+            // the user without the NEEDS_LOGIN prompt and no clue why.
+            log.warn("failed to mark account NEEDS_LOGIN after auth error", {
+              service,
+              userId: rule.userId,
+              error: dbError instanceof Error ? dbError.message : String(dbError),
+            });
+          });
       }
     }
     return failed;
