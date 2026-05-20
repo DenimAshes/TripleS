@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { prisma } from "@/lib/db/prisma";
+import { serviceKey } from "@/lib/services/adapterFactory";
 import { stateFilePath } from "@/worker/config";
 
 type RuleForPreflight = {
@@ -29,10 +30,6 @@ function isCacheComplete(active: number, declared: number): boolean {
   if (declared <= 0) return active > 0;
   if (active === 0) return false;
   return (declared - active) / declared <= PARTIAL_TOLERANCE;
-}
-
-function serviceKey(service: string): string {
-  return service.toLowerCase();
 }
 
 function browserMode(): string {
