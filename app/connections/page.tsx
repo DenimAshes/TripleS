@@ -63,6 +63,7 @@ export default async function ConnectionsPage() {
       status: spotifyConnected ? "Connected" : hasSpotifyCredentials() ? "Ready" : "Setup",
       tone: spotifyConnected ? "success" : "warning",
       icon: <KeyRound size={15} />,
+      href: "#connection-spotify",
     },
     ...browserSessions.map((item) => {
       const sessionStatus = browserSessionStatus(item.exists, item.updatedAt);
@@ -73,6 +74,7 @@ export default async function ConnectionsPage() {
         status: sessionStatus.label,
         tone: sessionStatus.tone,
         icon: item.exists ? <Clock3 size={15} /> : <UploadCloud size={15} />,
+        href: `#connection-${item.service.toLowerCase()}`,
       };
     }),
   ];
@@ -117,6 +119,7 @@ export default async function ConnectionsPage() {
 
         <section className="grid gap-4 xl:grid-cols-3">
           <ServiceConnectionCard
+            id="connection-spotify"
             service="SPOTIFY"
             status={spotifyConnected ? "connected" : hasSpotifyCredentials() ? "ready" : "setup needed"}
             mode="OAuth login"
@@ -134,7 +137,7 @@ export default async function ConnectionsPage() {
           </ServiceConnectionCard>
 
           {browserSessions.map((item) => (
-            <SessionUploader key={item.service} initial={item} />
+            <SessionUploader key={item.service} cardId={`connection-${item.service.toLowerCase()}`} initial={item} />
           ))}
         </section>
       </div>
@@ -149,6 +152,7 @@ function ConnectionOverviewItem({
   status,
   tone,
   icon,
+  href,
 }: {
   service: string;
   title: string;
@@ -156,13 +160,18 @@ function ConnectionOverviewItem({
   status: string;
   tone: string;
   icon: ReactNode;
+  href: string;
 }) {
   const meta = serviceMeta(service);
   const pillClass =
     tone === "success" ? "pill-success" : tone === "warning" ? "pill-warning" : tone === "danger" ? "pill-danger" : "";
 
   return (
-    <div className="group flex min-w-0 items-center justify-between gap-3 rounded-xl px-2 py-2 transition duration-200 hover:bg-[var(--surface-2)]">
+    <a
+      href={href}
+      aria-label={`Jump to ${meta.label} connection setup`}
+      className="group flex min-w-0 items-center justify-between gap-3 rounded-xl px-2 py-2 transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--surface-2)] focus-visible:shadow-[0_0_0_3px_var(--accent-ring)]"
+    >
       <div className="flex min-w-0 items-center gap-3">
         <ServiceIcon service={service} size="sm" className="transition duration-200 group-hover:scale-105" />
         <div className="min-w-0">
@@ -175,17 +184,19 @@ function ConnectionOverviewItem({
         </div>
       </div>
       <span className={`pill shrink-0 ${pillClass}`}>{status}</span>
-    </div>
+    </a>
   );
 }
 
 function ServiceConnectionCard({
+  id,
   service,
   status,
   mode,
   icon,
   children,
 }: {
+  id: string;
   service: string;
   status: string;
   mode: string;
@@ -196,7 +207,10 @@ function ServiceConnectionCard({
   const connected = status === "connected";
 
   return (
-    <section className="panel group relative flex min-h-[360px] flex-col overflow-hidden p-5 transition duration-300 hover:-translate-y-1 hover:border-[var(--border-accent)] hover:shadow-[0_26px_60px_-44px_var(--accent-glow)] xl:min-h-[420px]">
+    <section
+      id={id}
+      className={`panel group relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 transition duration-300 ${meta.border} hover:-translate-y-1 hover:shadow-[0_26px_60px_-44px_var(--accent-glow)] md:scroll-mt-8 xl:min-h-[420px]`}
+    >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-80" />
       <header className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
