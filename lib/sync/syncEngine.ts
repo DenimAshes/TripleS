@@ -849,22 +849,38 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
 
       if (rule.mode === "ADD_AND_REMOVE") {
         const removable = destinationTracks.filter((track) => !sourceIds.has(track.isrc || track.sourceTrackId));
+        const removableTracksToUpsert = removable.map((track) => ({ ...track, sourceService: targetKey as ServiceKey }));
+        const removableServiceTrackByKey = removableTracksToUpsert.length
+          ? await bulkUpsertServiceTracks(removableTracksToUpsert)
+          : new Map<string, ServiceTrack>();
+        const removableServiceTrackIds = Array.from(removableServiceTrackByKey.values())
+          .map((track) => track.id)
+          .filter((id) => !destinationExcludedTrackIds.has(id));
+        const removableStateByServiceTrackId = new Map(
+          destinationPlaylist && removableServiceTrackIds.length
+            ? (
+                await prisma.playlistTrackState.findMany({
+                  where: {
+                    playlistId: destinationPlaylist.id,
+                    serviceTrackId: { in: removableServiceTrackIds },
+                    addedBySystem: true,
+                    removedAt: null,
+                  },
+                })
+              ).map((state) => [state.serviceTrackId, state])
+            : [],
+        );
         for (const track of removable) {
           throwIfActiveJobAborted();
-          const serviceTrack = await upsertServiceTrack({ ...track, sourceService: targetKey as ServiceKey });
+          const serviceTrackKey = `${targetKey}::${track.sourceTrackId}`;
+          const serviceTrack = removableServiceTrackByKey.get(serviceTrackKey);
+          if (!serviceTrack) {
+            throw new Error(`bulkUpsertServiceTracks did not return entry for ${serviceTrackKey}`);
+          }
           if (destinationExcludedTrackIds.has(serviceTrack.id)) {
             continue;
           }
-          const state = destinationPlaylist
-            ? await prisma.playlistTrackState.findFirst({
-                where: {
-                  playlistId: destinationPlaylist.id,
-                  serviceTrackId: serviceTrack.id,
-                  addedBySystem: true,
-                  removedAt: null,
-                },
-              })
-            : null;
+          const state = removableStateByServiceTrackId.get(serviceTrack.id);
           if (state) {
             throwIfActiveJobAborted();
             await writeThrottle(destination.service);
