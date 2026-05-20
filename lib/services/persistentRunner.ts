@@ -32,6 +32,7 @@ export type PersistentRunnerService = "youtube" | "soundcloud";
 type PendingRequest = {
   id: string;
   command: string;
+  args: unknown[];
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
 };
@@ -166,7 +167,7 @@ export class PersistentRunner {
     const next = this.queue.shift();
     if (!next) return;
     this.inFlight = next;
-    const line = JSON.stringify({ id: next.id, command: next.command, args: (next as unknown as { args: unknown[] }).args ?? [] });
+    const line = JSON.stringify({ id: next.id, command: next.command, args: next.args });
     this.child.stdin!.write(line + "\n");
   }
 
@@ -191,10 +192,10 @@ export class PersistentRunner {
       const pending: PendingRequest = {
         id,
         command,
+        args,
         resolve: (value) => resolve(value as T),
         reject,
       };
-      (pending as unknown as { args: unknown[] }).args = args;
       this.queue.push(pending);
       this.pump();
     });
