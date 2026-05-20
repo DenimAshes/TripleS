@@ -116,7 +116,7 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
 
   return (
     <section
-      className={`panel group relative flex min-h-[420px] flex-col overflow-hidden p-5 transition duration-300 ${meta.border} hover:-translate-y-1 hover:shadow-[0_26px_60px_-44px_var(--accent-glow)] ${
+      className={`panel group relative flex flex-col overflow-hidden p-5 transition duration-300 xl:min-h-[420px] ${meta.border} hover:-translate-y-1 hover:shadow-[0_26px_60px_-44px_var(--accent-glow)] ${
         dragOver ? "border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring)]" : ""
       }`}
       onDragOver={(e) => {

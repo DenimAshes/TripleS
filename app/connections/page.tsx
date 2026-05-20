@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { ArrowRight, CheckCircle2, KeyRound, RadioTower } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, KeyRound, RadioTower, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ServiceIcon, ServicePill, serviceMeta } from "@/components/ServiceBrand";
 import { SessionUploader } from "@/components/SessionUploader";
@@ -12,6 +12,14 @@ import { getSession } from "@/lib/auth/session";
 import { hasSpotifyCredentials, validateSpotifyRedirectUri } from "@/lib/services/spotify/spotifyAuth";
 
 const BROWSER_SERVICES = ["youtube", "soundcloud"];
+
+function browserSessionStatus(exists: boolean, iso: string | null) {
+  if (!exists || !iso) return { label: "Missing", tone: "muted" };
+  const days = (Date.now() - new Date(iso).getTime()) / 86_400_000;
+  if (days >= 14) return { label: "Stale", tone: "danger" };
+  if (days >= 7) return { label: "Ageing", tone: "warning" };
+  return { label: "Fresh", tone: "success" };
+}
 
 export default async function ConnectionsPage() {
   const session = await getSession();
@@ -47,6 +55,27 @@ export default async function ConnectionsPage() {
 
   const spotifyConnected = Boolean(spotifyAccount) && spotifyAccount?.connectionStatus === "CONNECTED" && !spotifyAccount?.isMock;
   const connectedCount = Number(spotifyConnected) + browserSessions.filter((item) => item.exists).length;
+  const overviewItems = [
+    {
+      service: "SPOTIFY",
+      title: "Login",
+      subtitle: spotifyConnected ? spotifyAccount?.serviceUsername ?? "Connected" : hasSpotifyCredentials() ? "Ready to connect" : "Setup needed",
+      status: spotifyConnected ? "Connected" : hasSpotifyCredentials() ? "Ready" : "Setup",
+      tone: spotifyConnected ? "success" : "warning",
+      icon: <KeyRound size={15} />,
+    },
+    ...browserSessions.map((item) => {
+      const sessionStatus = browserSessionStatus(item.exists, item.updatedAt);
+      return {
+        service: item.service,
+        title: "Session",
+        subtitle: item.exists ? "Saved browser JSON" : "Upload required",
+        status: sessionStatus.label,
+        tone: sessionStatus.tone,
+        icon: item.exists ? <Clock3 size={15} /> : <UploadCloud size={15} />,
+      };
+    }),
+  ];
 
   return (
     <AppShell title="Connections">
@@ -80,6 +109,12 @@ export default async function ConnectionsPage() {
           </div>
         </section>
 
+        <section className="grid gap-2 border-y border-[var(--border-soft)] py-3 sm:grid-cols-3" aria-label="Connection status">
+          {overviewItems.map((item) => (
+            <ConnectionOverviewItem key={item.service} {...item} />
+          ))}
+        </section>
+
         <section className="grid gap-4 xl:grid-cols-3">
           <ServiceConnectionCard
             service="SPOTIFY"
@@ -107,6 +142,43 @@ export default async function ConnectionsPage() {
   );
 }
 
+function ConnectionOverviewItem({
+  service,
+  title,
+  subtitle,
+  status,
+  tone,
+  icon,
+}: {
+  service: string;
+  title: string;
+  subtitle: string;
+  status: string;
+  tone: string;
+  icon: ReactNode;
+}) {
+  const meta = serviceMeta(service);
+  const pillClass =
+    tone === "success" ? "pill-success" : tone === "warning" ? "pill-warning" : tone === "danger" ? "pill-danger" : "";
+
+  return (
+    <div className="group flex min-w-0 items-center justify-between gap-3 rounded-xl px-2 py-2 transition duration-200 hover:bg-[var(--surface-2)]">
+      <div className="flex min-w-0 items-center gap-3">
+        <ServiceIcon service={service} size="sm" className="transition duration-200 group-hover:scale-105" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-dim-fg">
+            {icon}
+            {title}
+          </div>
+          <p className="mt-1 truncate text-sm font-semibold text-white">{meta.label}</p>
+          <p className="truncate text-xs text-muted-fg">{subtitle}</p>
+        </div>
+      </div>
+      <span className={`pill shrink-0 ${pillClass}`}>{status}</span>
+    </div>
+  );
+}
+
 function ServiceConnectionCard({
   service,
   status,
@@ -124,7 +196,7 @@ function ServiceConnectionCard({
   const connected = status === "connected";
 
   return (
-    <section className="panel group relative flex min-h-[420px] flex-col overflow-hidden p-5 transition duration-300 hover:-translate-y-1 hover:border-[var(--border-accent)] hover:shadow-[0_26px_60px_-44px_var(--accent-glow)]">
+    <section className="panel group relative flex min-h-[360px] flex-col overflow-hidden p-5 transition duration-300 hover:-translate-y-1 hover:border-[var(--border-accent)] hover:shadow-[0_26px_60px_-44px_var(--accent-glow)] xl:min-h-[420px]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-80" />
       <header className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
