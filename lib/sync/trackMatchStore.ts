@@ -151,6 +151,7 @@ export async function upsertAutoTrackMatch({
       data: {
         confidence: Math.max(raced.confidence, confidence),
         status: raced.status === "CONFIRMED" || status === "CONFIRMED" ? "CONFIRMED" : "AUTO_MATCHED",
+        verifiedAt: new Date(),
       },
     });
   }
