@@ -1,7 +1,8 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, CheckCircle2, KeyRound } from "lucide-react";
+import type { ReactNode } from "react";
+import { ArrowRight, CheckCircle2, KeyRound, RadioTower } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ServiceIcon, ServicePill, serviceMeta } from "@/components/ServiceBrand";
 import { SessionUploader } from "@/components/SessionUploader";
@@ -49,27 +50,31 @@ export default async function ConnectionsPage() {
 
   return (
     <AppShell title="Connections">
-      <div className="space-y-7">
-        <section className="overflow-hidden rounded-2xl border border-[var(--border-soft)] bg-[linear-gradient(135deg,rgba(17,19,26,0.92),rgba(23,26,35,0.66))] p-5 shadow-[0_22px_70px_-52px_rgba(79,141,255,0.75)] md:p-7">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <div className="space-y-8">
+        <section className="relative overflow-hidden py-1">
+          <div className="pointer-events-none absolute right-0 top-0 h-32 w-32 rounded-full bg-[var(--accent-soft)] blur-3xl" />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2" aria-label="Supported services">
                 <ServicePill service="SPOTIFY" />
                 <ServicePill service="YOUTUBE" />
                 <ServicePill service="SOUNDCLOUD" />
               </div>
-              <h2 className="mt-5 text-2xl font-black tracking-tight text-white md:text-3xl">
-                Connect your music services once. Keep the sync worker ready.
+              <h2 className="mt-5 max-w-2xl text-2xl font-black tracking-tight text-white md:text-4xl">
+                One clean setup screen for every music connection.
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-fg">
-                Spotify signs in through OAuth. YouTube Music and SoundCloud use a browser session JSON from the
-                logged-in account.
+                Spotify is handled by secure login. YouTube Music and SoundCloud stay ready through a saved browser
+                session JSON.
               </p>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
-              <span className="pill pill-success justify-center">{connectedCount}/3 connected</span>
-              <Link href="/playlists" className="btn btn-ghost">
-                Playlists <ArrowRight size={15} />
+            <div className="flex flex-col gap-3 sm:flex-row lg:items-center">
+              <span className="pill pill-accent justify-center">
+                <RadioTower size={13} />
+                {connectedCount}/3 ready
+              </span>
+              <Link href="/playlists" className="btn btn-ghost whitespace-nowrap">
+                Open playlists <ArrowRight size={15} />
               </Link>
             </div>
           </div>
@@ -112,8 +117,8 @@ function ServiceConnectionCard({
   service: string;
   status: string;
   mode: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
+  icon: ReactNode;
+  children: ReactNode;
 }) {
   const meta = serviceMeta(service);
   const connected = status === "connected";

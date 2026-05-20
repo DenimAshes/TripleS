@@ -153,22 +153,22 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
         Upload the browser storage state from the logged-in account. Drag a JSON file here or paste the exported JSON.
       </p>
 
-      <dl className="mt-5 grid grid-cols-3 gap-2 text-xs">
-        <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2">
-          <dt className="text-dim-fg">Updated</dt>
+      <dl className="mt-5 grid gap-3 border-y border-[var(--border-soft)] py-4 text-sm sm:grid-cols-3 sm:gap-4">
+        <div className="min-w-0">
+          <dt className="text-xs uppercase tracking-[0.14em] text-dim-fg">Updated</dt>
           <dd className="mt-1 truncate text-[var(--text)]">{formatRelative(info.updatedAt)}</dd>
         </div>
-        <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2">
-          <dt className="text-dim-fg">Size</dt>
+        <div className="min-w-0">
+          <dt className="text-xs uppercase tracking-[0.14em] text-dim-fg">Size</dt>
           <dd className="mt-1 truncate text-[var(--text)] tabular-nums">{formatBytes(info.bytes)}</dd>
         </div>
-        <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2">
-          <dt className="text-dim-fg">By</dt>
+        <div className="min-w-0">
+          <dt className="text-xs uppercase tracking-[0.14em] text-dim-fg">By</dt>
           <dd className="mt-1 truncate text-[var(--text)]">{info.updatedBy ?? "-"}</dd>
         </div>
       </dl>
 
-      <label className="mt-5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg transition duration-200 hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">
+      <label className="mt-5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg transition duration-200 hover:-translate-y-0.5 hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">
         <input
           type="file"
           accept="application/json,.json"
