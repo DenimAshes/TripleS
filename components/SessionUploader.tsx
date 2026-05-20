@@ -137,7 +137,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   return (
     <section
       id={cardId}
-      className={`panel group surface-lift animated-gradient-frame animated-sheen ${glowClass} relative flex scroll-mt-24 flex-col overflow-hidden p-5 md:scroll-mt-8 xl:min-h-[420px] ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] ${
+      className={`panel group surface-lift animated-gradient-frame animated-sheen ${glowClass} relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 md:scroll-mt-8 xl:min-h-[420px] ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] ${
         dragOver ? "scale-[1.01] border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring),0_28px_70px_-46px_var(--accent-glow)]" : ""
       }`}
       onDragOver={(e) => {
@@ -153,7 +153,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       }}
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-80" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_at_20%_0%,rgba(255,255,255,0.045),transparent_55%)] opacity-0 transition duration-500 group-hover:opacity-100" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.045),transparent_48%)] opacity-0 transition duration-500 group-hover:opacity-100" />
       <header className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <ServiceIcon service={info.service} size="lg" className="transition duration-300 group-hover:scale-105" />
@@ -170,6 +170,18 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
           {badge.label}
         </span>
       </header>
+
+      <div className="connection-card-pulse mt-5" aria-hidden="true">
+        {["JSON", "Session", "Playlists"].map((label, index) => (
+          <span
+            key={label}
+            className={index === 0 || (info.exists && index < 3) ? "is-active" : ""}
+            style={{ animationDelay: `${index * 160}ms` }}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
 
       <p className="mt-5 text-sm leading-6 text-muted-fg">
         Upload the browser storage state from the logged-in account. Drag a JSON file here or paste the exported JSON.
@@ -271,24 +283,26 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
 
       {error ? <p className="mt-3 text-xs text-[#fca5a5]">{error}</p> : null}
 
-      {info.exists && browseHref ? (
-        <Link href={browseHref} className="btn btn-ghost surface-lift group mt-4 w-full">
-          <ListMusic size={16} />
-          Browse {meta.shortLabel} playlists
-        </Link>
-      ) : null}
+      <div className="mt-auto grid gap-2 pt-4">
+        {info.exists && browseHref ? (
+          <Link href={browseHref} className="btn btn-ghost surface-lift group w-full">
+            <ListMusic size={16} />
+            Browse {meta.shortLabel} playlists
+          </Link>
+        ) : null}
 
-      {info.exists ? (
-        <button
-          type="button"
-          onClick={clear}
-          disabled={busy}
-          className="mt-auto inline-flex items-center gap-1.5 pt-4 text-xs text-muted-fg transition hover:text-[#fca5a5] disabled:opacity-50"
-        >
-          <Trash2 size={13} />
-          Delete saved session
-        </button>
-      ) : null}
+        {info.exists ? (
+          <button
+            type="button"
+            onClick={clear}
+            disabled={busy}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs text-muted-fg transition hover:bg-red-500/10 hover:text-[#fca5a5] disabled:opacity-50"
+          >
+            <Trash2 size={13} />
+            Delete saved session
+          </button>
+        ) : null}
+      </div>
     </section>
   );
 }

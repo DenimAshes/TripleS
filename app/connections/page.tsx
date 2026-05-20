@@ -162,7 +162,7 @@ export default async function ConnectionsPage() {
 
         <SetupAssistant healthyCount={healthyCount} tasks={setupTasks} />
 
-        <section className="grid gap-4 animate-slide-in-up xl:grid-cols-3" style={{ animationDelay: "140ms" }}>
+        <section className="grid items-stretch gap-4 animate-slide-in-up xl:grid-cols-3" style={{ animationDelay: "140ms" }}>
           <ServiceConnectionCard
             id="connection-spotify"
             service="SPOTIFY"
@@ -394,7 +394,7 @@ function ServiceConnectionCard({
       className={`panel group surface-lift animated-gradient-frame animated-sheen ${glowClass} relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] md:scroll-mt-8 xl:min-h-[420px]`}
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-80" />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_at_20%_0%,rgba(255,255,255,0.045),transparent_55%)] opacity-0 transition duration-500 group-hover:opacity-100" />
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.045),transparent_48%)] opacity-0 transition duration-500 group-hover:opacity-100" />
       <header className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <ServiceIcon service={service} size="lg" className="transition duration-300 group-hover:scale-105" />
@@ -411,7 +411,20 @@ function ServiceConnectionCard({
           {status}
         </span>
       </header>
+      <ConnectionCardPulse labels={["Login", "Token", "Playlists"]} active={connected ? 3 : 1} />
       <div className="mt-5 flex flex-1 flex-col">{children}</div>
     </section>
+  );
+}
+
+function ConnectionCardPulse({ labels, active }: { labels: [string, string, string]; active: number }) {
+  return (
+    <div className="connection-card-pulse mt-5" aria-hidden="true">
+      {labels.map((label, index) => (
+        <span key={label} className={index < active ? "is-active" : ""} style={{ animationDelay: `${index * 160}ms` }}>
+          {label}
+        </span>
+      ))}
+    </div>
   );
 }
