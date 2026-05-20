@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, Clipboard, FileJson, Trash2, UploadCloud } from "lucide-react";
 import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
@@ -45,6 +46,7 @@ const STALE_BADGE: Record<StaleLevel, { label: string; classes: string }> = {
 };
 
 export function SessionUploader({ initial, cardId }: { initial: SessionInfo; cardId?: string }) {
+  const router = useRouter();
   const [info, setInfo] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +80,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
         });
         setNotice(`Saved ${data.cookies ?? "new"} cookies from ${sourceLabel}.`);
         setPasted("");
+        router.refresh();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -113,6 +116,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       } else {
         setInfo({ ...info, exists: false, bytes: 0, updatedAt: null, updatedBy: null });
         setNotice("Saved session deleted.");
+        router.refresh();
       }
     } finally {
       setBusy(false);
