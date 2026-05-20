@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Clipboard, FileJson, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Clipboard, FileJson, ListMusic, Trash2, UploadCloud } from "lucide-react";
 import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
 type SessionInfo = {
@@ -45,6 +46,13 @@ const STALE_BADGE: Record<StaleLevel, { label: string; classes: string }> = {
   missing: { label: "missing", classes: "" },
 };
 
+function browserRoute(service: string): string | null {
+  const normalized = service.toLowerCase();
+  if (normalized === "youtube") return "/youtube-browser";
+  if (normalized === "soundcloud") return "/soundcloud-browser";
+  return null;
+}
+
 export function SessionUploader({ initial, cardId }: { initial: SessionInfo; cardId?: string }) {
   const router = useRouter();
   const [info, setInfo] = useState(initial);
@@ -56,6 +64,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   const meta = serviceMeta(info.service);
   const level = staleLevel(info.exists, info.updatedAt);
   const badge = STALE_BADGE[level];
+  const browseHref = browserRoute(info.service);
 
   async function uploadText(text: string, sourceLabel: string) {
     setBusy(true);
@@ -253,6 +262,13 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       ) : null}
 
       {error ? <p className="mt-3 text-xs text-[#fca5a5]">{error}</p> : null}
+
+      {info.exists && browseHref ? (
+        <Link href={browseHref} className="btn btn-ghost mt-4 w-full">
+          <ListMusic size={16} />
+          Browse {meta.shortLabel} playlists
+        </Link>
+      ) : null}
 
       {info.exists ? (
         <button
