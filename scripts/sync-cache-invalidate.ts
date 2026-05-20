@@ -34,11 +34,17 @@ async function main() {
 
   const playlists = await prisma.playlist.findMany({ where });
   const incomplete: Array<{ playlist: (typeof playlists)[number]; activeStates: number; stale: boolean }> = [];
+  const counts = playlists.length
+    ? await prisma.playlistTrackState.groupBy({
+        by: ["playlistId"],
+        where: { playlistId: { in: playlists.map((playlist) => playlist.id) }, removedAt: null },
+        _count: { _all: true },
+      })
+    : [];
+  const activeCountByPlaylistId = new Map(counts.map((row) => [row.playlistId, row._count._all]));
 
   for (const playlist of playlists) {
-    const activeStates = await prisma.playlistTrackState.count({
-      where: { playlistId: playlist.id, removedAt: null },
-    });
+    const activeStates = activeCountByPlaylistId.get(playlist.id) ?? 0;
     const expected = playlist.trackCount ?? 0;
     const stale =
       args.staleHours && playlist.lastFetchedAt
@@ -59,14 +65,16 @@ async function main() {
     console.log(
       `${args.apply ? "[apply]" : "[dry-run]"} ${playlist.service}:${playlist.servicePlaylistId} (${playlist.name}) - active=${activeStates}, expected=${expected}, stale=${stale}, lastFetchedAt=${playlist.lastFetchedAt?.toISOString() ?? "never"}`,
     );
-    if (!args.apply) continue;
+  }
+
+  if (args.apply) {
     const now = new Date();
     await prisma.playlistTrackState.updateMany({
-      where: { playlistId: playlist.id, removedAt: null },
+      where: { playlistId: { in: incomplete.map(({ playlist }) => playlist.id) }, removedAt: null },
       data: { removedAt: now },
     });
-    await prisma.playlist.update({
-      where: { id: playlist.id },
+    await prisma.playlist.updateMany({
+      where: { id: { in: incomplete.map(({ playlist }) => playlist.id) } },
       data: { lastFetchedAt: null },
     });
   }

@@ -35,10 +35,17 @@ async function main() {
     lastFetchedAt: Date | null;
   }> = [];
 
+  const counts = playlists.length
+    ? await prisma.playlistTrackState.groupBy({
+        by: ["playlistId"],
+        where: { playlistId: { in: playlists.map((playlist) => playlist.id) }, removedAt: null },
+        _count: { _all: true },
+      })
+    : [];
+  const activeCountByPlaylistId = new Map(counts.map((row) => [row.playlistId, row._count._all]));
+
   for (const playlist of playlists) {
-    const active = await prisma.playlistTrackState.count({
-      where: { playlistId: playlist.id, removedAt: null },
-    });
+    const active = activeCountByPlaylistId.get(playlist.id) ?? 0;
     const declared = playlist.trackCount ?? 0;
     if (declared <= 0) continue;
     const dropRatio = (declared - active) / declared;
