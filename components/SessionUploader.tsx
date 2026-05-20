@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Clipboard, Trash2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Clipboard, FileJson, Trash2, UploadCloud } from "lucide-react";
 import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
 type SessionInfo = {
@@ -48,22 +48,24 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   const [info, setInfo] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [pasted, setPasted] = useState("");
   const meta = serviceMeta(info.service);
   const level = staleLevel(info.exists, info.updatedAt);
   const badge = STALE_BADGE[level];
 
-  async function uploadText(text: string) {
+  async function uploadText(text: string, sourceLabel: string) {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await fetch(`/api/admin/sessions/${info.service}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: text,
       });
-      const data = (await res.json()) as { error?: string; bytes?: number; updatedBy?: string; hint?: string };
+      const data = (await res.json()) as { error?: string; bytes?: number; cookies?: number; updatedBy?: string; hint?: string };
       if (!res.ok) {
         setError(data.error ? `${data.error}${data.hint ? ` - ${data.hint}` : ""}` : `HTTP ${res.status}`);
       } else {
@@ -74,6 +76,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
           updatedAt: new Date().toISOString(),
           updatedBy: data.updatedBy ?? null,
         });
+        setNotice(`Saved ${data.cookies ?? "new"} cookies from ${sourceLabel}.`);
         setPasted("");
       }
     } catch (err) {
@@ -85,7 +88,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
 
   async function upload(file: File) {
     const text = await file.text();
-    await uploadText(text);
+    await uploadText(text, file.name || "selected file");
   }
 
   async function submitPasted() {
@@ -94,13 +97,14 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       setError("Paste JSON first.");
       return;
     }
-    await uploadText(trimmed);
+    await uploadText(trimmed, "pasted JSON");
   }
 
   async function clear() {
     if (!confirm(`Delete saved ${info.service} session?`)) return;
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await fetch(`/api/admin/sessions/${info.service}`, { method: "DELETE" });
       if (!res.ok) {
@@ -108,6 +112,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
         setError(data.error ?? `HTTP ${res.status}`);
       } else {
         setInfo({ ...info, exists: false, bytes: 0, updatedAt: null, updatedBy: null });
+        setNotice("Saved session deleted.");
       }
     } finally {
       setBusy(false);
@@ -181,8 +186,16 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
             e.target.value = "";
           }}
         />
-        <UploadCloud size={22} className="transition duration-200 group-hover:-translate-y-0.5" />
-        <span className="font-medium">{busy ? "Uploading..." : "Drop JSON or click to choose"}</span>
+        {notice ? (
+          <CheckCircle2 size={22} className="text-emerald-300 transition duration-200 group-hover:-translate-y-0.5" />
+        ) : (
+          <UploadCloud size={22} className="transition duration-200 group-hover:-translate-y-0.5" />
+        )}
+        <span className="font-medium">{busy ? "Uploading..." : dragOver ? "Drop to upload" : "Drop JSON or click to choose"}</span>
+        <span className="inline-flex max-w-full items-center gap-1.5 truncate text-xs text-dim-fg">
+          <FileJson size={13} className="shrink-0" />
+          Playwright storageState or cookie export
+        </span>
       </label>
 
       <details className="mt-3 text-xs text-muted-fg">
@@ -228,7 +241,14 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
         </div>
       </details>
 
-      {error ? <p className="mt-2 text-xs text-[#fca5a5]">{error}</p> : null}
+      {notice ? (
+        <p className="mt-3 inline-flex items-start gap-1.5 text-xs text-emerald-200">
+          <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
+          <span>{notice}</span>
+        </p>
+      ) : null}
+
+      {error ? <p className="mt-3 text-xs text-[#fca5a5]">{error}</p> : null}
 
       {info.exists ? (
         <button
