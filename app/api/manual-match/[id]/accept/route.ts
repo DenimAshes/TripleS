@@ -9,8 +9,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const existing = await prisma.manualMatchCandidate.findFirst({ where: { id, userId: session.userId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const sourceTrack = await prisma.serviceTrack.findUnique({ where: { id: existing.sourceServiceTrackId } });
-  const candidateTrack = await prisma.serviceTrack.findUnique({ where: { id: existing.candidateServiceTrackId } });
+  const tracks = await prisma.serviceTrack.findMany({
+    where: { id: { in: [existing.sourceServiceTrackId, existing.candidateServiceTrackId] } },
+  });
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const sourceTrack = trackById.get(existing.sourceServiceTrackId);
+  const candidateTrack = trackById.get(existing.candidateServiceTrackId);
   if (!sourceTrack || !candidateTrack) {
     return NextResponse.json({ error: "Candidate tracks not found" }, { status: 409 });
   }
