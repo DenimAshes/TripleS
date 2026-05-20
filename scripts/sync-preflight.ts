@@ -68,15 +68,37 @@ async function main() {
     detail: dueRules.length ? dueRules.map((rule) => rule.name).join(" | ") : "none",
   });
 
+  const playlistRefs = dueRules.flatMap((rule) => [
+    { service: rule.sourceService, servicePlaylistId: rule.sourcePlaylistId },
+    ...rule.destinations.map((destination) => ({
+      service: destination.service,
+      servicePlaylistId: destination.playlistId,
+    })),
+  ]);
+  const playlistsForRules = playlistRefs.length
+    ? await prisma.playlist.findMany({
+        where: { OR: playlistRefs },
+      })
+    : [];
+  const playlistByKey = new Map(
+    playlistsForRules.map((playlist) => [`${playlist.service}::${playlist.servicePlaylistId}`, playlist]),
+  );
+  const activeCounts = playlistsForRules.length
+    ? await prisma.playlistTrackState.groupBy({
+        by: ["playlistId"],
+        where: { playlistId: { in: playlistsForRules.map((playlist) => playlist.id) }, removedAt: null },
+        _count: { _all: true },
+      })
+    : [];
+  const activeCountByPlaylistId = new Map(activeCounts.map((row) => [row.playlistId, row._count._all]));
+
   for (const rule of dueRules) {
-    const source = await prisma.playlist.findUnique({
-      where: { service_servicePlaylistId: { service: rule.sourceService, servicePlaylistId: rule.sourcePlaylistId } },
-    });
+    const source = playlistByKey.get(`${rule.sourceService}::${rule.sourcePlaylistId}`);
     if (!source) {
       checks.push({ status: "FAIL", name: `${rule.name} source`, detail: "missing playlist row" });
       continue;
     }
-    const active = await prisma.playlistTrackState.count({ where: { playlistId: source.id, removedAt: null } });
+    const active = activeCountByPlaylistId.get(source.id) ?? 0;
     const complete = source.trackCount <= 0 || active >= source.trackCount;
     checks.push({
       status: complete ? "OK" : "WARN",
@@ -85,9 +107,7 @@ async function main() {
     });
 
     for (const destination of rule.destinations) {
-      const playlist = await prisma.playlist.findUnique({
-        where: { service_servicePlaylistId: { service: destination.service, servicePlaylistId: destination.playlistId } },
-      });
+      const playlist = playlistByKey.get(`${destination.service}::${destination.playlistId}`);
       checks.push({
         status: playlist?.isWritable ? "OK" : "FAIL",
         name: `${rule.name} ${destination.service} destination`,
