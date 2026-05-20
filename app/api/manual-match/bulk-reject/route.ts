@@ -50,12 +50,18 @@ export async function POST(request: Request) {
   let failed = 0;
   const errors: string[] = [];
 
+  const sourceTrackIds = Array.from(new Set(candidates.map((c) => c.sourceServiceTrackId)));
+  const sourceTracks = sourceTrackIds.length
+    ? await prisma.serviceTrack.findMany({
+        where: { id: { in: sourceTrackIds } },
+        select: { id: true, internalTrackId: true },
+      })
+    : [];
+  const sourceTrackById = new Map(sourceTracks.map((track) => [track.id, track]));
+
   for (const candidate of candidates) {
     try {
-      const sourceTrack = await prisma.serviceTrack.findUnique({
-        where: { id: candidate.sourceServiceTrackId },
-        select: { id: true, internalTrackId: true },
-      });
+      const sourceTrack = sourceTrackById.get(candidate.sourceServiceTrackId);
       const destinationField = trackMatchField(candidate.targetService);
 
       await prisma.$transaction(async (tx) => {

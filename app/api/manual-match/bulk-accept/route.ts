@@ -46,21 +46,33 @@ export async function POST(request: Request) {
   let failed = 0;
   const errors: string[] = [];
 
+  const alternativesByCandidate = new Map<string, AlternativeEntry[]>(
+    candidates.map((c) => [c.id, c.alternativesJson ? (JSON.parse(c.alternativesJson) as AlternativeEntry[]) : []]),
+  );
+  const allTrackIds = new Set<string>();
+  for (const c of candidates) {
+    allTrackIds.add(c.sourceServiceTrackId);
+    allTrackIds.add(c.candidateServiceTrackId);
+    for (const alt of alternativesByCandidate.get(c.id) ?? []) {
+      allTrackIds.add(alt.serviceTrackId);
+    }
+  }
+  const fetchedTracks = allTrackIds.size
+    ? await prisma.serviceTrack.findMany({ where: { id: { in: Array.from(allTrackIds) } } })
+    : [];
+  const trackById = new Map(fetchedTracks.map((track) => [track.id, track]));
+
   for (const candidate of candidates) {
     try {
       // Use whatever the engine recorded as "candidate" — usually the
       // top-ranked alternative. Falls back to alternatives[0] if the
       // primary candidate row is gone.
       let targetTrackId = candidate.candidateServiceTrackId;
-      const alternatives = candidate.alternativesJson
-        ? (JSON.parse(candidate.alternativesJson) as AlternativeEntry[])
-        : [];
+      const alternatives = alternativesByCandidate.get(candidate.id) ?? [];
       const primaryConfidence =
         alternatives.find((item) => item.serviceTrackId === targetTrackId)?.confidence ?? candidate.confidence;
-      const [sourceTrack, candidateTrack] = await Promise.all([
-        prisma.serviceTrack.findUnique({ where: { id: candidate.sourceServiceTrackId } }),
-        prisma.serviceTrack.findUnique({ where: { id: targetTrackId } }),
-      ]);
+      const sourceTrack = trackById.get(candidate.sourceServiceTrackId);
+      const candidateTrack = trackById.get(targetTrackId);
       if (!sourceTrack) {
         failed += 1;
         errors.push(`Source track missing for ${candidate.id}`);
