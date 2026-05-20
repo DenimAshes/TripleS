@@ -162,7 +162,7 @@ export default async function ConnectionsPage() {
 
         <SetupAssistant healthyCount={healthyCount} tasks={setupTasks} />
 
-        <section className="grid gap-4 animate-slide-in-up lg:grid-cols-2 min-[1350px]:grid-cols-3" style={{ animationDelay: "140ms" }}>
+        <section className="grid gap-4 animate-slide-in-up xl:grid-cols-3" style={{ animationDelay: "140ms" }}>
           <ServiceConnectionCard
             id="connection-spotify"
             service="SPOTIFY"
