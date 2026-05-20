@@ -24,11 +24,17 @@ export async function warmupPlaylistTracks(userId: string): Promise<WarmupResult
   });
 
   const result: WarmupResult = { checked: playlists.length, refreshed: 0, failed: 0 };
+  if (!playlists.length) return result;
+
+  const counts = await prisma.playlistTrackState.groupBy({
+    by: ["playlistId"],
+    where: { playlistId: { in: playlists.map((p) => p.id) }, removedAt: null },
+    _count: { _all: true },
+  });
+  const activeCountByPlaylistId = new Map(counts.map((row) => [row.playlistId, row._count._all]));
 
   for (const playlist of playlists) {
-    const activeTrackCount = await prisma.playlistTrackState.count({
-      where: { playlistId: playlist.id, removedAt: null },
-    });
+    const activeTrackCount = activeCountByPlaylistId.get(playlist.id) ?? 0;
     if (!shouldRefresh(playlist.lastFetchedAt, activeTrackCount)) continue;
 
     try {
