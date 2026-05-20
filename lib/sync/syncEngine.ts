@@ -1,6 +1,6 @@
 import type { Prisma, ServiceTrack, SyncJob } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
+import { getAdapter, serviceKey } from "@/lib/services/adapterFactory";
 import {
   closeAllPersistentRunners,
   ensurePersistentRunner,
@@ -16,8 +16,8 @@ import {
   lookupExistingInPlaylist,
   lookupIsrcMatch,
   lookupStoredMatch,
-  resolveInternalTrackId,
 } from "./matchContext";
+import { isReadComplete, PartialSourceReadError, writePlaylistSnapshot } from "./snapshot";
 import { classifyError, nextRunAfterFailure } from "./failureClassifier";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -39,30 +39,10 @@ const SKIP_PREVIOUSLY_LOGGED = process.env.WORKER_SKIP_PREVIOUSLY_LOGGED !== "fa
 const REFRESH_SOURCE_TRACKS = process.env.WORKER_REFRESH_SOURCE_TRACKS === "true";
 const MATCH_CONCURRENCY = Math.max(1, Number(process.env.WORKER_MATCH_CONCURRENCY ?? 4));
 const RUNNING_JOB_TIMEOUT_MINUTES = Math.max(1, Number(process.env.WORKER_RUNNING_JOB_TIMEOUT_MINUTES ?? 60));
-const SNAPSHOT_PARTIAL_TOLERANCE = Math.max(
-  0,
-  Math.min(0.5, Number(process.env.WORKER_SNAPSHOT_PARTIAL_TOLERANCE ?? 0.1)),
-);
 const REQUIRE_PREFLIGHT = process.env.WORKER_REQUIRE_PREFLIGHT !== "false";
 const SYNC_JOB_TIMEOUT_MS = Math.max(60_000, Number(process.env.WORKER_SYNC_JOB_TIMEOUT_MS ?? 30 * 60_000));
 
-export class PartialSourceReadError extends Error {
-  readonly received: number;
-  readonly expected: number;
-  constructor(received: number, expected: number) {
-    super(`Live source read returned ${received} tracks, expected ~${expected}; refusing to overwrite snapshot.`);
-    this.name = "PartialSourceReadError";
-    this.received = received;
-    this.expected = expected;
-  }
-}
-
-function isReadComplete(received: number, expected: number): boolean {
-  if (expected <= 0) return true;
-  if (received === 0) return false;
-  const dropRatio = (expected - received) / expected;
-  return dropRatio <= SNAPSHOT_PARTIAL_TOLERANCE;
-}
+export { PartialSourceReadError };
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -112,44 +92,13 @@ function writeThrottle(service: string): Promise<void> {
   return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
 }
 
-async function upsertServiceTrack(track: NormalizedTrack) {
-  const internalId = await resolveInternalTrackId(track);
-  const internal = await prisma.internalTrack.upsert({
-    where: { id: internalId },
-    update: {},
-    create: {
-      id: internalId,
-      canonicalTitle: track.title,
-      canonicalArtists: JSON.stringify(track.artists),
-      canonicalAlbum: track.album,
-      durationMs: track.durationMs,
-      isrc: track.isrc,
-    },
-  });
-  return prisma.serviceTrack.upsert({
-    where: { service_serviceTrackId: { service: serviceEnum(track.sourceService), serviceTrackId: track.sourceTrackId } },
-    update: {
-      title: track.title,
-      artistsJson: JSON.stringify(track.artists),
-      album: track.album,
-      durationMs: track.durationMs,
-      isrc: track.isrc,
-      url: track.url,
-      imageUrl: track.imageUrl,
-    },
-    create: {
-      internalTrackId: internal.id,
-      service: serviceEnum(track.sourceService),
-      serviceTrackId: track.sourceTrackId,
-      title: track.title,
-      artistsJson: JSON.stringify(track.artists),
-      album: track.album,
-      durationMs: track.durationMs,
-      isrc: track.isrc,
-      url: track.url,
-      imageUrl: track.imageUrl,
-    },
-  });
+async function upsertServiceTrack(track: NormalizedTrack): Promise<ServiceTrack> {
+  const byKey = await bulkUpsertServiceTracks([track]);
+  const serviceTrack = byKey.get(`${track.sourceService}::${track.sourceTrackId}`);
+  if (!serviceTrack) {
+    throw new Error(`bulkUpsertServiceTracks did not return entry for ${track.sourceService}::${track.sourceTrackId}`);
+  }
+  return serviceTrack;
 }
 
 function normalizedFromServiceTrack(track: ServiceTrack): NormalizedTrack {
@@ -173,77 +122,6 @@ async function getPlaylistTracksFromDb(playlistId: string): Promise<NormalizedTr
     orderBy: { position: "asc" },
   });
   return states.map((state) => normalizedFromServiceTrack(state.serviceTrack));
-}
-
-async function storePlaylistSnapshot(
-  playlistId: string,
-  tracks: NormalizedTrack[],
-  options?: { expectedCount?: number; allowPartial?: boolean },
-): Promise<{ stored: boolean; reason?: string }> {
-  if (!tracks.length) return { stored: false, reason: "empty" };
-  const expected = options?.expectedCount ?? 0;
-  if (!options?.allowPartial && !isReadComplete(tracks.length, expected)) {
-    return { stored: false, reason: `partial-read (${tracks.length}/${expected})` };
-  }
-  const serviceTrackByKey = await bulkUpsertServiceTracks(tracks);
-  const orderedServiceTracks = tracks
-    .map((track) => serviceTrackByKey.get(`${track.sourceService}::${track.sourceTrackId}`))
-    .filter((track): track is ServiceTrack => Boolean(track));
-  const existingStates = await prisma.playlistTrackState.findMany({
-    where: {
-      playlistId,
-      removedAt: null,
-    },
-  });
-  const stateByServiceTrackId = new Map(existingStates.map((state) => [state.serviceTrackId, state]));
-  const now = new Date();
-  const creates: Prisma.PlaylistTrackStateCreateManyInput[] = [];
-  const updates: Promise<unknown>[] = [];
-  const seenServiceTrackIds = new Set<string>();
-  for (let index = 0; index < orderedServiceTracks.length; index += 1) {
-    const serviceTrack = orderedServiceTracks[index];
-    seenServiceTrackIds.add(serviceTrack.id);
-    const existing = stateByServiceTrackId.get(serviceTrack.id);
-    if (existing) {
-      updates.push(
-        prisma.playlistTrackState.update({
-          where: { id: existing.id },
-          data: {
-            position: index + 1,
-            lastSeenAt: now,
-            removedAt: null,
-          },
-        }),
-      );
-    } else {
-      creates.push({
-        playlistId,
-        serviceTrackId: serviceTrack.id,
-        position: index + 1,
-        addedBySystem: false,
-        firstSeenAt: now,
-        lastSeenAt: now,
-      });
-    }
-  }
-  if (updates.length) await Promise.all(updates);
-  if (creates.length) await prisma.playlistTrackState.createMany({ data: creates });
-
-  const staleStates = existingStates.filter((state) => !seenServiceTrackIds.has(state.serviceTrackId) && !state.removedAt);
-  if (staleStates.length) {
-    await prisma.playlistTrackState.updateMany({
-      where: { id: { in: staleStates.map((state) => state.id) } },
-      data: { removedAt: now, lastSeenAt: now },
-    });
-  }
-  await prisma.playlist.update({
-    where: { id: playlistId },
-    data: {
-      trackCount: orderedServiceTracks.length,
-      lastFetchedAt: now,
-    },
-  });
-  return { stored: true };
 }
 
 function nextScheduledRun(intervalMinutes: number) {
@@ -550,7 +428,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     if (!isReadComplete(liveTracks.length, expectedForLive)) {
       throw new PartialSourceReadError(liveTracks.length, expectedForLive);
     }
-    const snapshotResult = await storePlaylistSnapshot(sourcePlaylist.id, liveTracks, {
+    const snapshotResult = await writePlaylistSnapshot(sourcePlaylist.id, liveTracks, {
       expectedCount: expectedForLive,
     });
     if (!snapshotResult.stored) {
