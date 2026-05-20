@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, ExternalLink, Link2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ExternalLink, Link2, ListMusic } from "lucide-react";
 
 type Props = {
   hasCredentials: boolean;
@@ -50,12 +50,20 @@ export function SpotifyOAuthSetup({
           </div>
         ) : null}
 
-        <form method="post" action="/api/oauth/spotify/start" className="mt-auto pt-6">
-          <button type="submit" className="btn btn-primary w-full">
-            <Link2 size={16} />
-            {isConnected ? "Reconnect Spotify" : "Login with Spotify"}
-          </button>
-        </form>
+        <div className="mt-auto grid gap-2 pt-6">
+          <form method="post" action="/api/oauth/spotify/start">
+            <button type="submit" className="btn btn-primary w-full">
+              <Link2 size={16} />
+              {isConnected ? "Reconnect Spotify" : "Login with Spotify"}
+            </button>
+          </form>
+          {isConnected ? (
+            <Link href="/playlists?service=SPOTIFY" className="btn btn-ghost w-full">
+              <ListMusic size={16} />
+              View Spotify playlists
+            </Link>
+          ) : null}
+        </div>
       </div>
     );
   }
