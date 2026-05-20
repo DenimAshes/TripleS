@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { ArrowRight, CheckCircle2, Clock3, KeyRound, RadioTower, UploadCloud } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, KeyRound, ListChecks, RadioTower, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ServiceIcon, ServicePill, serviceMeta } from "@/components/ServiceBrand";
 import { SessionUploader } from "@/components/SessionUploader";
@@ -19,6 +19,10 @@ function browserSessionStatus(exists: boolean, iso: string | null) {
   if (days >= 14) return { label: "Stale", tone: "danger" };
   if (days >= 7) return { label: "Ageing", tone: "warning" };
   return { label: "Fresh", tone: "success" };
+}
+
+function browserRoute(service: string): string {
+  return service.toLowerCase() === "soundcloud" ? "/soundcloud-browser" : "/youtube-browser";
 }
 
 export default async function ConnectionsPage() {
@@ -54,13 +58,16 @@ export default async function ConnectionsPage() {
   });
 
   const spotifyConnected = Boolean(spotifyAccount) && spotifyAccount?.connectionStatus === "CONNECTED" && !spotifyAccount?.isMock;
+  const spotifyCredentialsReady = hasSpotifyCredentials();
   const connectedCount = Number(spotifyConnected) + browserSessions.filter((item) => item.exists).length;
+  const healthyCount =
+    Number(spotifyConnected) + browserSessions.filter((item) => browserSessionStatus(item.exists, item.updatedAt).tone === "success").length;
   const overviewItems = [
     {
       service: "SPOTIFY",
       title: "Login",
-      subtitle: spotifyConnected ? spotifyAccount?.serviceUsername ?? "Connected" : hasSpotifyCredentials() ? "Ready to connect" : "Setup needed",
-      status: spotifyConnected ? "Connected" : hasSpotifyCredentials() ? "Ready" : "Setup",
+      subtitle: spotifyConnected ? spotifyAccount?.serviceUsername ?? "Connected" : spotifyCredentialsReady ? "Ready to connect" : "Setup needed",
+      status: spotifyConnected ? "Connected" : spotifyCredentialsReady ? "Ready" : "Setup",
       tone: spotifyConnected ? "success" : "warning",
       icon: <KeyRound size={15} />,
       href: "#connection-spotify",
@@ -75,6 +82,38 @@ export default async function ConnectionsPage() {
         tone: sessionStatus.tone,
         icon: item.exists ? <Clock3 size={15} /> : <UploadCloud size={15} />,
         href: `#connection-${item.service.toLowerCase()}`,
+      };
+    }),
+  ];
+  const setupTasks = [
+    {
+      service: "SPOTIFY",
+      title: spotifyConnected ? "Spotify login is connected" : spotifyCredentialsReady ? "Finish Spotify login" : "Configure Spotify login",
+      detail: spotifyConnected
+        ? spotifyAccount?.serviceUsername ?? "OAuth token is ready."
+        : spotifyCredentialsReady
+          ? "Sign in once to unlock Spotify playlist sync."
+          : "Add app credentials before Spotify can connect.",
+      status: spotifyConnected ? "Ready" : spotifyCredentialsReady ? "Action needed" : "Blocked",
+      tone: spotifyConnected ? "success" : "warning",
+      href: spotifyConnected ? "/playlists?service=SPOTIFY" : spotifyCredentialsReady ? "#connection-spotify" : "/settings",
+      action: spotifyConnected ? "View playlists" : spotifyCredentialsReady ? "Login" : "Open settings",
+      icon: <KeyRound size={16} />,
+    },
+    ...browserSessions.map((item) => {
+      const sessionStatus = browserSessionStatus(item.exists, item.updatedAt);
+      const ready = sessionStatus.tone === "success";
+      const needsUpload = !item.exists;
+      const meta = serviceMeta(item.service);
+      return {
+        service: item.service,
+        title: ready ? `${meta.label} session is fresh` : needsUpload ? `Upload ${meta.label} session` : `Refresh ${meta.label} session`,
+        detail: ready ? "Browser automation can read playlists." : needsUpload ? "Upload a JSON export from the logged-in browser." : "The saved session is old enough to refresh soon.",
+        status: sessionStatus.label,
+        tone: sessionStatus.tone,
+        href: ready ? browserRoute(item.service) : `#connection-${item.service.toLowerCase()}`,
+        action: ready ? "Browse playlists" : "Upload JSON",
+        icon: item.exists ? <Clock3 size={16} /> : <UploadCloud size={16} />,
       };
     }),
   ];
@@ -102,7 +141,7 @@ export default async function ConnectionsPage() {
             <div className="flex flex-col gap-3 sm:flex-row lg:items-center">
               <span className="pill pill-accent justify-center">
                 <RadioTower size={13} />
-                {connectedCount}/3 ready
+                {connectedCount}/3 connected
               </span>
               <Link href="/playlists" className="btn btn-ghost whitespace-nowrap">
                 Open playlists <ArrowRight size={15} />
@@ -116,6 +155,8 @@ export default async function ConnectionsPage() {
             <ConnectionOverviewItem key={item.service} {...item} />
           ))}
         </section>
+
+        <SetupAssistant healthyCount={healthyCount} tasks={setupTasks} />
 
         <section className="grid gap-4 xl:grid-cols-3">
           <ServiceConnectionCard
@@ -142,6 +183,108 @@ export default async function ConnectionsPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function SetupAssistant({
+  healthyCount,
+  tasks,
+}: {
+  healthyCount: number;
+  tasks: Array<{
+    service: string;
+    title: string;
+    detail: string;
+    status: string;
+    tone: string;
+    href: string;
+    action: string;
+    icon: ReactNode;
+  }>;
+}) {
+  const percent = Math.round((healthyCount / 3) * 100);
+  const nextTask = tasks.find((task) => task.tone !== "success") ?? tasks[0];
+
+  return (
+    <section className="panel relative overflow-hidden p-5 md:p-6" aria-label="Connection setup assistant">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-70" />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.45fr)] lg:items-start">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">
+            <ListChecks size={15} />
+            Setup assistant
+          </div>
+          <h3 className="mt-3 text-2xl font-black tracking-tight text-white">{healthyCount} of 3 services healthy</h3>
+          <p className="mt-2 text-sm leading-6 text-muted-fg">
+            Refresh ageing sessions before sync runs and use connected services to inspect playlists.
+          </p>
+          <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--surface-2)]">
+            <div className="h-full rounded-full bg-[var(--accent)] transition-[width] duration-500" style={{ width: `${percent}%` }} />
+          </div>
+          <Link href={nextTask.href} className="btn btn-primary mt-5 w-full sm:w-auto">
+            {nextTask.action}
+            <ArrowRight size={15} />
+          </Link>
+        </div>
+
+        <div className="grid gap-2">
+          {tasks.map((task) => (
+            <SetupTaskRow key={task.service} {...task} />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SetupTaskRow({
+  service,
+  title,
+  detail,
+  status,
+  tone,
+  href,
+  action,
+  icon,
+}: {
+  service: string;
+  title: string;
+  detail: string;
+  status: string;
+  tone: string;
+  href: string;
+  action: string;
+  icon: ReactNode;
+}) {
+  const meta = serviceMeta(service);
+  const pillClass =
+    tone === "success" ? "pill-success" : tone === "warning" ? "pill-warning" : tone === "danger" ? "pill-danger" : "";
+
+  return (
+    <a
+      href={href}
+      className="group grid gap-3 rounded-xl border border-transparent px-2 py-3 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--border-soft)] hover:bg-[var(--surface-2)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+      aria-label={`${action}: ${meta.label}`}
+    >
+      <div className="flex min-w-0 gap-3">
+        <ServiceIcon service={service} size="sm" className="mt-0.5 transition duration-200 group-hover:scale-105" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-dim-fg">
+            {icon}
+            {meta.label}
+          </div>
+          <p className="mt-1 truncate text-sm font-semibold text-white">{title}</p>
+          <p className="mt-1 text-sm leading-5 text-muted-fg">{detail}</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2 pl-10 sm:justify-end sm:pl-0">
+        <span className={`pill shrink-0 ${pillClass}`}>{tone === "danger" ? <AlertTriangle size={13} /> : null}{status}</span>
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] transition group-hover:text-[var(--accent-hover)]">
+          {action}
+          <ArrowRight size={13} />
+        </span>
+      </div>
+    </a>
   );
 }
 
