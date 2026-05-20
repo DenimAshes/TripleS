@@ -5,7 +5,7 @@ import { requireAuth } from "@/lib/auth/session";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SERVICES = ["youtube", "spotify", "soundcloud"] as const;
+const SERVICES = ["youtube", "spotify", "soundcloud"];
 
 export async function GET(request: Request) {
   try {
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
-  const rows = await prisma.workerSessionState.findMany({ where: { service: { in: SERVICES as unknown as string[] } } });
+  const rows = await prisma.workerSessionState.findMany({ where: { service: { in: SERVICES } } });
   const byService = new Map(rows.map((r) => [r.service, r]));
 
   return NextResponse.json({

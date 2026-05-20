@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 
-const WORKER_SERVICES = ["youtube", "spotify", "soundcloud"] as const;
+const WORKER_SERVICES = ["youtube", "spotify", "soundcloud"];
 
 type RuleWithDestinations = Awaited<ReturnType<typeof prisma.syncRule.findMany>>[number] & {
   destinations: Awaited<ReturnType<typeof prisma.syncDestination.findMany>>;
@@ -126,7 +126,7 @@ export default async function DashboardPage() {
     prisma.syncRule.findMany({ where: { userId: session!.userId }, include: { destinations: true }, orderBy: { createdAt: "asc" } }),
     prisma.syncJob.findFirst({ where: { syncRule: { userId: session!.userId } }, orderBy: { startedAt: "desc" } }),
     prisma.playlist.findMany({ where: { userId: session!.userId }, select: { updatedAt: true } }),
-    prisma.workerSessionState.findMany({ where: { service: { in: WORKER_SERVICES as unknown as string[] } } }),
+    prisma.workerSessionState.findMany({ where: { service: { in: WORKER_SERVICES } } }),
     prisma.manualMatchCandidate.count({ where: { userId: session!.userId, status: "PENDING" } }),
     prisma.syncJob.findMany({
       where: { status: "RUNNING", syncRule: { userId: session!.userId } },

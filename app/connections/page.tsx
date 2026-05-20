@@ -12,7 +12,7 @@ import { getSession } from "@/lib/auth/session";
 import { getSpotifyWebCookie } from "@/lib/services/spotify/spotifyCookieStore";
 import { hasSpotifyCredentials, validateSpotifyRedirectUri } from "@/lib/services/spotify/spotifyAuth";
 
-const BROWSER_SERVICES = ["youtube", "soundcloud"] as const;
+const BROWSER_SERVICES = ["youtube", "soundcloud"];
 
 export default async function ConnectionsPage() {
   const session = await getSession();
@@ -20,7 +20,7 @@ export default async function ConnectionsPage() {
 
   const [rows, spotifyAccount, spotifyCookie] = await Promise.all([
     prisma.workerSessionState.findMany({
-      where: { service: { in: BROWSER_SERVICES as unknown as string[] } },
+      where: { service: { in: BROWSER_SERVICES } },
     }),
     prisma.connectedAccount.findUnique({
       where: { userId_service: { userId: session.userId, service: "SPOTIFY" } },
