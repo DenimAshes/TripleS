@@ -7,7 +7,12 @@ export async function GET(request: Request) {
   if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const rules = await prisma.syncRule.findMany({ where: { isEnabled: true } });
+  const rules = await prisma.syncRule.findMany({
+    where: {
+      isEnabled: true,
+      OR: [{ nextRunAt: null }, { nextRunAt: { lte: new Date() } }],
+    },
+  });
   const jobs = [];
   for (const rule of rules) {
     jobs.push(await runSync(rule.id));
