@@ -12,7 +12,6 @@ export type ServiceStatusRowProps = {
   connectionStatus: string | null;
   isMock: boolean;
   lastError: string | null;
-  hasCookie?: boolean;
   playlistCount: number;
   hiddenCount: number;
   lastFetchedAt: string | null;
@@ -103,14 +102,6 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
           {props.hiddenCount > 0 ? <span className="text-dim-fg"> / {props.hiddenCount} hidden</span> : null}
           <span className="mx-2 text-dim-fg">/</span>
           <span>last updated {formatRelative(props.lastFetchedAt)}</span>
-          {props.service === "SPOTIFY" && props.hasCookie !== undefined ? (
-            <>
-              <span className="mx-2 text-dim-fg">/</span>
-              <span className={props.hasCookie ? "text-emerald-400" : "text-[#fcd34d]"}>
-                {props.hasCookie ? "cookie saved" : "no cookie saved"}
-              </span>
-            </>
-          ) : null}
         </div>
         {state === "missing" ? (
           <div className="mt-1.5 text-xs text-[#fcd34d]">

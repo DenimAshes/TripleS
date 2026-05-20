@@ -1,15 +1,13 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, KeyRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { ServiceIcon, ServicePill } from "@/components/ServiceBrand";
+import { ServiceIcon, ServicePill, serviceMeta } from "@/components/ServiceBrand";
 import { SessionUploader } from "@/components/SessionUploader";
-import { SpotifyCookieConnector } from "@/components/SpotifyCookieConnector";
 import { SpotifyOAuthSetup } from "@/components/SpotifyOAuthSetup";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
-import { getSpotifyWebCookie } from "@/lib/services/spotify/spotifyCookieStore";
 import { hasSpotifyCredentials, validateSpotifyRedirectUri } from "@/lib/services/spotify/spotifyAuth";
 
 const BROWSER_SERVICES = ["youtube", "soundcloud"];
@@ -18,14 +16,13 @@ export default async function ConnectionsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [rows, spotifyAccount, spotifyCookie] = await Promise.all([
+  const [rows, spotifyAccount] = await Promise.all([
     prisma.workerSessionState.findMany({
       where: { service: { in: BROWSER_SERVICES } },
     }),
     prisma.connectedAccount.findUnique({
       where: { userId_service: { userId: session.userId, service: "SPOTIFY" } },
     }),
-    getSpotifyWebCookie(session.userId),
   ]);
 
   const hdrs = await headers();
@@ -52,47 +49,39 @@ export default async function ConnectionsPage() {
 
   return (
     <AppShell title="Connections">
-      <div className="space-y-8">
-        <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="panel p-6">
-            <div className="flex flex-wrap items-center gap-3">
-              <ServicePill service="SPOTIFY" />
-              <ServicePill service="YOUTUBE" />
-              <ServicePill service="SOUNDCLOUD" />
-            </div>
-            <h2 className="mt-5 text-2xl font-black tracking-tight text-white">Connect the music accounts you want TripleS to sync.</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-fg">
-              Spotify uses OAuth and redirects you to Spotify. YouTube Music and SoundCloud use an exported browser
-              session JSON, because those services are controlled through browser automation.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2 text-xs text-muted-fg">
-              <span className="pill pill-success">{connectedCount}/3 connected</span>
-              <span className="pill">OAuth + browser sessions</span>
-              <span className="pill">Playlist refresh after connect</span>
-            </div>
-          </div>
-
-          <div className="panel p-6">
-            <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-500/10 text-emerald-300">
-                <ShieldCheck size={21} />
+      <div className="space-y-7">
+        <section className="overflow-hidden rounded-2xl border border-[var(--border-soft)] bg-[linear-gradient(135deg,rgba(17,19,26,0.92),rgba(23,26,35,0.66))] p-5 shadow-[0_22px_70px_-52px_rgba(79,141,255,0.75)] md:p-7">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex flex-wrap gap-2">
+                <ServicePill service="SPOTIFY" />
+                <ServicePill service="YOUTUBE" />
+                <ServicePill service="SOUNDCLOUD" />
               </div>
-              <div>
-                <h3 className="font-bold text-white">Recommended order</h3>
-                <p className="text-sm text-muted-fg">Connect Spotify first, then import YouTube Music and SoundCloud sessions.</p>
-              </div>
+              <h2 className="mt-5 text-2xl font-black tracking-tight text-white md:text-3xl">
+                Connect your music services once. Keep the sync worker ready.
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-fg">
+                Spotify signs in through OAuth. YouTube Music and SoundCloud use a browser session JSON from the
+                logged-in account.
+              </p>
             </div>
-            <Link href="/playlists" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)] hover:underline">
-              Go to playlists after connecting <ArrowRight size={15} />
-            </Link>
+            <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
+              <span className="pill pill-success justify-center">{connectedCount}/3 connected</span>
+              <Link href="/playlists" className="btn btn-ghost">
+                Playlists <ArrowRight size={15} />
+              </Link>
+            </div>
           </div>
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-3">
-          <div className="xl:col-span-1">
-            <PlatformIntro service="SPOTIFY" title="Spotify" body="Best cloud path. Click connect, authorize in Spotify, and playlists import automatically." />
-          </div>
-          <div className="xl:col-span-2">
+        <section className="grid gap-4 xl:grid-cols-3">
+          <ServiceConnectionCard
+            service="SPOTIFY"
+            status={spotifyConnected ? "connected" : hasSpotifyCredentials() ? "ready" : "setup needed"}
+            mode="OAuth login"
+            icon={<KeyRound size={18} />}
+          >
             <SpotifyOAuthSetup
               hasCredentials={hasSpotifyCredentials()}
               redirectUri={redirectUri}
@@ -102,66 +91,53 @@ export default async function ConnectionsPage() {
               serviceUsername={spotifyAccount?.serviceUsername}
               lastError={spotifyAccount?.lastError}
             />
-          </div>
-        </section>
+          </ServiceConnectionCard>
 
-        <section className="grid gap-5 xl:grid-cols-3">
-          <PlatformIntro
-            service="YOUTUBE"
-            title="YouTube Music"
-            body="Export your logged-in browser storageState JSON, then drop the file here or paste the JSON."
-          />
-          <PlatformIntro
-            service="SOUNDCLOUD"
-            title="SoundCloud"
-            body="Uses the same import flow as YouTube Music: file drop, file picker, or direct JSON paste."
-          />
-          <div className="panel p-5 text-sm text-muted-fg">
-            <h3 className="font-bold text-white">How to export JSON</h3>
-            <ol className="mt-3 space-y-2 text-xs leading-5">
-              <li>1. Log in to the service in your normal browser.</li>
-              <li>2. Open Cookie-Editor on that tab.</li>
-              <li>3. Choose Export as Playwright, or export JSON cookies.</li>
-              <li>4. Drop the JSON file into the matching card below.</li>
-            </ol>
-          </div>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2">
           {browserSessions.map((item) => (
             <SessionUploader key={item.service} initial={item} />
           ))}
         </section>
-
-        <details className="panel p-5">
-          <summary className="cursor-pointer text-sm font-semibold text-white">Advanced Spotify cookie fallback</summary>
-          <p className="mt-3 text-sm text-muted-fg">
-            Use this only when OAuth is not possible. Cloud hosts often get blocked by Spotify for this cookie flow.
-          </p>
-          <div className="mt-4">
-            <SpotifyCookieConnector
-              hasCookie={Boolean(spotifyCookie)}
-              serviceUsername={spotifyAccount?.serviceUsername}
-              connectionStatus={spotifyAccount?.connectionStatus}
-              lastError={spotifyAccount?.lastError}
-            />
-          </div>
-        </details>
       </div>
     </AppShell>
   );
 }
 
-function PlatformIntro({ service, title, body }: { service: string; title: string; body: string }) {
+function ServiceConnectionCard({
+  service,
+  status,
+  mode,
+  icon,
+  children,
+}: {
+  service: string;
+  status: string;
+  mode: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const meta = serviceMeta(service);
+  const connected = status === "connected";
+
   return (
-    <div className="panel h-full p-5">
-      <div className="flex items-start gap-4">
-        <ServiceIcon service={service} size="lg" />
-        <div>
-          <h3 className="text-lg font-black tracking-tight text-white">{title}</h3>
-          <p className="mt-2 text-sm leading-6 text-muted-fg">{body}</p>
+    <section className="panel group relative flex min-h-[420px] flex-col overflow-hidden p-5 transition duration-300 hover:-translate-y-1 hover:border-[var(--border-accent)] hover:shadow-[0_26px_60px_-44px_var(--accent-glow)]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-80" />
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <ServiceIcon service={service} size="lg" className="transition duration-300 group-hover:scale-105" />
+          <div className="min-w-0">
+            <h3 className="truncate text-xl font-black tracking-tight text-white">{meta.label}</h3>
+            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.16em] text-dim-fg">
+              {icon}
+              {mode}
+            </p>
+          </div>
         </div>
-      </div>
-    </div>
+        <span className={`pill ${connected ? "pill-success" : "pill-warning"}`}>
+          {connected ? <CheckCircle2 size={13} /> : null}
+          {status}
+        </span>
+      </header>
+      <div className="mt-5 flex flex-1 flex-col">{children}</div>
+    </section>
   );
 }

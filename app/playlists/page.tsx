@@ -31,7 +31,6 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
       connectionStatus: account?.connectionStatus ?? null,
       isMock: account?.isMock ?? false,
       lastError: account?.lastError ?? null,
-      hasCookie: Boolean(account?.webCookieEncrypted),
       playlistCount: visiblePlaylists.length,
       hiddenCount,
       lastFetchedAt: lastFetched ? lastFetched.toISOString() : null,

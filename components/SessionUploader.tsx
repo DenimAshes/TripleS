@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { UploadCloud } from "lucide-react";
+import { CheckCircle2, Clipboard, Trash2, UploadCloud } from "lucide-react";
 import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
 type SessionInfo = {
@@ -51,6 +51,8 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
   const [dragOver, setDragOver] = useState(false);
   const [pasted, setPasted] = useState("");
   const meta = serviceMeta(info.service);
+  const level = staleLevel(info.exists, info.updatedAt);
+  const badge = STALE_BADGE[level];
 
   async function uploadText(text: string) {
     setBusy(true);
@@ -63,7 +65,7 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
       });
       const data = (await res.json()) as { error?: string; bytes?: number; updatedBy?: string; hint?: string };
       if (!res.ok) {
-        setError(data.error ? `${data.error}${data.hint ? ` — ${data.hint}` : ""}` : `HTTP ${res.status}`);
+        setError(data.error ? `${data.error}${data.hint ? ` - ${data.hint}` : ""}` : `HTTP ${res.status}`);
       } else {
         setInfo({
           service: info.service,
@@ -113,8 +115,8 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
   }
 
   return (
-    <div
-      className={`panel p-5 transition ${meta.border} ${
+    <section
+      className={`panel group relative flex min-h-[420px] flex-col overflow-hidden p-5 transition duration-300 ${meta.border} hover:-translate-y-1 hover:shadow-[0_26px_60px_-44px_var(--accent-glow)] ${
         dragOver ? "border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring)]" : ""
       }`}
       onDragOver={(e) => {
@@ -129,35 +131,44 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
         if (file) upload(file);
       }}
     >
-      <div className="flex items-center justify-between gap-3">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-80" />
+      <header className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <ServiceIcon service={info.service} />
+          <ServiceIcon service={info.service} size="lg" className="transition duration-300 group-hover:scale-105" />
           <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold">{meta.label}</h3>
-            <p className="text-xs text-muted-fg">Browser session JSON</p>
+            <h3 className="truncate text-xl font-black tracking-tight text-white">{meta.label}</h3>
+            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.16em] text-dim-fg">
+              <UploadCloud size={16} />
+              Session JSON
+            </p>
           </div>
         </div>
-        {(() => {
-          const level = staleLevel(info.exists, info.updatedAt);
-          const badge = STALE_BADGE[level];
-          return <span className={`pill ${badge.classes}`}>{badge.label}</span>;
-        })()}
-      </div>
-      <dl className="mt-4 space-y-1 text-xs text-muted-fg">
-        <div className="flex justify-between">
-          <dt>Updated</dt>
-          <dd className="text-[var(--text)]">{formatRelative(info.updatedAt)}</dd>
+        <span className={`pill ${badge.classes}`}>
+          {level === "fresh" ? <CheckCircle2 size={13} /> : null}
+          {badge.label}
+        </span>
+      </header>
+
+      <p className="mt-5 text-sm leading-6 text-muted-fg">
+        Upload the browser storage state from the logged-in account. Drag a JSON file here or paste the exported JSON.
+      </p>
+
+      <dl className="mt-5 grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2">
+          <dt className="text-dim-fg">Updated</dt>
+          <dd className="mt-1 truncate text-[var(--text)]">{formatRelative(info.updatedAt)}</dd>
         </div>
-        <div className="flex justify-between">
-          <dt>Size</dt>
-          <dd className="text-[var(--text)] tabular-nums">{formatBytes(info.bytes)}</dd>
+        <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2">
+          <dt className="text-dim-fg">Size</dt>
+          <dd className="mt-1 truncate text-[var(--text)] tabular-nums">{formatBytes(info.bytes)}</dd>
         </div>
-        <div className="flex justify-between">
-          <dt>By</dt>
-          <dd className="text-[var(--text)]">{info.updatedBy ?? "—"}</dd>
+        <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2">
+          <dt className="text-dim-fg">By</dt>
+          <dd className="mt-1 truncate text-[var(--text)]">{info.updatedBy ?? "-"}</dd>
         </div>
       </dl>
-      <label className="mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg transition hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">
+
+      <label className="mt-5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg transition duration-200 hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">
         <input
           type="file"
           accept="application/json,.json"
@@ -169,11 +180,15 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
             e.target.value = "";
           }}
         />
-        <UploadCloud size={20} />
-        {busy ? "Uploading..." : "Drop storageState.json or click"}
+        <UploadCloud size={22} className="transition duration-200 group-hover:-translate-y-0.5" />
+        <span className="font-medium">{busy ? "Uploading..." : "Drop JSON or click to choose"}</span>
       </label>
+
       <details className="mt-3 text-xs text-muted-fg">
-        <summary className="cursor-pointer select-none hover:text-[var(--text)]">Or paste JSON</summary>
+        <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-lg px-1 py-1 transition hover:text-[var(--text)]">
+          <Clipboard size={13} />
+          Paste JSON instead
+        </summary>
         <textarea
           value={pasted}
           onChange={(e) => setPasted(e.target.value)}
@@ -199,7 +214,7 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
           >
             {busy ? "Uploading..." : "Upload pasted JSON"}
           </button>
-          {pasted && (
+          {pasted ? (
             <button
               type="button"
               onClick={() => setPasted("")}
@@ -208,20 +223,23 @@ export function SessionUploader({ initial }: { initial: SessionInfo }) {
             >
               Clear
             </button>
-          )}
+          ) : null}
         </div>
       </details>
-      {error && <p className="mt-2 text-xs text-[#fca5a5]">{error}</p>}
-      {info.exists && (
+
+      {error ? <p className="mt-2 text-xs text-[#fca5a5]">{error}</p> : null}
+
+      {info.exists ? (
         <button
           type="button"
           onClick={clear}
           disabled={busy}
-          className="mt-3 text-xs text-muted-fg transition hover:text-[#fca5a5] disabled:opacity-50"
+          className="mt-auto inline-flex items-center gap-1.5 pt-4 text-xs text-muted-fg transition hover:text-[#fca5a5] disabled:opacity-50"
         >
+          <Trash2 size={13} />
           Delete saved session
         </button>
-      )}
-    </div>
+      ) : null}
+    </section>
   );
 }

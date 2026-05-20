@@ -1,14 +1,13 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ServicePill } from "@/components/ServiceBrand";
 import { SessionUploader } from "@/components/SessionUploader";
-import { SpotifyCookieConnector } from "@/components/SpotifyCookieConnector";
 import { SpotifyOAuthSetup } from "@/components/SpotifyOAuthSetup";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
-import { getSpotifyWebCookie } from "@/lib/services/spotify/spotifyCookieStore";
 import { hasSpotifyCredentials, validateSpotifyRedirectUri } from "@/lib/services/spotify/spotifyAuth";
 
 const BROWSER_SERVICES = ["youtube", "soundcloud"];
@@ -17,14 +16,13 @@ export default async function AdminSessionsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const [rows, spotifyAccount, spotifyCookie] = await Promise.all([
+  const [rows, spotifyAccount] = await Promise.all([
     prisma.workerSessionState.findMany({
       where: { service: { in: BROWSER_SERVICES } },
     }),
     prisma.connectedAccount.findUnique({
       where: { userId_service: { userId: session.userId, service: "SPOTIFY" } },
     }),
-    getSpotifyWebCookie(session.userId),
   ]);
 
   const hdrs = await headers();
@@ -33,15 +31,6 @@ export default async function AdminSessionsPage() {
   const fallbackRedirect = host ? `${proto}://${host}/api/oauth/spotify/callback` : "";
   const redirectUri = process.env.SPOTIFY_REDIRECT_URI || fallbackRedirect || "http://127.0.0.1:3000/api/oauth/spotify/callback";
   const redirectValidation = process.env.SPOTIFY_REDIRECT_URI ? validateSpotifyRedirectUri() : { ok: true, error: null };
-  const spotifyOAuth = {
-    hasCredentials: hasSpotifyCredentials(),
-    redirectUri,
-    redirectUriValid: redirectValidation.ok,
-    redirectUriError: redirectValidation.error,
-    isConnected: Boolean(spotifyAccount) && spotifyAccount?.connectionStatus === "CONNECTED" && !spotifyAccount?.isMock,
-    serviceUsername: spotifyAccount?.serviceUsername,
-    lastError: spotifyAccount?.lastError,
-  };
 
   const byService = new Map(rows.map((row) => [row.service, row]));
   const browserSessions = BROWSER_SERVICES.map((service) => {
@@ -57,74 +46,45 @@ export default async function AdminSessionsPage() {
 
   return (
     <AppShell title="Ops: session storage">
-      <div className="space-y-6">
-        <section className="panel p-5 text-sm text-muted-fg">
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <ServicePill service="SPOTIFY" />
-            <ServicePill service="YOUTUBE" />
-            <ServicePill service="SOUNDCLOUD" />
+      <div className="space-y-7">
+        <section className="flex flex-col gap-4 rounded-2xl border border-[var(--border-soft)] bg-[linear-gradient(135deg,rgba(17,19,26,0.92),rgba(23,26,35,0.66))] p-5 md:p-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="flex flex-wrap gap-2">
+              <ServicePill service="SPOTIFY" />
+              <ServicePill service="YOUTUBE" />
+              <ServicePill service="SOUNDCLOUD" />
+            </div>
+            <h2 className="mt-4 text-2xl font-black tracking-tight text-white">Account access</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-fg">
+              Spotify uses login through OAuth. YouTube Music and SoundCloud use the saved browser session JSON that
+              background workers read.
+            </p>
           </div>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Admin storage tools</h2>
-          <p className="mb-3 text-xs text-muted-fg">
-            Normal account setup lives on{" "}
-            <Link href="/connections" className="text-[var(--accent)] hover:underline">
-              Connections
-            </Link>
-            . This page is for inspecting and replacing the raw browser-session data used by background workers.
-          </p>
-          <p className="mb-2 text-xs text-muted-fg">
-            <strong className="text-[var(--text)]">Spotify</strong> should use OAuth. The{" "}
-            <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-xs">sp_dc</code> cookie is only an
-            advanced local fallback.
-          </p>
-          <p className="mb-3 text-xs text-muted-fg">
-            <strong className="text-[var(--text)]">YouTube Music</strong> and{" "}
-            <strong className="text-[var(--text)]">SoundCloud</strong> use a full Playwright storageState export from
-            your logged-in browser.
-          </p>
-          <ol className="ml-5 list-decimal space-y-1.5">
-            <li>Log in to the service in your personal browser.</li>
-            <li>
-              Install the free{" "}
-              <a className="text-[var(--accent)] hover:underline" href="https://cookie-editor.com/" target="_blank" rel="noreferrer">
-                Cookie-Editor
-              </a>{" "}
-              extension.
-            </li>
-            <li>
-              Open Cookie-Editor on the logged-in tab, choose <strong className="text-[var(--text)]">Export</strong>,
-              then <strong className="text-[var(--text)]">Export as Playwright</strong> if available.
-            </li>
-            <li>Drop the downloaded JSON into the matching card below, or paste the JSON manually.</li>
-          </ol>
+          <Link href="/connections" className="btn btn-ghost">
+            User setup <ArrowRight size={15} />
+          </Link>
         </section>
 
-        <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Spotify OAuth</h2>
-          <SpotifyOAuthSetup {...spotifyOAuth} />
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Spotify sp_dc cookie fallback</h2>
-          <div className="panel-inset mb-3 p-3 text-xs text-muted-fg">
-            <strong className="text-[#fcd34d]">Note:</strong> Spotify blocks this cookie flow from Vercel and most
-            datacenter IPs. Use OAuth unless you are running from a residential IP or proxy.
+        <section className="grid gap-4 xl:grid-cols-3">
+          <div className="panel flex min-h-[420px] flex-col p-5">
+            <h3 className="text-xl font-black tracking-tight text-white">Spotify</h3>
+            <p className="mt-2 text-sm text-muted-fg">OAuth only. Use the Spotify login flow to connect this account.</p>
+            <div className="mt-5 flex flex-1 flex-col">
+              <SpotifyOAuthSetup
+                hasCredentials={hasSpotifyCredentials()}
+                redirectUri={redirectUri}
+                redirectUriValid={redirectValidation.ok}
+                redirectUriError={redirectValidation.error}
+                isConnected={Boolean(spotifyAccount) && spotifyAccount?.connectionStatus === "CONNECTED" && !spotifyAccount?.isMock}
+                serviceUsername={spotifyAccount?.serviceUsername}
+                lastError={spotifyAccount?.lastError}
+              />
+            </div>
           </div>
-          <SpotifyCookieConnector
-            hasCookie={Boolean(spotifyCookie)}
-            serviceUsername={spotifyAccount?.serviceUsername}
-            connectionStatus={spotifyAccount?.connectionStatus}
-            lastError={spotifyAccount?.lastError}
-          />
-        </section>
 
-        <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-dim-fg">Browser sessions</h2>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {browserSessions.map((item) => (
-              <SessionUploader key={item.service} initial={item} />
-            ))}
-          </div>
+          {browserSessions.map((item) => (
+            <SessionUploader key={item.service} initial={item} />
+          ))}
         </section>
       </div>
     </AppShell>
