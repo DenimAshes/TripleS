@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { upsertServiceTrack } from "@/lib/services/playlistTracksStore";
+import { writePlaylistSnapshot } from "@/lib/sync/snapshot";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import {
   listSoundCloudPlaylistTracksCli,
@@ -223,45 +223,8 @@ export async function refreshSoundCloudPlaylistTracks(userId: string, servicePla
     tracksMemoryCache.set(`${userId}:${servicePlaylistId}`, { value, expiresAt: Date.now() + TRACKS_MEMORY_TTL_MS });
     return value;
   }
-  const seenServiceTrackIds = new Set<string>();
-  let position = 0;
 
-  for (const track of live) {
-    position += 1;
-    const serviceTrack = await upsertServiceTrack(track);
-    seenServiceTrackIds.add(serviceTrack.id);
-    const existing = await prisma.playlistTrackState.findFirst({
-      where: { playlistId: playlist.id, serviceTrackId: serviceTrack.id, removedAt: null },
-    });
-    if (existing) {
-      await prisma.playlistTrackState.update({ where: { id: existing.id }, data: { position, lastSeenAt: now } });
-    } else {
-      await prisma.playlistTrackState.create({
-        data: {
-          playlistId: playlist.id,
-          serviceTrackId: serviceTrack.id,
-          position,
-          addedBySystem: false,
-          firstSeenAt: now,
-          lastSeenAt: now,
-        },
-      });
-    }
-  }
-
-  const active = await prisma.playlistTrackState.findMany({
-    where: { playlistId: playlist.id, removedAt: null },
-    select: { id: true, serviceTrackId: true },
-  });
-  const removedIds = active.filter((row) => !seenServiceTrackIds.has(row.serviceTrackId)).map((row) => row.id);
-  if (removedIds.length > 0) {
-    await prisma.playlistTrackState.deleteMany({ where: { id: { in: removedIds } } });
-  }
-
-  await prisma.playlist.update({
-    where: { id: playlist.id },
-    data: { trackCount: live.length, lastFetchedAt: now },
-  });
+  await writePlaylistSnapshot(playlist.id, live, { allowPartial: true });
 
   const value = { tracks: live, lastFetchedAt: now, fromCache: false, isStale: false };
   tracksMemoryCache.set(`${userId}:${servicePlaylistId}`, { value, expiresAt: Date.now() + TRACKS_MEMORY_TTL_MS });

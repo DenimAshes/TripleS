@@ -12,47 +12,6 @@ export type PlaylistTrackSyncProgress = {
   elapsedMs?: number;
 };
 
-// TODO: migrate youtubeCache/soundcloudCache callers to bulkUpsertServiceTracks
-// so this dumb non-ISRC-aware upsert can be removed.
-export async function upsertServiceTrack(track: NormalizedTrack) {
-  const internal = await prisma.internalTrack.upsert({
-    where: { id: `${track.sourceService}_${track.sourceTrackId}` },
-    update: {},
-    create: {
-      id: `${track.sourceService}_${track.sourceTrackId}`,
-      canonicalTitle: track.title,
-      canonicalArtists: JSON.stringify(track.artists),
-      canonicalAlbum: track.album,
-      durationMs: track.durationMs,
-      isrc: track.isrc,
-    },
-  });
-  return prisma.serviceTrack.upsert({
-    where: { service_serviceTrackId: { service: serviceEnum(track.sourceService), serviceTrackId: track.sourceTrackId } },
-    update: {
-      title: track.title,
-      artistsJson: JSON.stringify(track.artists),
-      album: track.album,
-      durationMs: track.durationMs,
-      isrc: track.isrc,
-      url: track.url,
-      imageUrl: track.imageUrl,
-    },
-    create: {
-      internalTrackId: internal.id,
-      service: serviceEnum(track.sourceService),
-      serviceTrackId: track.sourceTrackId,
-      title: track.title,
-      artistsJson: JSON.stringify(track.artists),
-      album: track.album,
-      durationMs: track.durationMs,
-      isrc: track.isrc,
-      url: track.url,
-      imageUrl: track.imageUrl,
-    },
-  });
-}
-
 export async function syncPlaylistTracksToDb(
   userId: string,
   service: ServiceKey,
