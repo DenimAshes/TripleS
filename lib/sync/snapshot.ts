@@ -1,7 +1,28 @@
-import type { Prisma, ServiceTrack } from "@prisma/client";
+import { Prisma, type ServiceTrack } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { bulkUpsertServiceTracks } from "./matchContext";
 import type { NormalizedTrack } from "./syncTypes";
+
+const POSITION_UPDATE_BATCH_SIZE = 500;
+
+async function batchUpdatePositions(
+  pairs: Array<{ id: string; position: number }>,
+  now: Date,
+): Promise<void> {
+  if (!pairs.length) return;
+  for (let offset = 0; offset < pairs.length; offset += POSITION_UPDATE_BATCH_SIZE) {
+    const chunk = pairs.slice(offset, offset + POSITION_UPDATE_BATCH_SIZE);
+    const rows = chunk.map((pair) => Prisma.sql`(${pair.id}, ${pair.position})`);
+    await prisma.$executeRaw`
+      UPDATE "PlaylistTrackState" AS s
+      SET "position" = v."position",
+          "lastSeenAt" = ${now},
+          "removedAt" = NULL
+      FROM (VALUES ${Prisma.join(rows)}) AS v("id", "position")
+      WHERE s."id" = v."id"
+    `;
+  }
+}
 
 const PARTIAL_TOLERANCE = Math.max(
   0,
@@ -67,7 +88,7 @@ export async function writePlaylistSnapshot(
   const stateByServiceTrackId = new Map(existingStates.map((state) => [state.serviceTrackId, state]));
   const now = new Date();
   const creates: Prisma.PlaylistTrackStateCreateManyInput[] = [];
-  const updates: Promise<unknown>[] = [];
+  const updatePairs: Array<{ id: string; position: number }> = [];
   const seenServiceTrackIds = new Set<string>();
 
   for (let index = 0; index < orderedServiceTracks.length; index += 1) {
@@ -76,12 +97,7 @@ export async function writePlaylistSnapshot(
     seenServiceTrackIds.add(serviceTrack.id);
     const existing = stateByServiceTrackId.get(serviceTrack.id);
     if (existing) {
-      updates.push(
-        prisma.playlistTrackState.update({
-          where: { id: existing.id },
-          data: { position: index + 1, lastSeenAt: now, removedAt: null },
-        }),
-      );
+      updatePairs.push({ id: existing.id, position: index + 1 });
     } else {
       creates.push({
         playlistId,
@@ -94,7 +110,7 @@ export async function writePlaylistSnapshot(
     }
   }
 
-  if (updates.length) await Promise.all(updates);
+  await batchUpdatePositions(updatePairs, now);
   if (creates.length) await prisma.playlistTrackState.createMany({ data: creates });
 
   const staleStateIds = existingStates
