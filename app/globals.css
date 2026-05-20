@@ -143,6 +143,21 @@ a {
     0 0 20px rgba(79, 141, 255, 0.08);
 }
 
+.surface-lift {
+  transform: translateY(0);
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease,
+    box-shadow 220ms ease,
+    color 220ms ease;
+}
+
+.surface-lift:hover,
+.surface-lift:focus-visible {
+  transform: translateY(-2px);
+}
+
 .panel-flat {
   border: 1px solid var(--border-soft);
   background: var(--surface);
@@ -400,4 +415,15 @@ a {
 
 .animate-fade-in {
   animation: fade-in 300ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

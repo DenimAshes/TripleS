@@ -135,8 +135,8 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   return (
     <section
       id={cardId}
-      className={`panel group relative flex scroll-mt-24 flex-col overflow-hidden p-5 transition duration-300 md:scroll-mt-8 xl:min-h-[420px] ${meta.border} hover:-translate-y-1 hover:shadow-[0_26px_60px_-44px_var(--accent-glow)] ${
-        dragOver ? "border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring)]" : ""
+      className={`panel group surface-lift relative flex scroll-mt-24 flex-col overflow-hidden p-5 md:scroll-mt-8 xl:min-h-[420px] ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] ${
+        dragOver ? "scale-[1.01] border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring),0_28px_70px_-46px_var(--accent-glow)]" : ""
       }`}
       onDragOver={(e) => {
         e.preventDefault();
@@ -151,6 +151,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       }}
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-80" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_at_20%_0%,rgba(255,255,255,0.045),transparent_55%)] opacity-0 transition duration-500 group-hover:opacity-100" />
       <header className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <ServiceIcon service={info.service} size="lg" className="transition duration-300 group-hover:scale-105" />
@@ -187,7 +188,12 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
         </div>
       </dl>
 
-      <label className="mt-5 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg transition duration-200 hover:-translate-y-0.5 hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)]">
+      <label
+        className={`surface-lift relative mt-5 flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)] ${
+          dragOver ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]" : ""
+        }`}
+      >
+        <span className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-70" />
         <input
           type="file"
           accept="application/json,.json"
@@ -202,7 +208,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
         {notice ? (
           <CheckCircle2 size={22} className="text-emerald-300 transition duration-200 group-hover:-translate-y-0.5" />
         ) : (
-          <UploadCloud size={22} className="transition duration-200 group-hover:-translate-y-0.5" />
+          <UploadCloud size={22} className="transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-110" />
         )}
         <span className="font-medium">{busy ? "Uploading..." : dragOver ? "Drop to upload" : "Drop JSON or click to choose"}</span>
         <span className="inline-flex max-w-full items-center gap-1.5 truncate text-xs text-dim-fg">
@@ -212,7 +218,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       </label>
 
       <details className="mt-3 text-xs text-muted-fg">
-        <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-lg px-1 py-1 transition hover:text-[var(--text)]">
+        <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-lg px-1 py-1 transition duration-200 hover:translate-x-0.5 hover:text-[var(--text)]">
           <Clipboard size={13} />
           Paste JSON instead
         </summary>
@@ -264,7 +270,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       {error ? <p className="mt-3 text-xs text-[#fca5a5]">{error}</p> : null}
 
       {info.exists && browseHref ? (
-        <Link href={browseHref} className="btn btn-ghost mt-4 w-full">
+        <Link href={browseHref} className="btn btn-ghost surface-lift group mt-4 w-full">
           <ListMusic size={16} />
           Browse {meta.shortLabel} playlists
         </Link>

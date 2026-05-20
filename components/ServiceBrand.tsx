@@ -82,7 +82,13 @@ export function ServiceIcon({
 export function ServicePill({ service, className }: { service: string; className?: string }) {
   const meta = serviceMeta(service);
   return (
-    <span className={cn("inline-flex items-center gap-2 rounded-xl border px-2.5 py-1 text-xs font-semibold", meta.soft, className)}>
+    <span
+      className={cn(
+        "surface-lift inline-flex items-center gap-2 rounded-xl border px-2.5 py-1 text-xs font-semibold hover:shadow-[0_10px_24px_-20px_currentColor]",
+        meta.soft,
+        className,
+      )}
+    >
       <ServiceIcon service={service} size="sm" className="h-5 w-5 rounded-md" />
       {meta.label}
     </span>
