@@ -43,6 +43,7 @@ async function main() {
 
   if (!orphans.length) return;
 
+  const deletedFromDb: typeof orphans = [];
   for (const row of orphans) {
     const tag = `${row.service}:${row.servicePlaylistId} (${row.name})`;
     if (!apply) {
@@ -61,10 +62,15 @@ async function main() {
     } catch (error) {
       console.warn(`  [WARN] delete on service failed for ${tag}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    await prisma.playlistGroupMember.deleteMany({ where: { playlistId: row.id } });
-    await prisma.playlistTrackState.deleteMany({ where: { playlistId: row.id } });
-    await prisma.playlist.delete({ where: { id: row.id } });
+    deletedFromDb.push(row);
     console.log(`  [OK] removed ${tag} serviceDeleted=${serviceDeleted}`);
+  }
+
+  if (apply && deletedFromDb.length) {
+    const playlistIds = deletedFromDb.map((row) => row.id);
+    await prisma.playlistGroupMember.deleteMany({ where: { playlistId: { in: playlistIds } } });
+    await prisma.playlistTrackState.deleteMany({ where: { playlistId: { in: playlistIds } } });
+    await prisma.playlist.deleteMany({ where: { id: { in: playlistIds } } });
   }
 
   if (!apply) {

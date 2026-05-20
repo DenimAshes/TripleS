@@ -58,11 +58,14 @@ async function main() {
   }
 
   // Delete in dependency order. Cascades on the DB handle most child rows.
+  if (allRules.length) {
+    await prisma.syncRule.deleteMany({ where: { id: { in: allRules.map((rule) => rule.id) } } });
+  }
   for (const rule of allRules) {
-    await prisma.syncRule.delete({ where: { id: rule.id } });
     console.log(`[cleanup-test] removed sync rule ${rule.id}`);
   }
 
+  const deletedPlaylists: typeof scTest = [];
   for (const playlist of scTest) {
     if (playlist.createdBySystem) {
       try {
@@ -77,10 +80,14 @@ async function main() {
         );
       }
     }
-    await prisma.playlistGroupMember.deleteMany({ where: { playlistId: playlist.id } });
-    await prisma.playlistTrackState.deleteMany({ where: { playlistId: playlist.id } });
-    await prisma.playlist.delete({ where: { id: playlist.id } });
+    deletedPlaylists.push(playlist);
     console.log(`[cleanup-test] removed playlist ${playlist.id}`);
+  }
+  if (deletedPlaylists.length) {
+    const playlistIds = deletedPlaylists.map((playlist) => playlist.id);
+    await prisma.playlistGroupMember.deleteMany({ where: { playlistId: { in: playlistIds } } });
+    await prisma.playlistTrackState.deleteMany({ where: { playlistId: { in: playlistIds } } });
+    await prisma.playlist.deleteMany({ where: { id: { in: playlistIds } } });
   }
 
   // Pending manual-match candidates that point at the deleted tracks have
@@ -91,8 +98,10 @@ async function main() {
   const emptyGroups = await prisma.playlistGroup.findMany({
     where: { members: { none: {} } },
   });
+  if (emptyGroups.length) {
+    await prisma.playlistGroup.deleteMany({ where: { id: { in: emptyGroups.map((group) => group.id) } } });
+  }
   for (const group of emptyGroups) {
-    await prisma.playlistGroup.delete({ where: { id: group.id } });
     console.log(`[cleanup-test] removed empty group ${group.id}`);
   }
 }
