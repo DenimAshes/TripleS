@@ -1,5 +1,6 @@
 import { AppSidebar } from "./AppSidebar";
 import { BottomNav } from "./BottomNav";
+import { CommandPalette } from "./CommandPalette";
 import { HealthIndicator } from "./HealthIndicator";
 
 export function AppShell({ children, title }: { children: React.ReactNode; title: string }) {
@@ -13,7 +14,8 @@ export function AppShell({ children, title }: { children: React.ReactNode; title
               <div className="text-[10px] uppercase tracking-[0.28em] font-bold text-blue-500/70">TripleS workspace</div>
               <h1 className="mt-2 text-3xl font-black tracking-tight text-white md:text-4xl">{title}</h1>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <CommandPalette />
               <HealthIndicator />
               <form action="/api/auth/logout" method="post">
                 <button className="btn btn-ghost">Logout</button>

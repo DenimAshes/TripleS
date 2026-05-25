@@ -17,9 +17,9 @@ export type ServiceStatusRowProps = {
   lastFetchedAt: string | null;
 };
 
-function formatRelative(iso: string | null): string {
+function formatRelative(iso: string | null, nowMs: number): string {
   if (!iso) return "never";
-  const diff = Date.now() - new Date(iso).getTime();
+  const diff = nowMs - new Date(iso).getTime();
   if (diff < 60_000) return "just now";
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
@@ -30,6 +30,7 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<{ ok: boolean; message: string } | null>(null);
+  const [nowMs] = useState(() => Date.now());
 
   async function refresh() {
     setBusy(true);
@@ -88,20 +89,37 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
           : "pill";
   const meta = serviceMeta(props.service);
 
+  const glow =
+    meta.key === "SPOTIFY"
+      ? "service-glow-spotify"
+      : meta.key === "YOUTUBE"
+        ? "service-glow-youtube"
+        : meta.key === "SOUNDCLOUD"
+          ? "service-glow-soundcloud"
+          : "";
+  const lastFetchedIso = props.lastFetchedAt;
+  const stale = lastFetchedIso ? nowMs - new Date(lastFetchedIso).getTime() > 24 * 3_600_000 : false;
+
   return (
-    <div className="panel-inset flex flex-col gap-3 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
+    <div className={`panel-inset animated-sheen ${glow} relative flex flex-col gap-3 overflow-hidden p-4 text-sm sm:flex-row sm:items-center sm:justify-between`}>
+      <span className={`pointer-events-none absolute inset-y-2 left-0 w-0.5 rounded-full ${meta.bg} opacity-70`} />
+      <div className="relative min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <ServiceIcon service={props.service} size="sm" />
           <span className="font-semibold text-[var(--text)]">{meta.label}</span>
           <span className={pillClass}>{stateLabel}</span>
+          {state === "connected" && stale ? (
+            <span className="pill pill-warning" title="No fresh fetch in over 24 hours">
+              stale
+            </span>
+          ) : null}
         </div>
         <div className="mt-1 text-xs text-muted-fg">
           <span className="tabular-nums text-[var(--text)]">{props.playlistCount}</span>{" "}
           {props.playlistCount === 1 ? "playlist" : "playlists"}
           {props.hiddenCount > 0 ? <span className="text-dim-fg"> / {props.hiddenCount} hidden</span> : null}
           <span className="mx-2 text-dim-fg">/</span>
-          <span>last updated {formatRelative(props.lastFetchedAt)}</span>
+          <span>last updated {formatRelative(props.lastFetchedAt, nowMs)}</span>
         </div>
         {state === "missing" ? (
           <div className="mt-1.5 text-xs text-[#fcd34d]">
@@ -113,8 +131,11 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
           </div>
         ) : null}
         {state === "needs_login" || state === "warn" ? (
-          <div className="mt-1.5 text-xs text-[#fcd34d]">
-            {props.lastError ? props.lastError.slice(0, 200) : "Session needs attention. Reconnect it in Connections."}
+          <div
+            className="mt-1.5 max-w-3xl truncate text-xs text-[#fcd34d]"
+            title={props.lastError || "Session needs attention. Reconnect it in Connections."}
+          >
+            {props.lastError ? props.lastError.split("\n")[0].slice(0, 110) : "Session needs attention. Reconnect it in Connections."}
           </div>
         ) : null}
         {state === "mock" ? (
@@ -137,7 +158,7 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
         type="button"
         onClick={refresh}
         disabled={busy || state === "missing"}
-        className="btn btn-ghost shrink-0"
+        className="btn btn-ghost surface-lift relative shrink-0"
       >
         <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
         {busy ? "Loading..." : "Refresh"}

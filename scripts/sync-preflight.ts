@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { binaryInfo } from "cloakbrowser";
 import { prisma } from "@/lib/db/prisma";
 import { stateFilePath } from "@/worker/config";
+import { shouldRefreshSourceCache } from "@/lib/sync/sourceCachePolicy";
 
 type Status = "OK" | "WARN" | "FAIL";
 
@@ -100,10 +101,13 @@ async function main() {
     }
     const active = activeCountByPlaylistId.get(source.id) ?? 0;
     const complete = source.trackCount <= 0 || active >= source.trackCount;
+    const willRefreshLive = shouldRefreshSourceCache({ lastFetchedAt: source.lastFetchedAt });
     checks.push({
-      status: complete ? "OK" : "WARN",
+      status: complete || willRefreshLive ? "OK" : "WARN",
       name: `${rule.name} source cache`,
-      detail: `${active}/${source.trackCount} active tracks`,
+      detail: complete
+        ? `${active}/${source.trackCount} active tracks`
+        : `${active}/${source.trackCount} active tracks; worker will refresh live before syncing`,
     });
 
     for (const destination of rule.destinations) {

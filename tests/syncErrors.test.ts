@@ -21,6 +21,18 @@ describe("SyncError classification", () => {
     expect(classifySyncError(new Error("The column Playlist.url does not exist in the current database.")).code).toBe("DB_SCHEMA_MISMATCH");
   });
 
+  test("maps concurrent sync errors", () => {
+    const error = classifySyncError(new Error("Playlist group already has a RUNNING sync job (job-1) started at 2026-05-15T00:00:00.000Z"));
+
+    expect(error.code).toBe("ALREADY_RUNNING");
+    expect(error.httpStatus).toBe(409);
+    expect(error.details.recommendedAction).toBe("Wait for the current sync to finish.");
+  });
+
+  test("maps advisory lock conflicts", () => {
+    expect(classifySyncError(new Error("Could not acquire advisory lock for playlist group; another sync is already starting.")).code).toBe("ALREADY_RUNNING");
+  });
+
   test("maps preflight incomplete cache messages", () => {
     const error = classifySyncError(
       new Error("Preflight failed for SyncRule x: Source playlist YOUTUBE:mix has incomplete cache (93/171 active). Refresh playlist tracks before running sync."),

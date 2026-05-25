@@ -20,6 +20,7 @@ type RunBrowserRunnerOptions = {
 type RunnerTelemetry = {
   service: string;
   script: string;
+  command: string | null;
   pid: number | null;
   durationMs: number;
   exitCode: number | null;
@@ -69,6 +70,7 @@ export function runBrowserRunnerCli({
   return new Promise((resolve, reject) => {
     const abortSignal = signal ?? getActiveJobAbortSignal();
     const startedAt = Date.now();
+    const command = args[0] ?? null;
     const child = spawn(process.execPath, [tsxCliPath(), script, ...args], {
       cwd: /*turbopackIgnore: true*/ process.cwd(),
       env: sanitizeRunnerEnv(),
@@ -104,6 +106,7 @@ export function runBrowserRunnerCli({
       emit({
         service: serviceName,
         script,
+        command,
         pid: child.pid ?? null,
         durationMs: Date.now() - startedAt,
         exitCode,
@@ -122,7 +125,7 @@ export function runBrowserRunnerCli({
         killProcessTree(child.pid);
       }
       child.kill("SIGKILL");
-      finalize("timeout", null, null, new Error(`${serviceName} browser runner timed out after ${timeoutMs}ms`));
+      finalize("timeout", null, null, new Error(`${serviceName} browser runner${command ? ` (${command})` : ""} timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
     const onAbort = () => {
@@ -131,7 +134,7 @@ export function runBrowserRunnerCli({
         killProcessTree(child.pid);
       }
       child.kill("SIGKILL");
-      finalize("cancelled", null, null, new CancelledError(`${serviceName} browser runner cancelled`));
+      finalize("cancelled", null, null, new CancelledError(`${serviceName} browser runner${command ? ` (${command})` : ""} cancelled`));
     };
     if (abortSignal?.aborted) {
       onAbort();
@@ -146,7 +149,7 @@ export function runBrowserRunnerCli({
           killedTree = true;
           killProcessTree(child.pid);
         }
-        finalize("buffer-overflow", null, null, new Error(`${serviceName} browser runner exceeded stdout buffer limit`));
+        finalize("buffer-overflow", null, null, new Error(`${serviceName} browser runner${command ? ` (${command})` : ""} exceeded stdout buffer limit`));
       }
     });
 
@@ -157,7 +160,7 @@ export function runBrowserRunnerCli({
           killedTree = true;
           killProcessTree(child.pid);
         }
-        finalize("buffer-overflow", null, null, new Error(`${serviceName} browser runner exceeded stderr buffer limit`));
+        finalize("buffer-overflow", null, null, new Error(`${serviceName} browser runner${command ? ` (${command})` : ""} exceeded stderr buffer limit`));
       }
     });
 
@@ -172,7 +175,7 @@ export function runBrowserRunnerCli({
         "exit",
         code,
         signal,
-        new Error(`${serviceName} browser runner failed with ${status}${stderr.trim() ? `: ${tail(stderr.trim())}` : ""}`),
+        new Error(`${serviceName} browser runner${command ? ` (${command})` : ""} failed with ${status}${stderr.trim() ? `: ${tail(stderr.trim())}` : ""}`),
       );
     });
   });

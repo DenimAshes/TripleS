@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { binaryInfo } from "cloakbrowser";
 import { prisma } from "@/lib/db/prisma";
+import { buildSourcePlaylistGroupMap, ruleBatchKey } from "@/lib/sync/groupAwareRuleLimit";
 import {
   listSoundCloudPlaylistTracksCli,
   listSoundCloudPlaylistsCli,
@@ -89,18 +90,41 @@ async function checkDatabase(): Promise<CheckResult> {
       prisma.user.count(),
       prisma.playlist.count(),
       prisma.syncRule.count(),
-      prisma.syncRule.count({
+      prisma.syncRule.findMany({
         where: {
           isEnabled: true,
           OR: [{ nextRunAt: null }, { nextRunAt: { lte: new Date() } }],
         },
+        select: {
+          id: true,
+          sourceService: true,
+          sourcePlaylistId: true,
+        },
       }),
     ]);
+    const groupMembers = dueRules.length
+      ? await prisma.playlistGroupMember.findMany({
+          where: {
+            playlist: {
+              OR: dueRules.map((rule) => ({
+                service: rule.sourceService,
+                servicePlaylistId: rule.sourcePlaylistId,
+              })),
+            },
+          },
+          select: {
+            groupId: true,
+            playlist: { select: { service: true, servicePlaylistId: true } },
+          },
+        })
+      : [];
+    const groupMap = buildSourcePlaylistGroupMap(groupMembers);
+    const dueSyncBatches = new Set(dueRules.map((rule) => ruleBatchKey(rule, groupMap))).size;
     return {
       service: "database",
       status: "ok",
       message: "Database is reachable.",
-      details: { users, playlists, syncRules, dueRules },
+      details: { users, playlists, syncRules, dueRules: dueRules.length, dueSyncBatches },
     };
   } catch (error) {
     const classified = classifyError(error);

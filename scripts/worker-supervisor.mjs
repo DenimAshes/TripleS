@@ -23,7 +23,7 @@ const PROCESS_DEFINITIONS = [
 ];
 
 const RESTART_BACKOFF_MS = Math.max(1000, Number(process.env.WORKER_SUPERVISOR_BACKOFF_MS || 5000));
-const SUCCESS_BACKOFF_MS = Math.max(1000, Number(process.env.WORKER_SUPERVISOR_SUCCESS_BACKOFF_MS || 5 * 60_000));
+const SUCCESS_BACKOFF_MS = Math.max(1000, Number(process.env.WORKER_SUPERVISOR_SUCCESS_BACKOFF_MS || 60_000));
 const MAX_FAILURES = Math.max(0, Number(process.env.WORKER_SUPERVISOR_MAX_FAILURES || 5));
 
 let shuttingDown = false;

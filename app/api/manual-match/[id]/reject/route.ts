@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
+import { scheduleManualMatchFollowupSync } from "@/lib/services/manualMatchResolution";
 
 function trackMatchField(service: string) {
   if (service === "SPOTIFY") return "spotifyServiceTrackId";
@@ -55,5 +56,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
   });
 
-  return NextResponse.json({ ok: true, deactivatedTrackMatches: deactivated });
+  const followup = await scheduleManualMatchFollowupSync({
+    userId: session.userId,
+    sourceServiceTrackId: existing.sourceServiceTrackId,
+  });
+
+  return NextResponse.json({ ok: true, deactivatedTrackMatches: deactivated, scheduledRules: followup.count });
 }

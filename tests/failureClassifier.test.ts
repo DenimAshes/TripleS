@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { cooldownMsForFailureCount, isCooldownError, nextRunAfterFailure } from "../lib/sync/failureClassifier";
+import {
+  classifyError,
+  cooldownMsForFailureCount,
+  isCooldownError,
+  nextRunAfterFailure,
+  recommendedActionForFailure,
+} from "../lib/sync/failureClassifier";
 
 describe("isCooldownError", () => {
   it("catches captcha block messages", () => {
@@ -9,6 +15,11 @@ describe("isCooldownError", () => {
   it("catches expired-session messages", () => {
     expect(isCooldownError(new Error("YouTube user is not logged in"))).toBe(true);
     expect(isCooldownError(new Error("No saved soundcloud browser session at /worker/state/soundcloud.json"))).toBe(true);
+  });
+
+  it("catches service 403 hard-block messages", () => {
+    expect(isCooldownError(new Error("SoundCloud API 403: captcha-delivery"))).toBe(true);
+    expect(classifyError(new Error("HTTP 403 Forbidden"))).toBe("auth");
   });
 
   it("does not flag transient errors", () => {
@@ -44,5 +55,13 @@ describe("nextRunAfterFailure", () => {
   it("still cools down when intervalMinutes is 0 but error is captcha-class", () => {
     const next = nextRunAfterFailure(0, new Error("not logged in"), now);
     expect(next?.getTime()).toBe(now.getTime() + cooldownMsForFailureCount(1));
+  });
+});
+
+describe("recommendedActionForFailure", () => {
+  it("returns actionable text for runner failures", () => {
+    expect(recommendedActionForFailure(new Error("SoundCloud API 403"))).toContain("Refresh the browser session");
+    expect(recommendedActionForFailure(new Error("captcha-delivery"))).toContain("saved browser profile");
+    expect(recommendedActionForFailure(new Error("timed out after 600000ms"))).toContain("increase the runner timeout");
   });
 });

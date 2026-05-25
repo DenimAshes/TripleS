@@ -24,6 +24,7 @@ import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("triples:sync-engine");
 import { recordCooldownForRule, recordSuccessForRule } from "./serviceCooldown";
+import { shouldRefreshSourceCache, sourceCacheMaxAgeMs } from "./sourceCachePolicy";
 import { releaseAllSessions } from "@/worker/sessionPool";
 import { preflightSyncRule } from "./preflight";
 import { bindCurrentJob, killChildPids, listKnownChildPids } from "@/worker/childPidRegistry";
@@ -38,6 +39,7 @@ const AUTO_MATCH_THRESHOLD = Number(process.env.WORKER_AUTO_MATCH_THRESHOLD ?? 0
 const MANUAL_REVIEW_THRESHOLD = Number(process.env.WORKER_MANUAL_REVIEW_THRESHOLD ?? 0.65);
 const SKIP_PREVIOUSLY_LOGGED = process.env.WORKER_SKIP_PREVIOUSLY_LOGGED !== "false";
 const REFRESH_SOURCE_TRACKS = process.env.WORKER_REFRESH_SOURCE_TRACKS === "true";
+const SOURCE_CACHE_MAX_AGE_MS = sourceCacheMaxAgeMs();
 const MATCH_CONCURRENCY = Math.max(1, Number(process.env.WORKER_MATCH_CONCURRENCY ?? 4));
 const RUNNING_JOB_TIMEOUT_MINUTES = Math.max(1, Number(process.env.WORKER_RUNNING_JOB_TIMEOUT_MINUTES ?? 60));
 const REQUIRE_PREFLIGHT = process.env.WORKER_REQUIRE_PREFLIGHT !== "false";
@@ -127,6 +129,14 @@ async function getPlaylistTracksFromDb(playlistId: string): Promise<NormalizedTr
 
 function nextScheduledRun(intervalMinutes: number) {
   return intervalMinutes > 0 ? new Date(Date.now() + intervalMinutes * 60_000) : null;
+}
+
+function shouldRefreshSourceTracks(sourcePlaylist: { lastFetchedAt: Date | null } | null): boolean {
+  return shouldRefreshSourceCache({
+    lastFetchedAt: sourcePlaylist?.lastFetchedAt,
+    forceRefresh: REFRESH_SOURCE_TRACKS,
+    maxAgeMs: SOURCE_CACHE_MAX_AGE_MS,
+  });
 }
 
 function boundedTrackCount(): number {
@@ -250,9 +260,20 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
   });
   if (!rule) throw new Error("SyncRule not found");
 
+  const sourcePlaylistForRun = await prisma.playlist.findUnique({
+    where: {
+      service_servicePlaylistId: {
+        service: rule.sourceService,
+        servicePlaylistId: rule.sourcePlaylistId,
+      },
+    },
+    select: { id: true, lastFetchedAt: true },
+  });
+  const refreshSourceTracks = shouldRefreshSourceTracks(sourcePlaylistForRun);
+
   if (REQUIRE_PREFLIGHT) {
     const preflight = await preflightSyncRule(rule, {
-      allowIncompleteSourceCache: REFRESH_SOURCE_TRACKS,
+      allowIncompleteSourceCache: refreshSourceTracks,
     });
     if (!preflight.ok) {
       throw new Error(`Preflight failed for SyncRule ${rule.id}: ${preflight.reasons.join("; ")}`);
@@ -274,41 +295,75 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     },
   });
 
-  const lockKey = `sync_rule:${syncRuleId}`;
-  const lockAcquired = await prisma.$queryRawUnsafe<Array<{ pg_try_advisory_lock: boolean }>>(
-    `SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS pg_try_advisory_lock`,
-    lockKey,
-  ).then((rows) => rows[0]?.pg_try_advisory_lock === true).catch(() => false);
-  if (!lockAcquired) {
-    throw new Error(`Could not acquire advisory lock for SyncRule ${syncRuleId}; another process is already running it.`);
-  }
+  const sourceGroupMemberForLock =
+    rule.direction === "TWO_WAY" && sourcePlaylistForRun
+      ? await prisma.playlistGroupMember.findUnique({
+          where: { playlistId: sourcePlaylistForRun.id },
+          select: { groupId: true },
+        })
+      : null;
+  const lockKeys = [
+    sourceGroupMemberForLock?.groupId ? `playlist_group:${sourceGroupMemberForLock.groupId}` : null,
+    `sync_rule:${syncRuleId}`,
+  ].filter((key): key is string => Boolean(key));
+  const job = await prisma.$transaction(async (tx) => {
+    for (const lockKey of lockKeys) {
+      const lockAcquired = await tx
+        .$queryRawUnsafe<Array<{ pg_try_advisory_lock: boolean }>>(
+          `SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0)) AS pg_try_advisory_lock`,
+          lockKey,
+        )
+        .then((rows) => rows[0]?.pg_try_advisory_lock === true)
+        .catch(() => false);
+      if (!lockAcquired) {
+        const target = lockKey.startsWith("playlist_group:") ? "playlist group" : "sync rule";
+        throw new Error(`Could not acquire advisory lock for ${target}; another sync is already starting.`);
+      }
+    }
 
-  let lockReleased = false;
-  const releaseLock = async () => {
-    if (lockReleased) return;
-    lockReleased = true;
-    await prisma.$queryRawUnsafe(
-      `SELECT pg_advisory_unlock(hashtextextended($1, 0))`,
-      lockKey,
-    ).catch(() => {});
-  };
+    const running = await tx.syncJob.findFirst({
+      where: { syncRuleId, status: "RUNNING", finishedAt: null },
+      orderBy: { startedAt: "desc" },
+    });
+    if (running) {
+      throw new Error(`SyncRule already has a RUNNING job (${running.id}) started at ${running.startedAt.toISOString()}`);
+    }
 
-  const running = await prisma.syncJob.findFirst({
-    where: { syncRuleId, status: "RUNNING", finishedAt: null },
-    orderBy: { startedAt: "desc" },
-  });
-  if (running) {
-    await releaseLock();
-    throw new Error(`SyncRule already has a RUNNING job (${running.id}) started at ${running.startedAt.toISOString()}`);
-  }
+    if (sourceGroupMemberForLock?.groupId) {
+      const groupMembers = await tx.playlistGroupMember.findMany({
+        where: { groupId: sourceGroupMemberForLock.groupId },
+        include: { playlist: { select: { service: true, servicePlaylistId: true } } },
+      });
+      const runningGroupJob = await tx.syncJob.findFirst({
+        where: {
+          status: "RUNNING",
+          finishedAt: null,
+          syncRule: {
+            userId: rule.userId,
+            direction: "TWO_WAY",
+            OR: groupMembers.map((member) => ({
+              sourceService: member.playlist.service,
+              sourcePlaylistId: member.playlist.servicePlaylistId,
+            })),
+          },
+        },
+        orderBy: { startedAt: "desc" },
+      });
+      if (runningGroupJob) {
+        throw new Error(
+          `Playlist group already has a RUNNING sync job (${runningGroupJob.id}) started at ${runningGroupJob.startedAt.toISOString()}`,
+        );
+      }
+    }
 
-  const job = await prisma.syncJob.create({
-    data: {
-      syncRuleId,
-      status: "RUNNING",
-      startedAt: new Date(),
-      statsJson: JSON.stringify({ synced: 0, alreadySynced: 0, notFound: 0, manualRequired: 0, removed: 0 }),
-    },
+    return tx.syncJob.create({
+      data: {
+        syncRuleId,
+        status: "RUNNING",
+        startedAt: new Date(),
+        statsJson: JSON.stringify({ synced: 0, alreadySynced: 0, notFound: 0, manualRequired: 0, removed: 0 }),
+      },
+    });
   });
   bindCurrentJob(job.id);
 
@@ -416,7 +471,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       `Source playlist ${rule.sourceService}:${rule.sourcePlaylistId} is not cached in DB; refresh playlists list before running sync.`,
     );
   }
-  const cachedSourceTracks = !REFRESH_SOURCE_TRACKS ? await getPlaylistTracksFromDb(sourcePlaylist.id) : [];
+  const cachedSourceTracks = !refreshSourceTracks ? await getPlaylistTracksFromDb(sourcePlaylist.id) : [];
   const expectedSourceTracks = sourcePlaylist.trackCount ?? 0;
   const sourceCacheComplete = isReadComplete(cachedSourceTracks.length, expectedSourceTracks);
   let sourceTracks: NormalizedTrack[];
@@ -738,6 +793,15 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
               state,
             );
             destinationStateByServiceTrackId.set(targetServiceTrack.id, updatedState);
+            if (!alreadyPresent) {
+              const activeDestinationTrackCount = await prisma.playlistTrackState.count({
+                where: { playlistId: destinationPlaylist.id, removedAt: null },
+              });
+              await prisma.playlist.update({
+                where: { id: destinationPlaylist.id },
+                data: { trackCount: activeDestinationTrackCount, lastFetchedAt: new Date() },
+              });
+            }
           }
 
           const action = alreadyPresent ? "already_synced" : "synced";
@@ -1010,6 +1074,5 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     bindCurrentJob(null);
     await closeAllPersistentRunners().catch(() => {});
     await releaseAllSessions().catch(() => {});
-    await releaseLock();
   }
 }

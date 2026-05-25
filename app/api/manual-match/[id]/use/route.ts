@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
 import { upsertAutoTrackMatch } from "@/lib/sync/trackMatchStore";
+import { parseManualMatchAlternatives } from "@/lib/services/manualMatchRequest";
+import { closeCompetingManualCandidates, scheduleManualMatchFollowupSync } from "@/lib/services/manualMatchResolution";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await requireAuth(request);
@@ -23,9 +25,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.json({ error: "Song not found" }, { status: 409 });
   }
 
-  const alternatives = existing.alternativesJson
-    ? (JSON.parse(existing.alternativesJson) as Array<{ serviceTrackId: string; confidence: number }>)
-    : [];
+  const alternatives = parseManualMatchAlternatives(existing.alternativesJson);
   const confidence = alternatives.find((item) => item.serviceTrackId === serviceTrackId)?.confidence ?? existing.confidence;
 
   const match = await upsertAutoTrackMatch({
@@ -42,6 +42,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     where: { id },
     data: { status: "ACCEPTED", candidateServiceTrackId: serviceTrackId, confidence },
   });
+  await closeCompetingManualCandidates({
+    userId: session.userId,
+    sourceServiceTrackId: existing.sourceServiceTrackId,
+    targetService: existing.targetService,
+    keepId: id,
+  });
+  const followup = await scheduleManualMatchFollowupSync({
+    userId: session.userId,
+    sourceServiceTrackId: existing.sourceServiceTrackId,
+  });
 
-  return NextResponse.json({ match });
+  return NextResponse.json({ match, scheduledRules: followup.count });
 }

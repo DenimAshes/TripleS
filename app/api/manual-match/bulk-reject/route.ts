@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
+import { ManualMatchRequestError, parseBulkThreshold, parsePreviewFlag } from "@/lib/services/manualMatchRequest";
+import { scheduleManualMatchFollowupSyncs } from "@/lib/services/manualMatchResolution";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,9 +25,16 @@ function trackMatchField(service: string): "spotifyServiceTrackId" | "youtubeSer
 export async function POST(request: Request) {
   const session = await requireAuth(request);
   const body = await request.json().catch(() => ({}));
-  const rawThreshold = typeof body?.threshold === "number" ? body.threshold : 0.65;
-  const threshold = Math.max(0, Math.min(1, rawThreshold));
-  const preview = body?.preview === true;
+  let threshold: number;
+  try {
+    threshold = parseBulkThreshold(body?.threshold, 0.65);
+  } catch (error) {
+    if (error instanceof ManualMatchRequestError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
+  const preview = parsePreviewFlag(body?.preview);
 
   const candidates = await prisma.manualMatchCandidate.findMany({
     where: { userId: session.userId, status: "PENDING", confidence: { lte: threshold } },
@@ -49,6 +58,7 @@ export async function POST(request: Request) {
   let rejected = 0;
   let failed = 0;
   const errors: string[] = [];
+  const rejectedSourceTrackIds: string[] = [];
 
   const sourceTrackIds = Array.from(new Set(candidates.map((c) => c.sourceServiceTrackId)));
   const sourceTracks = sourceTrackIds.length
@@ -92,6 +102,7 @@ export async function POST(request: Request) {
           });
         }
       });
+      rejectedSourceTrackIds.push(candidate.sourceServiceTrackId);
       rejected += 1;
     } catch (error) {
       failed += 1;
@@ -99,5 +110,10 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ threshold, rejected, failed, errors: errors.slice(0, 5) });
+  const followup = await scheduleManualMatchFollowupSyncs({
+    userId: session.userId,
+    sourceServiceTrackIds: rejectedSourceTrackIds,
+  });
+
+  return NextResponse.json({ threshold, rejected, failed, scheduledRules: followup.count, errors: errors.slice(0, 5) });
 }

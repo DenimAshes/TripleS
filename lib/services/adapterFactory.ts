@@ -47,7 +47,7 @@ export function getAdapter(service: string, userId?: string): MusicServiceAdapte
   if (key === "soundcloud") {
     if (process.env.SOUNDCLOUD_BROWSER_AUTOMATION === "true") {
       log.debug("soundcloud adapter resolved", { mode: "browser" });
-      return new SoundCloudBrowserAdapter();
+      return new SoundCloudBrowserAdapter(userId);
     }
     if (!process.env.SOUNDCLOUD_CLIENT_ID) {
       log.debug("soundcloud adapter resolved", { mode: "mock" });

@@ -2,6 +2,8 @@ import { prisma } from "@/lib/db/prisma";
 import { runSync } from "@/lib/sync/syncEngine";
 import { getServicesInCooldown } from "@/lib/sync/serviceCooldown";
 import { preflightSyncRule } from "@/lib/sync/preflight";
+import { shouldRefreshSourceCache } from "@/lib/sync/sourceCachePolicy";
+import { applyGroupAwareRuleLimit, buildSourcePlaylistGroupMap } from "@/lib/sync/groupAwareRuleLimit";
 import { killChildPids } from "@/worker/childPidRegistry";
 
 const RUNNING_JOB_TIMEOUT_MINUTES = Math.max(1, Number(process.env.WORKER_RUNNING_JOB_TIMEOUT_MINUTES ?? 60));
@@ -75,7 +77,18 @@ async function main() {
 
   const runnable: typeof notCooled = [];
   for (const rule of notCooled) {
-    const preflight = await preflightSyncRule(rule);
+    const sourcePlaylist = await prisma.playlist.findUnique({
+      where: {
+        service_servicePlaylistId: {
+          service: rule.sourceService,
+          servicePlaylistId: rule.sourcePlaylistId,
+        },
+      },
+      select: { lastFetchedAt: true },
+    });
+    const preflight = await preflightSyncRule(rule, {
+      allowIncompleteSourceCache: shouldRefreshSourceCache({ lastFetchedAt: sourcePlaylist?.lastFetchedAt }),
+    });
     if (!preflight.ok) {
       console.log(`[sync-worker] Preflight failed for ${rule.name} (${rule.id}): ${preflight.reasons.join("; ")}`);
       continue;
@@ -86,9 +99,30 @@ async function main() {
   shuffleInPlace(runnable);
 
   const maxPerRun = Number(process.env.WORKER_MAX_RULES_PER_RUN ?? 0);
-  const slice = Number.isFinite(maxPerRun) && maxPerRun > 0 ? runnable.slice(0, maxPerRun) : runnable;
+  const groupMembers = runnable.length
+    ? await prisma.playlistGroupMember.findMany({
+        where: {
+          playlist: {
+            OR: runnable
+              .filter((rule) => rule.sourcePlaylistId)
+              .map((rule) => ({
+                service: rule.sourceService,
+                servicePlaylistId: rule.sourcePlaylistId,
+              })),
+          },
+        },
+        select: {
+          groupId: true,
+          playlist: { select: { service: true, servicePlaylistId: true } },
+        },
+      })
+    : [];
+  const groupMap = buildSourcePlaylistGroupMap(groupMembers);
+  const slice = applyGroupAwareRuleLimit(runnable, groupMap, maxPerRun).selected;
   if (slice.length < runnable.length) {
-    console.log(`[sync-worker] Limiting to ${slice.length}/${runnable.length} rules this tick (WORKER_MAX_RULES_PER_RUN=${maxPerRun}).`);
+    console.log(
+      `[sync-worker] Limiting to ${slice.length}/${runnable.length} rules this tick by sync group (WORKER_MAX_RULES_PER_RUN=${maxPerRun}).`,
+    );
   }
 
   let ran = 0;
@@ -164,4 +198,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect();
+    process.exit(process.exitCode ?? 0);
   });

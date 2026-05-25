@@ -118,10 +118,10 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
         <label className="block space-y-2">
           <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Frequency</span>
           <select name="intervalMinutes" defaultValue={rule?.intervalMinutes || 60} className="w-full">
+            <option value="5">5 minutes</option>
             <option value="15">15 minutes</option>
             <option value="30">30 minutes</option>
             <option value="60">60 minutes</option>
-            <option value="0">Manual only</option>
           </select>
         </label>
         <label className="flex items-center gap-3 self-end pb-1 text-xs font-bold text-slate-400">

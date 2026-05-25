@@ -19,8 +19,8 @@ type HistoryJob = {
   removed: number;
 };
 
-function formatRelative(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+function formatRelative(iso: string, nowMs: number): string {
+  const diff = nowMs - new Date(iso).getTime();
   if (diff < 60_000) return "just now";
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
@@ -41,6 +41,7 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
   const [jobs, setJobs] = useState<HistoryJob[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nowMs] = useState(() => Date.now());
 
   useEffect(() => {
     if (!open) return;
@@ -99,7 +100,7 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <StatusBadge status={job.status.toLowerCase()} />
-                  <span className="text-muted-fg">{formatRelative(job.startedAt)}</span>
+                  <span className="text-muted-fg">{formatRelative(job.startedAt, nowMs)}</span>
                   <span className="text-dim-fg">·</span>
                   <span className="text-dim-fg tabular-nums">{formatDuration(job.durationMs)}</span>
                 </div>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
 import { upsertAutoTrackMatch } from "@/lib/sync/trackMatchStore";
+import { closeCompetingManualCandidates, scheduleManualMatchFollowupSync } from "@/lib/services/manualMatchResolution";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await requireAuth(request);
@@ -32,6 +33,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     where: { id },
     data: { status: "ACCEPTED" },
   });
+  await closeCompetingManualCandidates({
+    userId: session.userId,
+    sourceServiceTrackId: existing.sourceServiceTrackId,
+    targetService: existing.targetService,
+    keepId: id,
+  });
+  const followup = await scheduleManualMatchFollowupSync({
+    userId: session.userId,
+    sourceServiceTrackId: existing.sourceServiceTrackId,
+  });
 
-  return NextResponse.json({ match });
+  return NextResponse.json({ match, scheduledRules: followup.count });
 }

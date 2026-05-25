@@ -99,11 +99,17 @@ export async function refreshServicePlaylists(userId: string, service: ServiceKe
   // PlaylistGroup — that would silently break the user's sync rules. If
   // a connected playlist disappears from the upstream service, we leave
   // the row in place and let the user resolve the rule manually.
+  const referencedSyncDestinationIds = await prisma.syncDestination.findMany({
+    where: { service: serviceName },
+    select: { playlistId: true },
+  });
+  const protectedPlaylistIds = new Set(referencedSyncDestinationIds.map((destination) => destination.playlistId));
+
   await prisma.playlist.deleteMany({
     where: {
       userId,
       service: serviceName,
-      servicePlaylistId: { notIn: items.map((item) => item.id) },
+      servicePlaylistId: { notIn: [...items.map((item) => item.id), ...protectedPlaylistIds] },
       groupMembers: { none: {} },
     },
   });

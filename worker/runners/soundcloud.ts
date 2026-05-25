@@ -410,11 +410,12 @@ function normalizePlaylist(
 
   const apiId = playlist.id == null ? undefined : String(playlist.id);
   const permalink = soundCloudPathFromUrl(playlist.permalink_url) || undefined;
+  const trackArtwork = playlist.tracks?.find((track) => track.artwork_url)?.artwork_url;
   return {
     id,
     name,
     trackCount: playlist.track_count ?? playlist.tracks?.length ?? 0,
-    imageUrl: playlist.artwork_url || undefined,
+    imageUrl: playlist.artwork_url || trackArtwork || undefined,
     url,
     isWritable: runtime ? playlist.user_id === runtime.userId : undefined,
     apiId,
@@ -442,36 +443,54 @@ async function listPlaylistsViaApi(page: Page, runtime: SoundCloudRuntime): Prom
   // Only fetch playlists the current user owns. The `/playlist_likes` endpoint
   // returns sets the user merely liked — those aren't ours to sync into and
   // showing them mixed with owned ones confuses the picker.
-  const owned = await apiGetCollection<SoundCloudApiPlaylist>(
-    page,
-    runtime,
-    `/users/${runtime.userId}/playlists_without_albums?limit=50&linked_partitioning=1`,
-  ).catch(() => []);
+  const owned = await listOwnedPlaylistApiItems(page, runtime);
 
   const byId = new Map<string, SoundCloudPlaylist>();
   for (const playlist of owned) {
-    // Defense in depth: even within the owned endpoint, double-check user_id
-    // matches in case the response includes anything else (e.g. collaborative).
-    if (
-      typeof (playlist as { user_id?: unknown }).user_id === "number" &&
-      (playlist as { user_id: number }).user_id !== runtime.userId
-    ) {
-      continue;
-    }
     const normalized = normalizePlaylist(playlist, runtime);
     if (normalized) byId.set(normalized.id, normalized);
   }
   return Array.from(byId.values());
 }
 
+async function listOwnedPlaylistApiItems(page: Page, runtime: SoundCloudRuntime): Promise<SoundCloudApiPlaylist[]> {
+  const owned = await apiGetCollection<SoundCloudApiPlaylist>(
+    page,
+    runtime,
+    `/users/${runtime.userId}/playlists_without_albums?limit=50&linked_partitioning=1`,
+  ).catch(() => []);
+  return owned.filter((playlist) => {
+    const ownerId = (playlist as { user_id?: unknown }).user_id;
+    return typeof ownerId !== "number" || ownerId === runtime.userId;
+  });
+}
+
 async function resolvePlaylistViaApi(page: Page, runtime: SoundCloudRuntime, playlistIdOrUrl: string): Promise<SoundCloudApiPlaylist | undefined> {
   // Numeric ids hit /playlists/{id} directly. The /resolve endpoint only
   // understands canonical soundcloud.com URLs and silently 404s on bare ids.
   if (/^\d+$/.test(playlistIdOrUrl)) {
-    return apiGet<SoundCloudApiPlaylist>(page, runtime, `/playlists/${playlistIdOrUrl}`).catch(() => undefined);
+    const direct = await apiGet<SoundCloudApiPlaylist>(page, runtime, `/playlists/${playlistIdOrUrl}`).catch(() => undefined);
+    if (direct) return direct;
+  } else {
+    const url = playlistIdOrUrl.startsWith("http") ? playlistIdOrUrl : `https://soundcloud.com/${playlistIdOrUrl}`;
+    const resolved = await apiGet<SoundCloudApiPlaylist>(page, runtime, `/resolve?url=${encodeURIComponent(url)}`).catch(() => undefined);
+    if (resolved) return resolved;
   }
-  const url = playlistIdOrUrl.startsWith("http") ? playlistIdOrUrl : `https://soundcloud.com/${playlistIdOrUrl}`;
-  return apiGet<SoundCloudApiPlaylist>(page, runtime, `/resolve?url=${encodeURIComponent(url)}`).catch(() => undefined);
+
+  // SoundCloud occasionally returns 404 from /resolve for private set URLs
+  // even though the playlist is visible under the authenticated user's
+  // library. For writes, fall back to the owned playlist list and match by
+  // canonical permalink or numeric API id before declaring the playlist gone.
+  const wantedPath = playlistIdOrUrl.startsWith("http")
+    ? soundCloudPathFromUrl(playlistIdOrUrl)
+    : playlistIdOrUrl.replace(/^\/+|\/+$/g, "");
+  const wantedId = /^\d+$/.test(playlistIdOrUrl) ? playlistIdOrUrl : null;
+  const owned = await listOwnedPlaylistApiItems(page, runtime);
+  return owned.find((playlist) => {
+    const apiId = playlist.id == null ? null : String(playlist.id);
+    const path = soundCloudPathFromUrl(playlist.permalink_url);
+    return (wantedId && apiId === wantedId) || (!!wantedPath && path === wantedPath);
+  });
 }
 
 async function resolveTrackViaApi(page: Page, runtime: SoundCloudRuntime, trackIdOrUrl: string): Promise<SoundCloudApiTrack | undefined> {

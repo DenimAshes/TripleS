@@ -20,9 +20,9 @@ function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
 
-function formatRelative(iso: string | null): string {
+function formatRelative(iso: string | null, nowMs: number): string {
   if (!iso) return "never";
-  const diff = Date.now() - new Date(iso).getTime();
+  const diff = nowMs - new Date(iso).getTime();
   if (diff < 60_000) return "just now";
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} h ago`;
@@ -31,9 +31,9 @@ function formatRelative(iso: string | null): string {
 
 type StaleLevel = "fresh" | "warn" | "stale" | "missing";
 
-function staleLevel(exists: boolean, iso: string | null): StaleLevel {
+function staleLevel(exists: boolean, iso: string | null, nowMs: number): StaleLevel {
   if (!exists || !iso) return "missing";
-  const days = (Date.now() - new Date(iso).getTime()) / 86_400_000;
+  const days = (nowMs - new Date(iso).getTime()) / 86_400_000;
   if (days >= 14) return "stale";
   if (days >= 7) return "warn";
   return "fresh";
@@ -60,9 +60,11 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pasted, setPasted] = useState("");
+  const [nowMs] = useState(() => Date.now());
   const meta = serviceMeta(info.service);
-  const level = staleLevel(info.exists, info.updatedAt);
+  const level = staleLevel(info.exists, info.updatedAt, nowMs);
   const badge = STALE_BADGE[level];
   const browseHref = browserRoute(info.service);
   const glowClass =
@@ -115,7 +117,6 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   }
 
   async function clear() {
-    if (!confirm(`Delete saved ${info.service} session?`)) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -127,6 +128,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       } else {
         setInfo({ ...info, exists: false, bytes: 0, updatedAt: null, updatedBy: null });
         setNotice("Saved session deleted.");
+        setDeleteConfirm(false);
         router.refresh();
       }
     } finally {
@@ -190,7 +192,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       <dl className="mt-5 grid gap-3 border-y border-[var(--border-soft)] py-4 text-sm sm:grid-cols-3 sm:gap-4">
         <div className="min-w-0">
           <dt className="text-xs uppercase tracking-[0.14em] text-dim-fg">Updated</dt>
-          <dd className="mt-1 truncate text-[var(--text)]">{formatRelative(info.updatedAt)}</dd>
+          <dd className="mt-1 truncate text-[var(--text)]">{formatRelative(info.updatedAt, nowMs)}</dd>
         </div>
         <div className="min-w-0">
           <dt className="text-xs uppercase tracking-[0.14em] text-dim-fg">Size</dt>
@@ -292,15 +294,30 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
         ) : null}
 
         {info.exists ? (
-          <button
-            type="button"
-            onClick={clear}
-            disabled={busy}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs text-muted-fg transition hover:bg-red-500/10 hover:text-[#fca5a5] disabled:opacity-50"
-          >
-            <Trash2 size={13} />
-            Delete saved session
-          </button>
+          deleteConfirm ? (
+            <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-2">
+              <div className="text-xs font-medium text-[#fca5a5]">Delete saved {meta.shortLabel} session?</div>
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={clear} disabled={busy} className="btn btn-danger text-xs">
+                  <Trash2 size={13} />
+                  {busy ? "Deleting..." : "Delete"}
+                </button>
+                <button type="button" onClick={() => setDeleteConfirm(false)} disabled={busy} className="btn btn-ghost text-xs">
+                  Keep
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setDeleteConfirm(true)}
+              disabled={busy}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs text-muted-fg transition hover:bg-red-500/10 hover:text-[#fca5a5] disabled:opacity-50"
+            >
+              <Trash2 size={13} />
+              Delete saved session
+            </button>
+          )
         ) : null}
       </div>
     </section>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
+import { SyncRuleRequestError, validateSyncRuleInput } from "@/lib/services/syncRuleRequest";
 
 export async function GET(request: Request) {
   const session = await requireAuth(request);
@@ -13,22 +14,28 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const session = await requireAuth(request);
-  const body = await request.json();
-  const intervalMinutes = Number(body.intervalMinutes || 0);
+  const body = await request.json().catch(() => ({}));
+  const input = await validateSyncRuleInput(session.userId, body).catch((error) => {
+    if (error instanceof SyncRuleRequestError) return error;
+    throw error;
+  });
+  if (input instanceof SyncRuleRequestError) {
+    return NextResponse.json({ error: input.message }, { status: input.status });
+  }
   const rule = await prisma.syncRule.create({
     data: {
       userId: session.userId,
-      name: String(body.name || "New sync rule"),
-      sourceService: String(body.sourceService),
-      sourcePlaylistId: String(body.sourcePlaylistId),
-      mode: String(body.mode || "ADD_ONLY"),
+      name: input.name,
+      sourceService: input.sourceService,
+      sourcePlaylistId: input.sourcePlaylistId,
+      mode: input.mode,
       direction: "ONE_WAY",
-      intervalMinutes,
-      isEnabled: Boolean(body.isEnabled ?? true),
+      intervalMinutes: input.intervalMinutes,
+      isEnabled: input.isEnabled,
       nextRunAt: null,
       destinations: {
-        create: (body.destinations || []).map((destination: { service: string; playlistId: string }) => ({
-          service: String(destination.service),
+        create: input.destinations.map((destination) => ({
+          service: destination.service,
           playlistId: destination.playlistId,
           isEnabled: true,
         })),

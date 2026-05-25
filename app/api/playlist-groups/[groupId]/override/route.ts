@@ -2,54 +2,26 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
 import { parseArtistsJson } from "@/lib/utils/parseArtists";
-
-const SERVICE_FROM_HOST: Array<[RegExp, string]> = [
-  [/spotify\.com$/i, "SPOTIFY"],
-  [/music\.youtube\.com$/i, "YOUTUBE"],
-  [/(^|\.)youtube\.com$/i, "YOUTUBE"],
-  [/youtu\.be$/i, "YOUTUBE"],
-  [/soundcloud\.com$/i, "SOUNDCLOUD"],
-];
-
-function serviceFromUrl(url: string) {
-  const parsed = new URL(url);
-  return SERVICE_FROM_HOST.find(([pattern]) => pattern.test(parsed.hostname))?.[1] || null;
-}
-
-function trackIdFromUrl(url: string, service: string) {
-  const parsed = new URL(url);
-  if (service === "SPOTIFY") {
-    const match = parsed.pathname.match(/\/track\/([^/?#]+)/);
-    return match?.[1] || url;
-  }
-  if (service === "YOUTUBE") {
-    return parsed.searchParams.get("v") || parsed.pathname.replace(/^\/+/, "") || url;
-  }
-  return parsed.pathname.replace(/^\/+|\/+$/g, "") || url;
-}
+import { parseTrackUrl } from "@/lib/services/trackUrl";
 
 export async function POST(request: Request, { params }: { params: Promise<{ groupId: string }> }) {
   const session = await requireAuth(request);
   const { groupId } = await params;
   const body = await request.json().catch(() => ({}));
   const sourceTrackId = String(body.sourceTrackId || "");
-  const rawUrl = String(body.url || "").trim();
 
-  if (!sourceTrackId || !rawUrl) {
-    return NextResponse.json({ error: "Song link is required." }, { status: 400 });
+  if (!sourceTrackId) {
+    return NextResponse.json({ error: "Source song not found." }, { status: 400 });
   }
 
-  let url: URL;
+  let parsed: ReturnType<typeof parseTrackUrl>;
   try {
-    url = new URL(rawUrl);
-  } catch {
-    return NextResponse.json({ error: "Paste a valid song link." }, { status: 400 });
+    parsed = parseTrackUrl(body.url, body.targetService ? String(body.targetService).toUpperCase() : undefined);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Paste a valid song link." }, { status: 400 });
   }
 
-  const targetService = String(body.targetService || serviceFromUrl(url.toString()) || "");
-  if (!targetService) {
-    return NextResponse.json({ error: "This song link is from an unsupported platform." }, { status: 400 });
-  }
+  const targetService = parsed.service;
 
   const member = await prisma.playlistGroupMember.findFirst({
     where: { groupId, service: targetService, group: { userId: session.userId } },
@@ -64,7 +36,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
   }
 
   const artists = parseArtistsJson(sourceTrack.artistsJson);
-  const serviceTrackId = trackIdFromUrl(url.toString(), targetService);
+  const serviceTrackId = parsed.trackId;
   const internal = await prisma.internalTrack.upsert({
     where: { id: `${targetService}_${serviceTrackId}` },
     update: {},
@@ -85,7 +57,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
       album: sourceTrack.album,
       durationMs: sourceTrack.durationMs,
       isrc: sourceTrack.isrc,
-      url: url.toString(),
+      url: parsed.url.toString(),
     },
     create: {
       internalTrackId: internal.id,
@@ -96,7 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
       album: sourceTrack.album,
       durationMs: sourceTrack.durationMs,
       isrc: sourceTrack.isrc,
-      url: url.toString(),
+      url: parsed.url.toString(),
     },
   });
 

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { prisma } from "@/lib/db/prisma";
 import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
 import { getServicesInCooldown } from "@/lib/sync/serviceCooldown";
+import { shouldRefreshSourceCache } from "@/lib/sync/sourceCachePolicy";
 import type { ServiceKey } from "@/lib/sync/syncTypes";
 import { stateFilePath } from "@/worker/config";
 
@@ -59,13 +60,7 @@ function cacheAgeHours(lastFetchedAt: Date | null): number | null {
   return (Date.now() - lastFetchedAt.getTime()) / 3_600_000;
 }
 
-async function main(): Promise<void> {
-  const syncRuleId = process.argv[2];
-  const liveMode = process.argv.includes("--live");
-  if (!syncRuleId) {
-    throw new Error("Usage: npm run sync:doctor -- <syncRuleId> [--live]");
-  }
-
+async function diagnoseRule(syncRuleId: string, liveMode: boolean): Promise<Check[]> {
   const rule = await prisma.syncRule.findUnique({
     where: { id: syncRuleId },
     include: { destinations: { where: { isEnabled: true } } },
@@ -148,10 +143,14 @@ async function main(): Promise<void> {
     const age = cacheAgeHours(sourcePlaylist.lastFetchedAt);
     const complete = sourcePlaylist.trackCount <= 0 || states >= sourcePlaylist.trackCount;
     const fresh = SOURCE_CACHE_TTL_HOURS <= 0 || (age !== null && age <= SOURCE_CACHE_TTL_HOURS);
+    const willRefreshLive = shouldRefreshSourceCache({ lastFetchedAt: sourcePlaylist.lastFetchedAt });
     checks.push({
-      status: complete && fresh ? "OK" : "WARN",
+      status: (complete && fresh) || willRefreshLive ? "OK" : "WARN",
       name: "source cache",
-      detail: `${states}/${sourcePlaylist.trackCount} active tracks, lastFetched=${sourcePlaylist.lastFetchedAt?.toISOString() || "never"}`,
+      detail:
+        complete && fresh
+          ? `${states}/${sourcePlaylist.trackCount} active tracks, lastFetched=${sourcePlaylist.lastFetchedAt?.toISOString() || "never"}`
+          : `${states}/${sourcePlaylist.trackCount} active tracks, lastFetched=${sourcePlaylist.lastFetchedAt?.toISOString() || "never"}; worker will refresh live before syncing`,
     });
   }
 
@@ -266,6 +265,34 @@ async function main(): Promise<void> {
     detail: `${serviceTrackCount} cached target service tracks`,
   });
 
+  return checks;
+}
+
+async function main(): Promise<void> {
+  const args = process.argv.slice(2).filter((arg) => arg !== "--live");
+  const syncRuleId = args[0];
+  const liveMode = process.argv.includes("--live");
+
+  if (syncRuleId) {
+    print(await diagnoseRule(syncRuleId, liveMode));
+    return;
+  }
+
+  const rules = await prisma.syncRule.findMany({
+    where: { isEnabled: true },
+    select: { id: true, name: true },
+    orderBy: [{ nextRunAt: "asc" }, { updatedAt: "desc" }],
+  });
+  if (!rules.length) {
+    print([{ status: "WARN", name: "enabled sync rules", detail: "none" }]);
+    return;
+  }
+
+  const checks: Check[] = [];
+  for (const rule of rules) {
+    checks.push({ status: "OK", name: "sync rule", detail: `${rule.name} (${rule.id})` });
+    checks.push(...(await diagnoseRule(rule.id, liveMode)));
+  }
   print(checks);
 }
 

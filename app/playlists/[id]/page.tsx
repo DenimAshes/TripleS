@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Clock3, Link2, Lock, ListMusic, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddPlaylistSyncButton, type SyncPlaylistOption } from "@/components/AddPlaylistSyncButton";
 import { PlaylistDiagnosticsCard } from "@/components/PlaylistDiagnosticsCard";
@@ -11,12 +11,21 @@ import { ServiceIcon, ServicePill, serviceMeta } from "@/components/ServiceBrand
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { getCachedPlaylistTracks } from "@/lib/services/playlistTracksStore";
+import { parseArtistsJson } from "@/lib/utils/parseArtists";
 
 const MATCH_FIELDS: Record<string, "spotifyServiceTrackId" | "youtubeServiceTrackId" | "soundcloudServiceTrackId"> = {
   SPOTIFY: "spotifyServiceTrackId",
   YOUTUBE: "youtubeServiceTrackId",
   SOUNDCLOUD: "soundcloudServiceTrackId",
 };
+
+function relativeFromNow(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
 
 export default async function PlaylistDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -98,7 +107,7 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
     id: state.id,
     position: state.position,
     title: state.serviceTrack.title,
-    artists: (JSON.parse(state.serviceTrack.artistsJson) as string[]).join(", "),
+    artists: parseArtistsJson(state.serviceTrack.artistsJson).join(", "),
     album: state.serviceTrack.album,
     durationMs: state.serviceTrack.durationMs,
     imageUrl: state.serviceTrack.imageUrl,
@@ -115,6 +124,19 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
     isExcluded: excludedIds.has(state.serviceTrackId),
   }));
   const meta = serviceMeta(playlist.service);
+  const glow =
+    meta.key === "SPOTIFY"
+      ? "service-glow-spotify"
+      : meta.key === "YOUTUBE"
+        ? "service-glow-youtube"
+        : meta.key === "SOUNDCLOUD"
+          ? "service-glow-soundcloud"
+          : "";
+  const linkedServices = Array.from(new Set(groupServices.filter((service) => service !== playlist.service)));
+  const matchedRows = trackRows.filter((row) => (row.linkedServices?.length ?? 0) > 0).length;
+  const matchRatio = trackRows.length === 0 ? 0 : Math.round((matchedRows / trackRows.length) * 100);
+  const lastFetchedIso = playlist.lastFetchedAt?.toISOString() || null;
+  const lastFetchedLabel = lastFetchedIso ? relativeFromNow(lastFetchedIso) : "never";
 
   return (
     <AppShell title={playlist.name}>
@@ -123,15 +145,23 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
         hasTracks={states.length > 0}
         activeTracks={states.length}
         expectedTracks={playlist.trackCount}
-        lastFetchedAt={playlist.lastFetchedAt?.toISOString() || null}
+        lastFetchedAt={lastFetchedIso}
       />
 
-      <div className={`mb-6 overflow-hidden rounded-2xl border bg-[#0d0e12]/70 p-5 ${meta.border}`}>
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+      <section
+        className={`panel group surface-lift animated-gradient-frame animated-sheen ${glow} relative mb-6 overflow-hidden p-5 animate-slide-in-up md:p-6`}
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-70" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_at_15%_0%,rgba(79,141,255,0.08),transparent_52%)] opacity-60 transition duration-500 group-hover:opacity-100" />
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-4">
             {playlist.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={playlist.imageUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover ring-1 ring-[var(--border-soft)]" />
+              <img
+                src={playlist.imageUrl}
+                alt=""
+                className="h-20 w-20 shrink-0 rounded-xl object-cover ring-1 ring-[var(--border-soft)] transition duration-300 group-hover:scale-[1.03] group-hover:ring-[var(--border)]"
+              />
             ) : (
               <ServiceIcon service={playlist.service} size="lg" className="h-20 w-20 rounded-xl" />
             )}
@@ -141,13 +171,20 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
               </Link>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <ServicePill service={playlist.service} />
-                <span className="pill">{playlist.trackCount} songs</span>
+                <span className="pill">
+                  <ListMusic size={12} />
+                  {playlist.trackCount} {playlist.trackCount === 1 ? "song" : "songs"}
+                </span>
                 <span className={playlist.isWritable ? "pill pill-success" : "pill pill-warning"}>
-                  {playlist.isWritable ? "Writable" : "Read only"}
+                  {playlist.isWritable ? "Writable" : <><Lock size={11} /> Read only</>}
+                </span>
+                <span className="pill">
+                  <Clock3 size={12} />
+                  fetched {lastFetchedLabel}
                 </span>
               </div>
-              <h2 className="mt-3 truncate text-2xl font-black tracking-tight text-white">{playlist.name}</h2>
-              {playlist.description ? <p className="mt-2 max-w-2xl text-sm text-muted-fg">{playlist.description}</p> : null}
+              <h2 className="mt-3 truncate text-2xl font-black tracking-tight text-white md:text-3xl">{playlist.name}</h2>
+              {playlist.description ? <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-fg">{playlist.description}</p> : null}
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -155,7 +192,48 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
             <RefreshPlaylistTracksButton playlistId={playlist.id} />
           </div>
         </div>
-      </div>
+
+        {group ? (
+          <div className="relative mt-5 grid gap-3 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)]/60 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-fg">
+                <Sparkles size={12} />
+                Sync coverage
+              </div>
+              <p className="mt-1 text-sm text-muted-fg">
+                <span className="font-semibold text-white">{matchedRows}</span> of{" "}
+                <span className="tabular-nums">{trackRows.length}</span> tracks linked across other services
+                <span className="ml-2 text-dim-fg">/ {matchRatio}%</span>
+              </p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]">
+                <div
+                  className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-hover),var(--success),var(--accent))] bg-[length:220%_100%] shadow-[0_0_18px_var(--accent-glow)] transition-[width] duration-700 animate-gradient-pan"
+                  style={{ width: `${matchRatio}%` }}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dim-fg">
+                <Link2 size={11} className="-mt-0.5 mr-1 inline" />
+                Mirrors
+              </span>
+              {linkedServices.length > 0 ? (
+                linkedServices.map((service) => {
+                  const sMeta = serviceMeta(service);
+                  return (
+                    <span key={service} className={`pill ${sMeta.soft}`}>
+                      <ServiceIcon service={service} size="sm" className="h-4 w-4" />
+                      {sMeta.shortLabel}
+                    </span>
+                  );
+                })
+              ) : (
+                <span className="pill">No mirrors yet</span>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       <PlaylistDiagnosticsCard playlist={playlist} activeStates={states.length} />
 

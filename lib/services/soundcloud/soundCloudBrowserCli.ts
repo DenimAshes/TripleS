@@ -1,6 +1,6 @@
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import { runBrowserRunnerCli } from "../browserRunnerCli";
-import { classifyError, isHardBlockError, isRetryableError } from "@/lib/sync/failureClassifier";
+import { classifyError, isHardBlockError, isRetryableError, recommendedActionForFailure } from "@/lib/sync/failureClassifier";
 import { setServiceCooldown } from "@/lib/sync/serviceCooldown";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -38,6 +38,7 @@ function runnerTimeoutMs(): number {
 async function runSoundCloud(args: string[]) {
   const timeoutMs = runnerTimeoutMs();
   let lastError: unknown = null;
+  const command = args[0] || "unknown";
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     try {
       return await runBrowserRunnerCli({
@@ -59,15 +60,17 @@ async function runSoundCloud(args: string[]) {
       });
 
       if (/captcha-delivery|SoundCloud API 403/i.test(message)) {
-        await setServiceCooldown("soundcloud", "SoundCloud captcha/403 on browser runner").catch(() => {});
+        const reason = `SoundCloud ${command} blocked by captcha/403`;
+        await setServiceCooldown("soundcloud", reason).catch(() => {});
         throw new Error(
-          "SoundCloud blocked the write request with captcha. Reading still works; open SoundCloud in the saved Chrome profile and try again later.",
+          `${reason}. ${recommendedActionForFailure(error)}`,
         );
       }
 
       if (isHardBlockError(error)) {
-        await setServiceCooldown("soundcloud", `SoundCloud hard-block (${kind}): ${message.slice(0, 200)}`).catch(() => {});
-        throw error instanceof Error ? error : new Error(message);
+        const reason = `SoundCloud ${command} hard-block (${kind})`;
+        await setServiceCooldown("soundcloud", `${reason}: ${message.slice(0, 200)}`).catch(() => {});
+        throw new Error(`${reason}. ${recommendedActionForFailure(error)} Original error: ${message}`);
       }
 
       if (isRetryableError(error) && attempt < MAX_RETRIES) {
@@ -78,8 +81,8 @@ async function runSoundCloud(args: string[]) {
       }
 
       if (kind === "timeout") {
-        await setServiceCooldown("soundcloud", `SoundCloud runner timed out repeatedly after ${timeoutMs}ms`).catch(() => {});
-        throw new Error(`SoundCloud browser runner timed out after ${timeoutMs}ms`);
+        await setServiceCooldown("soundcloud", `SoundCloud ${command} timed out repeatedly after ${timeoutMs}ms`).catch(() => {});
+        throw new Error(`SoundCloud browser runner (${command}) timed out after ${timeoutMs}ms. ${recommendedActionForFailure(error)}`);
       }
       throw error instanceof Error ? error : new Error(message);
     }

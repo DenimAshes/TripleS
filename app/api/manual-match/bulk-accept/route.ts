@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
 import { upsertAutoTrackMatch } from "@/lib/sync/trackMatchStore";
+import {
+  ManualMatchRequestError,
+  parseBulkThreshold,
+  parseManualMatchAlternatives,
+  parsePreviewFlag,
+} from "@/lib/services/manualMatchRequest";
+import { closeCompetingManualCandidates, scheduleManualMatchFollowupSyncs } from "@/lib/services/manualMatchResolution";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,14 +21,19 @@ export const dynamic = "force-dynamic";
 // Body: { threshold: number (0..1, default 0.85), preview?: boolean }
 // preview=true returns only the count + summaries; nothing is written.
 
-type AlternativeEntry = { serviceTrackId: string; confidence: number };
-
 export async function POST(request: Request) {
   const session = await requireAuth(request);
   const body = await request.json().catch(() => ({}));
-  const rawThreshold = typeof body?.threshold === "number" ? body.threshold : 0.85;
-  const threshold = Math.max(0, Math.min(1, rawThreshold));
-  const preview = body?.preview === true;
+  let threshold: number;
+  try {
+    threshold = parseBulkThreshold(body?.threshold, 0.85);
+  } catch (error) {
+    if (error instanceof ManualMatchRequestError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
+  const preview = parsePreviewFlag(body?.preview);
 
   const candidates = await prisma.manualMatchCandidate.findMany({
     where: { userId: session.userId, status: "PENDING", confidence: { gte: threshold } },
@@ -45,10 +57,9 @@ export async function POST(request: Request) {
   let accepted = 0;
   let failed = 0;
   const errors: string[] = [];
+  const acceptedSourceTrackIds: string[] = [];
 
-  const alternativesByCandidate = new Map<string, AlternativeEntry[]>(
-    candidates.map((c) => [c.id, c.alternativesJson ? (JSON.parse(c.alternativesJson) as AlternativeEntry[]) : []]),
-  );
+  const alternativesByCandidate = new Map(candidates.map((c) => [c.id, parseManualMatchAlternatives(c.alternativesJson)]));
   const allTrackIds = new Set<string>();
   for (const c of candidates) {
     allTrackIds.add(c.sourceServiceTrackId);
@@ -102,6 +113,13 @@ export async function POST(request: Request) {
         where: { id: candidate.id },
         data: { status: "ACCEPTED", candidateServiceTrackId: targetTrackId, confidence: primaryConfidence },
       });
+      await closeCompetingManualCandidates({
+        userId: session.userId,
+        sourceServiceTrackId: candidate.sourceServiceTrackId,
+        targetService: candidate.targetService,
+        keepId: candidate.id,
+      });
+      acceptedSourceTrackIds.push(candidate.sourceServiceTrackId);
       accepted += 1;
     } catch (error) {
       failed += 1;
@@ -109,5 +127,10 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ threshold, accepted, failed, errors: errors.slice(0, 5) });
+  const followup = await scheduleManualMatchFollowupSyncs({
+    userId: session.userId,
+    sourceServiceTrackIds: acceptedSourceTrackIds,
+  });
+
+  return NextResponse.json({ threshold, accepted, failed, scheduledRules: followup.count, errors: errors.slice(0, 5) });
 }

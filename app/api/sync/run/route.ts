@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import { rateLimit } from "@/lib/auth/rateLimit";
+import { prisma } from "@/lib/db/prisma";
 import { serializeBrowserActionJob, startBrowserActionJob } from "@/lib/services/browserActionJobs";
 
 export const runtime = "nodejs";
@@ -24,6 +25,22 @@ export async function POST(request: Request) {
     );
   }
   const body = await request.json().catch(() => ({}));
-  const job = await startBrowserActionJob(session.userId, "sync.run", { syncRuleId: body.syncRuleId ? String(body.syncRuleId) : undefined });
+  const syncRuleId =
+    body && typeof body === "object" && "syncRuleId" in body && body.syncRuleId
+      ? String(body.syncRuleId).trim()
+      : undefined;
+  if (!syncRuleId) {
+    return NextResponse.json({ error: "syncRuleId is required" }, { status: 400 });
+  }
+
+  const rule = await prisma.syncRule.findFirst({
+    where: { id: syncRuleId, userId: session.userId },
+    select: { id: true },
+  });
+  if (!rule) {
+    return NextResponse.json({ error: "Sync rule not found" }, { status: 404 });
+  }
+
+  const job = await startBrowserActionJob(session.userId, "sync.run", { syncRuleId });
   return NextResponse.json({ job: serializeBrowserActionJob(job) }, { status: 202 });
 }

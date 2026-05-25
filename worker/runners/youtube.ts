@@ -310,15 +310,6 @@ async function extractVisiblePlaylists(page: Page): Promise<YtPlaylist[]> {
     //   OLAK5uy_— album-as-playlist surfaces from the artist
     //   MPREb_  — auto-generated playlist for an album/release
     //   AMPYM…  — auto-mixes
-    function isAutoPlaylistId(id: string): boolean {
-      if (id === "LM" || id === "SE") return true;
-      if (id.startsWith("RD")) return true;
-      if (id.startsWith("OLAK5uy_")) return true;
-      if (id.startsWith("MPREb_") || id.startsWith("MPLA")) return true;
-      if (id.startsWith("AMPYM") || id.startsWith("ALPL")) return true;
-      return false;
-    }
-
     // We rely on the "By you" filter chip applied before scraping to keep
     // saved-from-someone-else playlists out of the list. Per-card subtitle
     // heuristics were too aggressive and would drop legitimate owned
@@ -332,7 +323,18 @@ async function extractVisiblePlaylists(page: Page): Promise<YtPlaylist[]> {
       const m = a.href.match(/list=([A-Za-z0-9_-]+)/);
       const id = m?.[1];
       if (!id || seen.has(id)) continue;
-      if (isAutoPlaylistId(id)) continue;
+      if (
+        id === "LM" ||
+        id === "SE" ||
+        id.startsWith("RD") ||
+        id.startsWith("OLAK5uy_") ||
+        id.startsWith("MPREb_") ||
+        id.startsWith("MPLA") ||
+        id.startsWith("AMPYM") ||
+        id.startsWith("ALPL")
+      ) {
+        continue;
+      }
 
       const card =
         a.closest("ytmusic-two-row-item-renderer") ||

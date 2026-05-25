@@ -45,9 +45,9 @@ function formatDuration(durationMs?: number) {
   return `${minutes}:${seconds}`;
 }
 
-function formatRelative(iso: string | null) {
+function formatRelative(iso: string | null, nowMs: number) {
   if (!iso) return "never";
-  const diff = Date.now() - new Date(iso).getTime();
+  const diff = nowMs - new Date(iso).getTime();
   const minutes = Math.round(diff / 60_000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;
@@ -73,6 +73,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
   const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [nowMs] = useState(() => Date.now());
 
   const selectedPlaylist = useMemo(() => playlists.find((playlist) => playlist.id === selectedId), [playlists, selectedId]);
 
@@ -211,7 +212,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
               <RefreshCw size={16} className={busy === "playlists" ? "animate-spin" : ""} />
               Refresh
             </button>
-            {playlistsMeta.lastSyncedAt ? <span className="text-xs text-[#666a73]">Updated {formatRelative(playlistsMeta.lastSyncedAt)}</span> : null}
+            {playlistsMeta.lastSyncedAt ? <span className="text-xs text-[#666a73]">Updated {formatRelative(playlistsMeta.lastSyncedAt, nowMs)}</span> : null}
           </div>
         </div>
 
@@ -285,7 +286,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
                 <h2 className="font-semibold">{selectedPlaylist?.name || "Select playlist"}</h2>
                 <div className="text-sm text-[#666a73]">
                   {tracks.length} tracks
-                  {selectedId && tracksMeta.lastFetchedAt ? ` · updated ${formatRelative(tracksMeta.lastFetchedAt)}` : ""}
+                  {selectedId && tracksMeta.lastFetchedAt ? ` · updated ${formatRelative(tracksMeta.lastFetchedAt, nowMs)}` : ""}
                 </div>
               </div>
               <button

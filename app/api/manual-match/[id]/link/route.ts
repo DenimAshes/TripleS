@@ -3,34 +3,23 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
 import { upsertAutoTrackMatch } from "@/lib/sync/trackMatchStore";
 import { findCandidateGroup } from "@/lib/sync/manualMatchGroup";
-
-function trackIdFromUrl(url: string, service: string) {
-  const parsed = new URL(url);
-  if (service === "SPOTIFY") {
-    return parsed.pathname.match(/\/track\/([^/?#]+)/)?.[1] || url;
-  }
-  if (service === "YOUTUBE") {
-    return parsed.searchParams.get("v") || parsed.pathname.replace(/^\/+/, "") || url;
-  }
-  return parsed.pathname.replace(/^\/+|\/+$/g, "") || url;
-}
+import { parseTrackUrl } from "@/lib/services/trackUrl";
+import { closeCompetingManualCandidates, scheduleManualMatchFollowupSync } from "@/lib/services/manualMatchResolution";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await requireAuth(request);
   const { id } = await context.params;
   const body = await request.json().catch(() => ({}));
-  const rawUrl = String(body.url || "").trim();
-  if (!rawUrl) return NextResponse.json({ error: "Song link is required." }, { status: 400 });
-
-  let url: URL;
-  try {
-    url = new URL(rawUrl);
-  } catch {
-    return NextResponse.json({ error: "Paste a valid song link." }, { status: 400 });
-  }
 
   const existing = await prisma.manualMatchCandidate.findFirst({ where: { id, userId: session.userId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  let parsed: ReturnType<typeof parseTrackUrl>;
+  try {
+    parsed = parseTrackUrl(body.url, existing.targetService);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Paste a valid song link." }, { status: 400 });
+  }
 
   const sourceTrack = await prisma.serviceTrack.findUnique({ where: { id: existing.sourceServiceTrackId } });
   if (!sourceTrack) return NextResponse.json({ error: "Source song not found." }, { status: 404 });
@@ -42,7 +31,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   });
   if (!group) return NextResponse.json({ error: "Connected playlists not found." }, { status: 404 });
 
-  const serviceTrackId = trackIdFromUrl(url.toString(), existing.targetService);
+  const serviceTrackId = parsed.trackId;
   const internal = await prisma.internalTrack.upsert({
     where: { id: `${existing.targetService}_${serviceTrackId}` },
     update: {},
@@ -63,7 +52,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       album: sourceTrack.album,
       durationMs: sourceTrack.durationMs,
       isrc: sourceTrack.isrc,
-      url: url.toString(),
+      url: parsed.url.toString(),
     },
     create: {
       internalTrackId: internal.id,
@@ -74,7 +63,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       album: sourceTrack.album,
       durationMs: sourceTrack.durationMs,
       isrc: sourceTrack.isrc,
-      url: url.toString(),
+      url: parsed.url.toString(),
     },
   });
 
@@ -107,6 +96,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     where: { id },
     data: { status: "ACCEPTED", candidateServiceTrackId: targetTrack.id, confidence: 1 },
   });
+  await closeCompetingManualCandidates({
+    userId: session.userId,
+    sourceServiceTrackId: existing.sourceServiceTrackId,
+    targetService: existing.targetService,
+    keepId: id,
+  });
+  const followup = await scheduleManualMatchFollowupSync({
+    userId: session.userId,
+    sourceServiceTrackId: existing.sourceServiceTrackId,
+  });
 
-  return NextResponse.json({ match });
+  return NextResponse.json({ match, scheduledRules: followup.count });
 }

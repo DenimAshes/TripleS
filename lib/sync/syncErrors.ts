@@ -97,6 +97,12 @@ export function classifySyncError(error: unknown): SyncError {
   if (/Playlist not found|SyncRule not found|No sync rule found/i.test(message)) {
     return new SyncError("PLAYLIST_NOT_FOUND", message, { rawMessage: message });
   }
+  if (/Could not acquire advisory lock|already has a RUNNING job|already has a RUNNING sync job|already running|already starting/i.test(message)) {
+    return new SyncError("ALREADY_RUNNING", message, {
+      rawMessage: message,
+      recommendedAction: "Wait for the current sync to finish.",
+    }, 409);
+  }
   if (/Preflight failed/i.test(message)) {
     const reason = message.split(":").slice(1).join(":").trim() || message;
     const mapped = preflightReasonToCode(reason);

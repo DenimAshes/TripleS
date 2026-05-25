@@ -163,6 +163,118 @@ function playlistTrackProgressStep(progress: PlaylistTrackSyncProgress): string 
   return `Cached ${progress.current} tracks`;
 }
 
+async function countPendingManualReviews(userId: string, playlistIds: string[]): Promise<number> {
+  if (!playlistIds.length) return 0;
+  const states = await prisma.playlistTrackState.findMany({
+    where: { playlistId: { in: playlistIds }, removedAt: null },
+    select: { serviceTrackId: true },
+  });
+  const sourceServiceTrackIds = states.map((state) => state.serviceTrackId);
+  if (!sourceServiceTrackIds.length) return 0;
+  return prisma.manualMatchCandidate.count({
+    where: {
+      userId,
+      status: "PENDING",
+      sourceServiceTrackId: { in: sourceServiceTrackIds },
+    },
+  });
+}
+
+async function runInitialPlaylistGroupSync(job: BrowserActionJob, input: ConnectPlaylistsInput) {
+  if (input.runInitialSync === false) return null;
+  await setJob(job.id, { currentStep: "Loading source playlist" });
+  const sourcePlaylist = await prisma.playlist.findUnique({ where: { id: input.sourcePlaylistId } });
+  if (!sourcePlaylist || sourcePlaylist.userId !== job.userId) {
+    throw new Error("Source playlist not found");
+  }
+  if (await isTerminalJob(job.id)) return null;
+
+  const groupMember = await prisma.playlistGroupMember.findUnique({
+    where: { playlistId: sourcePlaylist.id },
+    select: { groupId: true },
+  });
+  const groupMembers = groupMember
+    ? await prisma.playlistGroupMember.findMany({
+        where: { groupId: groupMember.groupId },
+        include: { playlist: true },
+        orderBy: { service: "asc" },
+      })
+    : [{ playlist: sourcePlaylist }];
+  const sourceFirst = [...groupMembers].sort((a, b) => {
+    if (a.playlist.id === sourcePlaylist.id) return -1;
+    if (b.playlist.id === sourcePlaylist.id) return 1;
+    return a.playlist.service.localeCompare(b.playlist.service);
+  });
+
+  const sourceRefreshes = [];
+  const sourceErrors = [];
+  const refreshFailedPlaylistIds = new Set<string>();
+  for (const member of sourceFirst) {
+    await setJob(job.id, { currentStep: `Reading ${member.playlist.service} source tracks` });
+    try {
+      const refresh = await syncPlaylistTracksToDb(
+        job.userId,
+        serviceKey(member.playlist.service),
+        member.playlist.servicePlaylistId,
+        (progress) => setJob(job.id, { currentStep: playlistTrackProgressStep(progress) }),
+      );
+      sourceRefreshes.push({ playlistId: member.playlist.id, service: member.playlist.service, result: refresh });
+    } catch (error) {
+      refreshFailedPlaylistIds.add(member.playlist.id);
+      sourceErrors.push({
+        playlistId: member.playlist.id,
+        service: member.playlist.service,
+        phase: "refresh",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    if (await isTerminalJob(job.id)) return null;
+  }
+
+  await setJob(job.id, { currentStep: "Starting first sync" });
+  const rules = await prisma.syncRule.findMany({
+    where: {
+      userId: job.userId,
+      isEnabled: true,
+      direction: "TWO_WAY",
+      OR: sourceFirst.map((member) => ({
+        sourceService: member.playlist.service,
+        sourcePlaylistId: member.playlist.servicePlaylistId,
+      })),
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!rules.length) throw new Error("No sync rule found for the connected playlist");
+  const ruleBySource = new Map(rules.map((rule) => [`${rule.sourceService}:${rule.sourcePlaylistId}`, rule]));
+  const syncJobs = [];
+  const syncErrors = [];
+  for (const member of sourceFirst) {
+    if (refreshFailedPlaylistIds.has(member.playlist.id)) continue;
+    const rule = ruleBySource.get(`${member.playlist.service}:${member.playlist.servicePlaylistId}`);
+    if (!rule) continue;
+    await setJob(job.id, { currentStep: `Syncing changes from ${member.playlist.service}` });
+    try {
+      syncJobs.push(await runSync(rule.id));
+    } catch (error) {
+      syncErrors.push({
+        ruleId: rule.id,
+        service: member.playlist.service,
+        phase: "sync",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    if (await isTerminalJob(job.id)) return null;
+  }
+  if (!syncJobs.length && syncErrors.length) {
+    throw new Error(`Initial sync failed for every source: ${syncErrors.map((item) => `${item.service}: ${item.error}`).join("; ")}`);
+  }
+  const pendingReviewCount = await countPendingManualReviews(
+    job.userId,
+    sourceFirst.map((member) => member.playlist.id),
+  );
+  return { sourceRefreshes, sourceErrors, syncJobs, syncErrors, pendingReviewCount };
+}
+
 async function runAction(job: BrowserActionJob) {
   bindCurrentBrowserJob(job.id);
   const abortController = new AbortController();
@@ -177,9 +289,12 @@ async function runAction(job: BrowserActionJob) {
     await runInActiveJob({ jobId: job.id, abortController }, async () => {
       if (job.type === "playlistGroup.connect") {
         await setJob(job.id, { currentStep: "Creating or connecting playlist" });
-        const result = await connectPlaylistGroup(job.userId, job.input as ConnectPlaylistsInput);
+        const input = job.input as ConnectPlaylistsInput;
+        const group = await connectPlaylistGroup(job.userId, input);
         if (await isTerminalJob(job.id)) return;
-        await setJob(job.id, { status: "succeeded", result, currentStep: "Finished", finishedAt: new Date() });
+        const initialSync = await runInitialPlaylistGroupSync(job, input);
+        if (await isTerminalJob(job.id)) return;
+        await setJob(job.id, { status: "succeeded", result: { group, initialSync }, currentStep: "Finished", finishedAt: new Date() });
         return;
       }
 
@@ -204,10 +319,9 @@ async function runAction(job: BrowserActionJob) {
 
       if (job.type === "sync.run") {
         const input = job.input as { syncRuleId?: string };
+        if (!input.syncRuleId) throw new Error("syncRuleId is required");
         await setJob(job.id, { currentStep: "Loading sync rule" });
-        const rule = input.syncRuleId
-          ? await prisma.syncRule.findFirst({ where: { id: input.syncRuleId, userId: job.userId } })
-          : await prisma.syncRule.findFirst({ where: { userId: job.userId, isEnabled: true } });
+        const rule = await prisma.syncRule.findFirst({ where: { id: input.syncRuleId, userId: job.userId } });
         if (!rule) throw new Error("No sync rule found");
         if (await isTerminalJob(job.id)) return;
         await setJob(job.id, { currentStep: "Running sync" });

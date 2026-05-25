@@ -67,6 +67,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
   const [previewCount, setPreviewCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   async function preview(newThreshold: number) {
     setBusy(true);
@@ -79,6 +80,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
       });
       const data = await res.json();
       setPreviewCount(typeof data.count === "number" ? data.count : 0);
+      setConfirming(false);
     } catch (err) {
       setOutcome(err instanceof Error ? err.message : "Preview failed");
     } finally {
@@ -88,12 +90,6 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
 
   async function apply() {
     if (!previewCount) return;
-    if (
-      !confirm(
-        `${config.confirmVerb} ${previewCount} pending review${previewCount === 1 ? "" : "s"} at ${config.thresholdLabel}${Math.round(threshold * 100)}% confidence?`,
-      )
-    )
-      return;
     setBusy(true);
     setOutcome(null);
     try {
@@ -107,10 +103,12 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
         setOutcome(data.error || `Failed (${res.status})`);
       } else {
         const count = data[config.outcomeCountKey] ?? 0;
+        const scheduled = typeof data.scheduledRules === "number" && data.scheduledRules > 0 ? ` Sync queued for ${data.scheduledRules} source${data.scheduledRules === 1 ? "" : "s"}.` : "";
         setOutcome(
-          `${config.successVerb} ${count}${data.failed ? `, ${data.failed} failed (${(data.errors || []).slice(0, 2).join("; ")})` : ""}.`,
+          `${config.successVerb} ${count}${data.failed ? `, ${data.failed} failed (${(data.errors || []).slice(0, 2).join("; ")})` : ""}.${scheduled}`,
         );
         setPreviewCount(null);
+        setConfirming(false);
         router.refresh();
       }
     } catch (err) {
@@ -123,6 +121,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
   function onThresholdChange(value: number) {
     setThreshold(value);
     setPreviewCount(null);
+    setConfirming(false);
   }
 
   return (
@@ -151,10 +150,31 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
         <button type="button" onClick={() => preview(threshold)} disabled={busy} className="btn btn-ghost">
           Preview
         </button>
-        <button type="button" onClick={apply} disabled={busy || !previewCount} className={config.buttonClass}>
-          {config.buttonIcon}
-          {previewCount != null ? `${config.buttonLabel} ${previewCount}` : config.buttonLabel}
-        </button>
+        {confirming && previewCount ? (
+          <>
+            <span className="text-xs text-muted-fg">
+              {config.confirmVerb} {previewCount} at {config.thresholdLabel}
+              {Math.round(threshold * 100)}%?
+            </span>
+            <button type="button" onClick={apply} disabled={busy} className={config.buttonClass}>
+              {config.buttonIcon}
+              Confirm
+            </button>
+            <button type="button" onClick={() => setConfirming(false)} disabled={busy} className="btn btn-ghost">
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            disabled={busy || !previewCount}
+            className={config.buttonClass}
+          >
+            {config.buttonIcon}
+            {previewCount != null ? `${config.buttonLabel} ${previewCount}` : config.buttonLabel}
+          </button>
+        )}
       </div>
       {outcome ? (
         <div className={`basis-full text-xs ${outcome.startsWith(config.successVerb) ? "text-emerald-400" : "text-[#fca5a5]"}`}>

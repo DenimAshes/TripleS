@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import { getYouTubeTrackRefreshJob, startYouTubeTrackRefreshJob } from "@/lib/services/youtube/youtubeRefreshJobs";
+import { BrowserLabRequestError, parsePlaylistRefreshRequest } from "@/lib/services/browserLabRequest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,8 +32,16 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await requireAuth(request);
   const body = await request.json().catch(() => ({}));
-  if (!body.playlistId) return NextResponse.json({ error: "playlistId is required" }, { status: 400 });
+  let input: ReturnType<typeof parsePlaylistRefreshRequest>;
+  try {
+    input = parsePlaylistRefreshRequest(body);
+  } catch (error) {
+    if (error instanceof BrowserLabRequestError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
 
-  const job = startYouTubeTrackRefreshJob(session.userId, String(body.playlistId));
+  const job = startYouTubeTrackRefreshJob(session.userId, input.playlistId);
   return NextResponse.json({ job: serializeJob(job) });
 }

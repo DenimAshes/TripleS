@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
+import type { Prisma } from "@prisma/client";
 
 export class PlaylistGroupError extends Error {
   constructor(public status: number, message: string) {
@@ -19,28 +20,174 @@ export type ConnectPlaylistsInput = {
   mode?: string;
   intervalMinutes?: number;
   isEnabled?: boolean;
+  runInitialSync?: boolean;
 };
 
-export async function connectPlaylistGroup(userId: string, input: ConnectPlaylistsInput) {
-  const sourcePlaylistId = String(input.sourcePlaylistId || "");
-  const destinationPlaylistIds = Array.isArray(input.destinationPlaylistIds)
-    ? input.destinationPlaylistIds.map(String).filter(Boolean)
+const SERVICES = new Set(["SPOTIFY", "YOUTUBE", "SOUNDCLOUD"]);
+const MODES = new Set(["ADD_ONLY", "ADD_AND_REMOVE", "FULL_MIRROR"]);
+
+type GroupRulePlaylist = {
+  id: string;
+  service: string;
+  servicePlaylistId: string;
+  name: string;
+  isWritable: boolean;
+};
+
+export type NormalizedConnectPlaylistsInput = {
+  sourcePlaylistId: string;
+  destinationPlaylistIds: string[];
+  createDestination: { service: string; name: string } | null;
+  name?: string;
+  mode: string;
+  intervalMinutes: number;
+  isEnabled: boolean;
+};
+
+function normalizeService(value: unknown) {
+  const service = String(value || "").trim().toUpperCase();
+  if (!SERVICES.has(service)) {
+    throw new PlaylistGroupError(400, "Choose a valid platform.");
+  }
+  return service;
+}
+
+function normalizeMode(value: unknown) {
+  const mode = String(value || "ADD_ONLY").trim().toUpperCase();
+  if (!MODES.has(mode)) {
+    throw new PlaylistGroupError(400, "Choose a valid sync mode.");
+  }
+  return mode;
+}
+
+function normalizeInterval(value: unknown) {
+  const interval = Number(value ?? 5);
+  if (!Number.isInteger(interval) || interval < 1 || interval > 24 * 60) {
+    throw new PlaylistGroupError(400, "Sync interval must be between 1 and 1440 minutes.");
+  }
+  return interval;
+}
+
+function normalizeName(value: unknown, fallback?: string) {
+  const name = String(value || "").trim();
+  const normalized = name || fallback;
+  return normalized ? normalized.slice(0, 120) : undefined;
+}
+
+export function normalizeConnectPlaylistsInput(input: unknown): NormalizedConnectPlaylistsInput {
+  const raw = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  const sourcePlaylistId = String(raw.sourcePlaylistId || "").trim();
+  const destinationPlaylistIds = Array.isArray(raw.destinationPlaylistIds)
+    ? Array.from(new Set(raw.destinationPlaylistIds.map((value) => String(value || "").trim()).filter(Boolean)))
     : [];
-  const createDestination =
-    input.createDestination && typeof input.createDestination === "object"
-      ? {
-          service: String(input.createDestination.service || ""),
-          name: String(input.createDestination.name || "").trim(),
-        }
+  const createDestinationRaw =
+    raw.createDestination && typeof raw.createDestination === "object"
+      ? (raw.createDestination as Record<string, unknown>)
       : null;
-  const intervalMinutes = Number(input.intervalMinutes || 0);
+  const createDestination = createDestinationRaw
+    ? {
+        service: normalizeService(createDestinationRaw.service),
+        name: normalizeName(createDestinationRaw.name) || "",
+      }
+    : null;
 
   if (!sourcePlaylistId || (destinationPlaylistIds.length === 0 && !createDestination)) {
     throw new PlaylistGroupError(400, "Choose playlists to connect.");
   }
-  if (createDestination && (!createDestination.service || !createDestination.name)) {
+  if (destinationPlaylistIds.includes(sourcePlaylistId)) {
+    throw new PlaylistGroupError(400, "Source playlist cannot also be a destination.");
+  }
+  if (destinationPlaylistIds.length > 2) {
+    throw new PlaylistGroupError(400, "Choose no more than one playlist per other platform.");
+  }
+  if (createDestination && !createDestination.name) {
     throw new PlaylistGroupError(400, "Name the new playlist.");
   }
+
+  return {
+    sourcePlaylistId,
+    destinationPlaylistIds,
+    createDestination,
+    name: normalizeName(raw.name),
+    mode: normalizeMode(raw.mode),
+    intervalMinutes: normalizeInterval(raw.intervalMinutes),
+    isEnabled: Boolean(raw.isEnabled ?? true),
+  };
+}
+
+function groupRuleName(groupName: string, source: GroupRulePlaylist) {
+  return `${groupName} - ${source.name}`;
+}
+
+async function upsertGroupSyncRules(
+  tx: Prisma.TransactionClient,
+  {
+    userId,
+    groupName,
+    playlists,
+    mode,
+    intervalMinutes,
+    isEnabled,
+  }: {
+    userId: string;
+    groupName: string;
+    playlists: GroupRulePlaylist[];
+    mode: string;
+    intervalMinutes: number;
+    isEnabled: boolean;
+  },
+) {
+  for (const source of playlists) {
+    const destinations = playlists.filter((playlist) => playlist.id !== source.id && playlist.isWritable);
+    if (destinations.length === 0) continue;
+
+    const existingRule = await tx.syncRule.findFirst({
+      where: {
+        userId,
+        sourceService: source.service,
+        sourcePlaylistId: source.servicePlaylistId,
+      },
+      include: { destinations: true },
+    });
+    const data = {
+      name: groupRuleName(groupName, source),
+      sourceService: source.service,
+      sourcePlaylistId: source.servicePlaylistId,
+      mode,
+      direction: "TWO_WAY",
+      intervalMinutes,
+      isEnabled,
+      nextRunAt: isEnabled ? null : existingRule?.nextRunAt ?? null,
+      destinations: {
+        create: destinations.map((playlist) => ({
+          service: playlist.service,
+          playlistId: playlist.servicePlaylistId,
+          isEnabled: true,
+        })),
+      },
+    };
+
+    if (existingRule) {
+      await tx.syncDestination.deleteMany({ where: { syncRuleId: existingRule.id } });
+      await tx.syncRule.update({
+        where: { id: existingRule.id },
+        data,
+      });
+    } else {
+      await tx.syncRule.create({
+        data: {
+          userId,
+          ...data,
+        },
+      });
+    }
+  }
+}
+
+export async function connectPlaylistGroup(userId: string, input: ConnectPlaylistsInput) {
+  const normalized = normalizeConnectPlaylistsInput(input);
+  const destinationPlaylistIds = [...normalized.destinationPlaylistIds];
+  const { sourcePlaylistId, createDestination, intervalMinutes } = normalized;
 
   const source = await prisma.playlist.findUnique({ where: { id: sourcePlaylistId } });
   if (!source || source.userId !== userId) {
@@ -175,15 +322,16 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
   }
 
   return prisma.$transaction(async (tx) => {
+    const requestedGroupName = normalized.name || sourceGroup?.name || source.name;
     const groupRow = sourceGroup
       ? await tx.playlistGroup.update({
           where: { id: sourceGroup.id },
-          data: { name: sourceGroup.name },
+          data: { name: requestedGroupName },
         })
       : await tx.playlistGroup.create({
           data: {
             userId,
-            name: input.name ? String(input.name) : source.name,
+            name: requestedGroupName,
           },
         });
 
@@ -199,58 +347,14 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
       where: { groupId: groupRow.id },
       include: { playlist: true },
     });
-    const ruleDestinations = allGroupMembers
-      .map((member) => member.playlist)
-      .filter((playlist) => playlist.id !== source.id && playlist.isWritable);
-
-    const ruleName = input.name ? String(input.name) : `${source.name} sync`;
-    const existingRule = await tx.syncRule.findFirst({
-      where: { userId, sourcePlaylistId: source.servicePlaylistId },
-      include: { destinations: true },
+    await upsertGroupSyncRules(tx, {
+      userId,
+      groupName: groupRow.name,
+      playlists: allGroupMembers.map((member) => member.playlist),
+      mode: normalized.mode,
+      intervalMinutes,
+      isEnabled: normalized.isEnabled,
     });
-
-    if (existingRule) {
-      await tx.syncDestination.deleteMany({ where: { syncRuleId: existingRule.id } });
-      await tx.syncRule.update({
-        where: { id: existingRule.id },
-        data: {
-          name: ruleName,
-          sourceService: source.service,
-          mode: String(input.mode || existingRule.mode || "ADD_ONLY"),
-          intervalMinutes,
-          isEnabled: Boolean(input.isEnabled ?? true),
-          nextRunAt: Boolean(input.isEnabled ?? true) ? null : existingRule.nextRunAt,
-          destinations: {
-            create: ruleDestinations.map((playlist) => ({
-              service: playlist.service,
-              playlistId: playlist.servicePlaylistId,
-              isEnabled: true,
-            })),
-          },
-        },
-      });
-    } else {
-      await tx.syncRule.create({
-        data: {
-          userId,
-          name: ruleName,
-          sourceService: source.service,
-          sourcePlaylistId: source.servicePlaylistId,
-          mode: String(input.mode || "ADD_ONLY"),
-          direction: "ONE_WAY",
-          intervalMinutes,
-          isEnabled: Boolean(input.isEnabled ?? true),
-          nextRunAt: null,
-          destinations: {
-            create: ruleDestinations.map((playlist) => ({
-              service: playlist.service,
-              playlistId: playlist.servicePlaylistId,
-              isEnabled: true,
-            })),
-          },
-        },
-      });
-    }
 
     return tx.playlistGroup.findUniqueOrThrow({
       where: { id: groupRow.id },

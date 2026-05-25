@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { binaryInfo } from "cloakbrowser";
 import { prisma } from "@/lib/db/prisma";
+import { buildSourcePlaylistGroupMap, ruleBatchKey } from "@/lib/sync/groupAwareRuleLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,14 +45,40 @@ export async function GET() {
 
   const dbPing = await timed("db", () => prisma.$queryRawUnsafe<Array<{ ok: number }>>("SELECT 1 AS ok"));
 
-  const [lastJob, runningJobs, queuedJobs, sessions] = await Promise.all([
+  const [lastJob, runningJobs, queuedJobs, sessions, dueRules, pendingManualMatches] = await Promise.all([
     prisma.syncJob.findFirst({ orderBy: { startedAt: "desc" }, select: { startedAt: true, status: true, finishedAt: true } }).catch(() => null),
     prisma.syncJob.count({ where: { status: "RUNNING", finishedAt: null } }).catch(() => -1),
     prisma.browserJob.count({ where: { status: { in: ["queued", "running"] } } }).catch(() => -1),
     prisma.workerSessionState
       .findMany({ select: { service: true, updatedAt: true } })
       .catch(() => [] as Array<{ service: string; updatedAt: Date }>),
+    prisma.syncRule
+      .findMany({
+        where: {
+          isEnabled: true,
+          OR: [{ nextRunAt: null }, { nextRunAt: { lte: new Date() } }],
+        },
+        select: { id: true, sourceService: true, sourcePlaylistId: true },
+      })
+      .catch(() => [] as Array<{ id: string; sourceService: string; sourcePlaylistId: string }>),
+    prisma.manualMatchCandidate.count({ where: { status: "PENDING" } }).catch(() => -1),
   ]);
+  const groupMembers = dueRules.length
+    ? await prisma.playlistGroupMember
+        .findMany({
+          where: {
+            playlist: {
+              OR: dueRules.map((rule) => ({ service: rule.sourceService, servicePlaylistId: rule.sourcePlaylistId })),
+            },
+          },
+          select: {
+            groupId: true,
+            playlist: { select: { service: true, servicePlaylistId: true } },
+          },
+        })
+        .catch(() => [])
+    : [];
+  const dueSyncBatches = new Set(dueRules.map((rule) => ruleBatchKey(rule, buildSourcePlaylistGroupMap(groupMembers)))).size;
 
   const now = Date.now();
   const STALE_RUNNING_MS = Number(process.env.WORKER_RUNNING_JOB_TIMEOUT_MINUTES ?? 60) * 60_000;
@@ -79,6 +106,11 @@ export async function GET() {
       : null,
     runningJobs,
     queuedBrowserJobs: queuedJobs,
+    syncQueue: {
+      dueRules: dueRules.length,
+      dueSyncBatches,
+      pendingManualMatches,
+    },
     sessions: sessionAges,
   };
 

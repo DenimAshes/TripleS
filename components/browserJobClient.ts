@@ -16,7 +16,16 @@ export type BrowserJob = {
     activeTracks?: number;
     expectedTracks?: number;
   } | null;
-  result: unknown;
+  result: {
+    initialSync?: {
+      pendingReviewCount?: number;
+      syncJobs?: Array<{
+        statsJson?: string;
+      }>;
+      sourceErrors?: Array<{ service?: string; error?: string }>;
+      syncErrors?: Array<{ service?: string; error?: string }>;
+    } | null;
+  } | null;
 };
 
 function wait(ms: number) {
