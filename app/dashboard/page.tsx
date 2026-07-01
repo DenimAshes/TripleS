@@ -198,6 +198,8 @@ export default async function DashboardPage() {
   );
   const dueRules = rules.filter((rule) => rule.isEnabled && (!rule.nextRunAt || rule.nextRunAt <= new Date(now)));
   const dueSyncBatches = new Set(dueRules.map((rule) => ruleBatchKey(rule, sourceGroupMap))).size;
+  const queuePreviewRules = dueRules.slice(0, 4);
+  const hiddenQueueRules = Math.max(0, dueRules.length - queuePreviewRules.length);
   const futureRuns = rules
     .filter((rule) => rule.isEnabled && rule.nextRunAt && rule.nextRunAt > new Date(now))
     .sort((a, b) => a.nextRunAt!.getTime() - b.nextRunAt!.getTime());
@@ -233,32 +235,46 @@ export default async function DashboardPage() {
       <PlaylistsAutoRefresh hasPlaylists={playlists.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
       <RunningJobsAutoRefresh runningCount={runningJobs.length} />
       <SessionStalenessBanner items={staleSessions} />
-      <section className="panel mb-6 flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">
-            <RotateCw size={14} />
-            Sync queue
+      <section className="panel mb-6 p-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">
+              <RotateCw size={14} />
+              Sync queue
+            </div>
+            <h2 className="mt-1 text-xl font-black tracking-tight text-white">
+              {dueRules.length
+                ? `${dueRules.length} rule${dueRules.length === 1 ? "" : "s"} ready to run`
+                : runningJobs.length
+                  ? `${runningJobs.length} sync ${runningJobs.length === 1 ? "is" : "are"} running`
+                  : "No sync work waiting"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-fg">
+              {dueRules.length
+                ? `${dueSyncBatches} grouped batch${dueSyncBatches === 1 ? "" : "es"} will be picked up by cron or worker.`
+                : nextScheduledRun
+                  ? `Next scheduled rule is due ${nextScheduledRun.toLocaleString()}.`
+                  : "Manual matches and rule edits will appear here when they queue follow-up sync."}
+            </p>
           </div>
-          <h2 className="mt-1 text-xl font-black tracking-tight text-white">
-            {dueRules.length
-              ? `${dueRules.length} rule${dueRules.length === 1 ? "" : "s"} ready to run`
-              : runningJobs.length
-                ? `${runningJobs.length} sync ${runningJobs.length === 1 ? "is" : "are"} running`
-                : "No sync work waiting"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-fg">
-            {dueRules.length
-              ? `${dueSyncBatches} grouped batch${dueSyncBatches === 1 ? "" : "es"} will be picked up by cron or worker.`
-              : nextScheduledRun
-                ? `Next scheduled rule is due ${nextScheduledRun.toLocaleString()}.`
-                : "Manual matches and rule edits will appear here when they queue follow-up sync."}
-          </p>
+          <div className="grid grid-cols-3 gap-2 text-center sm:min-w-80">
+            <QueueMetric label="Due" value={dueRules.length} tone={dueRules.length ? "accent" : "neutral"} />
+            <QueueMetric label="Batches" value={dueSyncBatches} tone={dueSyncBatches ? "accent" : "neutral"} />
+            <QueueMetric label="Running" value={runningJobs.length} tone={runningJobs.length ? "success" : "neutral"} />
+          </div>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center sm:min-w-80">
-          <QueueMetric label="Due" value={dueRules.length} tone={dueRules.length ? "accent" : "neutral"} />
-          <QueueMetric label="Batches" value={dueSyncBatches} tone={dueSyncBatches ? "accent" : "neutral"} />
-          <QueueMetric label="Running" value={runningJobs.length} tone={runningJobs.length ? "success" : "neutral"} />
-        </div>
+        {queuePreviewRules.length ? (
+          <div className="mt-4 grid gap-2">
+            {queuePreviewRules.map((rule) => (
+              <SyncQueueRuleRow key={rule.id} rule={rule} running={Boolean(runningByRule.get(rule.id))} />
+            ))}
+            {hiddenQueueRules > 0 ? (
+              <div className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2 text-xs text-muted-fg">
+                + {hiddenQueueRules} more queued rule{hiddenQueueRules === 1 ? "" : "s"}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </section>
       {pendingReviewCount > 0 ? (
         <Link
@@ -419,6 +435,37 @@ function QueueMetric({ value, label, tone }: { value: number; label: string; ton
     <div className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2">
       <div className={`text-2xl font-black tabular-nums ${valueClass}`}>{value}</div>
       <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-fg">{label}</div>
+    </div>
+  );
+}
+
+function SyncQueueRuleRow({ rule, running }: { rule: RuleWithDestinations; running: boolean }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
+        <ServiceIcon service={rule.sourceService} size="sm" />
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-[var(--text)]">{rule.name}</div>
+          <div className="truncate text-xs text-muted-fg">
+            {rule.sourceService} source · every {rule.intervalMinutes}m
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        {rule.destinations.map((destination) => (
+          <span
+            key={`${rule.id}:${destination.service}:${destination.playlistId}`}
+            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[var(--border-soft)] bg-[var(--surface)] px-2 text-xs font-semibold text-muted-fg"
+            title={destination.service}
+          >
+            <ServiceIcon service={destination.service} size="sm" className="h-4 w-4 rounded-md" />
+            {destination.service}
+          </span>
+        ))}
+        <span className={`pill ${running ? "pill-accent animate-pulse" : "pill-warning"}`}>
+          {running ? "Running" : "Waiting"}
+        </span>
+      </div>
     </div>
   );
 }
