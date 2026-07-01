@@ -90,9 +90,33 @@ describe("manual match resolution", () => {
     expect(mocks.syncRuleUpdateMany).toHaveBeenCalledWith({
       where: {
         userId: "user-1",
-        direction: "TWO_WAY",
         isEnabled: true,
         OR: [{ sourceService: "SPOTIFY", sourcePlaylistId: "sp-1" }],
+      },
+      data: { nextRunAt: null },
+    });
+  });
+
+  test("does not filter follow-up scheduling by sync direction", async () => {
+    mocks.playlistTrackStateFindMany.mockResolvedValue([
+      {
+        playlist: {
+          service: "SPOTIFY",
+          servicePlaylistId: "sp-one-way",
+        },
+      },
+    ]);
+
+    await scheduleManualMatchFollowupSync({
+      userId: "user-1",
+      sourceServiceTrackId: "source-track",
+    });
+
+    expect(mocks.syncRuleUpdateMany).toHaveBeenCalledWith({
+      where: {
+        userId: "user-1",
+        isEnabled: true,
+        OR: [{ sourceService: "SPOTIFY", sourcePlaylistId: "sp-one-way" }],
       },
       data: { nextRunAt: null },
     });
@@ -114,7 +138,6 @@ describe("manual match resolution", () => {
     expect(mocks.syncRuleUpdateMany).toHaveBeenCalledWith({
       where: {
         userId: "user-1",
-        direction: "TWO_WAY",
         isEnabled: true,
         OR: [
           { sourceService: "SPOTIFY", sourcePlaylistId: "sp-1" },
@@ -147,7 +170,6 @@ describe("manual match resolution", () => {
     expect(mocks.syncRuleUpdateMany).toHaveBeenCalledWith({
       where: {
         userId: "user-1",
-        direction: "TWO_WAY",
         isEnabled: true,
         OR: [
           { sourceService: "SPOTIFY", sourcePlaylistId: "sp-1" },

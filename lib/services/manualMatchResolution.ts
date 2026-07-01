@@ -79,7 +79,6 @@ export async function scheduleManualMatchFollowupSyncs({
   return prisma.syncRule.updateMany({
     where: {
       userId,
-      direction: "TWO_WAY",
       isEnabled: true,
       OR: sources,
     },
