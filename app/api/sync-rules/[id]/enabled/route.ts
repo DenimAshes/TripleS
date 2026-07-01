@@ -73,6 +73,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     data: {
       isEnabled: enabled,
       nextRunAt: enabled ? null : existing.nextRunAt,
+      queuedReason: enabled ? "rule_enabled" : existing.queuedReason,
+      queuedAt: enabled ? new Date() : existing.queuedAt,
     },
     include: { destinations: true },
   });

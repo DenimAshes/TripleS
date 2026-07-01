@@ -33,6 +33,8 @@ export async function POST(request: Request) {
       intervalMinutes: input.intervalMinutes,
       isEnabled: input.isEnabled,
       nextRunAt: null,
+      queuedReason: input.isEnabled ? "rule_created" : null,
+      queuedAt: input.isEnabled ? new Date() : null,
       destinations: {
         create: input.destinations.map((destination) => ({
           service: destination.service,

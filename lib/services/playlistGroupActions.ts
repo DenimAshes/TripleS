@@ -158,6 +158,8 @@ async function upsertGroupSyncRules(
       intervalMinutes,
       isEnabled,
       nextRunAt: isEnabled ? null : existingRule?.nextRunAt ?? null,
+      queuedReason: isEnabled ? "playlist_group_connected" : existingRule?.queuedReason ?? null,
+      queuedAt: isEnabled ? new Date() : existingRule?.queuedAt ?? null,
       destinations: {
         create: destinations.map((playlist) => ({
           service: playlist.service,

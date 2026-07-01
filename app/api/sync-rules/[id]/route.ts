@@ -28,6 +28,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         intervalMinutes: input.intervalMinutes,
         isEnabled: input.isEnabled,
         nextRunAt: input.isEnabled ? null : existing.nextRunAt,
+        queuedReason: input.isEnabled ? "rule_updated" : existing.queuedReason,
+        queuedAt: input.isEnabled ? new Date() : existing.queuedAt,
         destinations: {
           create: input.destinations.map((destination) => ({
             service: destination.service,

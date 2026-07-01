@@ -1007,6 +1007,8 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       data: {
         lastRunAt: new Date(),
         nextRunAt: deferredByBatchLimit ? null : nextScheduledRun(rule.intervalMinutes),
+        queuedReason: deferredByBatchLimit ? rule.queuedReason : null,
+        queuedAt: deferredByBatchLimit ? rule.queuedAt : null,
       },
     });
     await recordSuccessForRule([rule.sourceService, ...rule.destinations.map((destination) => destination.service)]).catch(() => {});
@@ -1034,6 +1036,8 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       data: {
         lastRunAt: new Date(),
         nextRunAt: nextRunAfterFailure(rule.intervalMinutes, error),
+        queuedReason: null,
+        queuedAt: null,
       },
     });
     const destServices = rule.destinations.map((destination) => destination.service);

@@ -82,6 +82,10 @@ export async function scheduleManualMatchFollowupSyncs({
       isEnabled: true,
       OR: sources,
     },
-    data: { nextRunAt: null },
+    data: {
+      nextRunAt: null,
+      queuedReason: "manual_match_resolved",
+      queuedAt: new Date(),
+    },
   });
 }

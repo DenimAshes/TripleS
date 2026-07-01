@@ -93,7 +93,7 @@ describe("manual match resolution", () => {
         isEnabled: true,
         OR: [{ sourceService: "SPOTIFY", sourcePlaylistId: "sp-1" }],
       },
-      data: { nextRunAt: null },
+      data: { nextRunAt: null, queuedReason: "manual_match_resolved", queuedAt: expect.any(Date) },
     });
   });
 
@@ -118,7 +118,7 @@ describe("manual match resolution", () => {
         isEnabled: true,
         OR: [{ sourceService: "SPOTIFY", sourcePlaylistId: "sp-one-way" }],
       },
-      data: { nextRunAt: null },
+      data: { nextRunAt: null, queuedReason: "manual_match_resolved", queuedAt: expect.any(Date) },
     });
   });
 
@@ -144,7 +144,7 @@ describe("manual match resolution", () => {
           { sourceService: "YOUTUBE", sourcePlaylistId: "yt-1" },
         ],
       },
-      data: { nextRunAt: null },
+      data: { nextRunAt: null, queuedReason: "manual_match_resolved", queuedAt: expect.any(Date) },
     });
   });
 
@@ -176,7 +176,7 @@ describe("manual match resolution", () => {
           { sourceService: "SOUNDCLOUD", sourcePlaylistId: "sc-1" },
         ],
       },
-      data: { nextRunAt: null },
+      data: { nextRunAt: null, queuedReason: "manual_match_resolved", queuedAt: expect.any(Date) },
     });
   });
 

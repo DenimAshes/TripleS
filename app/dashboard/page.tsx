@@ -447,7 +447,7 @@ function SyncQueueRuleRow({ rule, running }: { rule: RuleWithDestinations; runni
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-[var(--text)]">{rule.name}</div>
           <div className="truncate text-xs text-muted-fg">
-            {rule.sourceService} source · every {rule.intervalMinutes}m
+            {rule.sourceService} source · {queueReasonLabel(rule.queuedReason)} · every {rule.intervalMinutes}m
           </div>
         </div>
       </div>
@@ -468,4 +468,13 @@ function SyncQueueRuleRow({ rule, running }: { rule: RuleWithDestinations; runni
       </div>
     </div>
   );
+}
+
+function queueReasonLabel(reason?: string | null): string {
+  if (reason === "manual_match_resolved") return "Manual match";
+  if (reason === "rule_created") return "New rule";
+  if (reason === "rule_updated") return "Rule edit";
+  if (reason === "rule_enabled") return "Enabled";
+  if (reason === "playlist_group_connected") return "Connected";
+  return "Queued";
 }
