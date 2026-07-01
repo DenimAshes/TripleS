@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/auth/session";
-import { ManualMatchRequestError, parseBulkThreshold, parsePreviewFlag } from "@/lib/services/manualMatchRequest";
+import {
+  buildManualMatchPreviewCandidates,
+  ManualMatchRequestError,
+  parseBulkThreshold,
+  parsePreviewFlag,
+} from "@/lib/services/manualMatchRequest";
 import { scheduleManualMatchFollowupSyncs } from "@/lib/services/manualMatchResolution";
 
 export const runtime = "nodejs";
@@ -42,16 +47,21 @@ export async function POST(request: Request) {
   });
 
   if (preview) {
+    const previewCandidates = candidates.slice(0, 8);
+    const trackIds = Array.from(new Set(previewCandidates.flatMap((c) => [c.sourceServiceTrackId, c.candidateServiceTrackId])));
+    const tracks = trackIds.length
+      ? await prisma.serviceTrack.findMany({
+          where: { id: { in: trackIds } },
+          select: { id: true, service: true, title: true, artistsJson: true },
+        })
+      : [];
+    const trackById = new Map(tracks.map((track) => [track.id, track]));
+
     return NextResponse.json({
       threshold,
       count: candidates.length,
-      candidates: candidates.map((c) => ({
-        id: c.id,
-        confidence: c.confidence,
-        sourceServiceTrackId: c.sourceServiceTrackId,
-        candidateServiceTrackId: c.candidateServiceTrackId,
-        targetService: c.targetService,
-      })),
+      remaining: Math.max(0, candidates.length - previewCandidates.length),
+      candidates: buildManualMatchPreviewCandidates(previewCandidates, trackById),
     });
   }
 

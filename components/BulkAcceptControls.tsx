@@ -6,6 +6,26 @@ import { useState } from "react";
 
 type Mode = "accept" | "reject";
 
+type PreviewCandidate = {
+  id: string;
+  confidence: number;
+  sourceServiceTrackId: string;
+  sourceService?: string;
+  sourceTitle?: string;
+  sourceArtists?: string[];
+  candidateServiceTrackId: string;
+  candidateService?: string;
+  candidateTitle?: string;
+  candidateArtists?: string[];
+  targetService: string;
+};
+
+type PreviewState = {
+  count: number;
+  remaining: number;
+  candidates: PreviewCandidate[];
+};
+
 type CardConfig = {
   mode: Mode;
   title: string;
@@ -64,7 +84,7 @@ const CONFIGS: Record<Mode, CardConfig> = {
 function BulkSection({ config, totalPending }: { config: CardConfig; totalPending: number }) {
   const router = useRouter();
   const [threshold, setThreshold] = useState(config.defaultThreshold);
-  const [previewCount, setPreviewCount] = useState<number | null>(null);
+  const [previewState, setPreviewState] = useState<PreviewState | null>(null);
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -79,7 +99,11 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
         body: JSON.stringify({ threshold: newThreshold, preview: true }),
       });
       const data = await res.json();
-      setPreviewCount(typeof data.count === "number" ? data.count : 0);
+      setPreviewState({
+        count: typeof data.count === "number" ? data.count : 0,
+        remaining: typeof data.remaining === "number" ? data.remaining : 0,
+        candidates: Array.isArray(data.candidates) ? data.candidates : [],
+      });
       setConfirming(false);
     } catch (err) {
       setOutcome(err instanceof Error ? err.message : "Preview failed");
@@ -89,7 +113,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
   }
 
   async function apply() {
-    if (!previewCount) return;
+    if (!previewState?.count) return;
     setBusy(true);
     setOutcome(null);
     try {
@@ -107,7 +131,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
         setOutcome(
           `${config.successVerb} ${count}${data.failed ? `, ${data.failed} failed (${(data.errors || []).slice(0, 2).join("; ")})` : ""}.${scheduled}`,
         );
-        setPreviewCount(null);
+        setPreviewState(null);
         setConfirming(false);
         router.refresh();
       }
@@ -120,7 +144,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
 
   function onThresholdChange(value: number) {
     setThreshold(value);
-    setPreviewCount(null);
+    setPreviewState(null);
     setConfirming(false);
   }
 
@@ -150,10 +174,10 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
         <button type="button" onClick={() => preview(threshold)} disabled={busy} className="btn btn-ghost">
           Preview
         </button>
-        {confirming && previewCount ? (
+        {confirming && previewState?.count ? (
           <>
             <span className="text-xs text-muted-fg">
-              {config.confirmVerb} {previewCount} at {config.thresholdLabel}
+              {config.confirmVerb} {previewState.count} at {config.thresholdLabel}
               {Math.round(threshold * 100)}%?
             </span>
             <button type="button" onClick={apply} disabled={busy} className={config.buttonClass}>
@@ -168,14 +192,50 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            disabled={busy || !previewCount}
+            disabled={busy || !previewState?.count}
             className={config.buttonClass}
           >
             {config.buttonIcon}
-            {previewCount != null ? `${config.buttonLabel} ${previewCount}` : config.buttonLabel}
+            {previewState ? `${config.buttonLabel} ${previewState.count}` : config.buttonLabel}
           </button>
         )}
       </div>
+      {previewState ? (
+        <div className="basis-full rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] p-3">
+          {previewState.count > 0 ? (
+            <>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-accent-fg">
+                Previewing {previewState.candidates.length} of {previewState.count}
+              </div>
+              <div className="grid gap-2">
+                {previewState.candidates.map((candidate) => (
+                  <div key={candidate.id} className="grid gap-1 rounded-lg border border-[var(--border-soft)] bg-[var(--surface)] p-2 text-xs sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-[var(--text)]">{candidate.sourceTitle || candidate.sourceServiceTrackId}</div>
+                      <div className="truncate text-dim-fg">
+                        {(candidate.sourceArtists || []).join(", ") || candidate.sourceService || "Source"}
+                      </div>
+                    </div>
+                    <div className="hidden text-muted-fg sm:block">→</div>
+                    <div className="min-w-0 sm:text-right">
+                      <div className="truncate font-semibold text-[var(--text)]">{candidate.candidateTitle || candidate.candidateServiceTrackId}</div>
+                      <div className="truncate text-dim-fg">
+                        {(candidate.candidateArtists || []).join(", ") || candidate.candidateService || candidate.targetService}
+                        <span className="ml-2 font-black text-[var(--text)]">{Math.round(candidate.confidence * 100)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {previewState.remaining > 0 ? (
+                <div className="mt-2 text-xs text-muted-fg">+ {previewState.remaining} more will be included.</div>
+              ) : null}
+            </>
+          ) : (
+            <div className="text-xs text-muted-fg">No songs match this threshold.</div>
+          )}
+        </div>
+      ) : null}
       {outcome ? (
         <div className={`basis-full text-xs ${outcome.startsWith(config.successVerb) ? "text-emerald-400" : "text-[#fca5a5]"}`}>
           {outcome}

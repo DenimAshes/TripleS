@@ -133,6 +133,12 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
                       <div className="flex min-w-0 items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-2">
+                            <span
+                              className="grid h-5 w-5 shrink-0 place-items-center rounded-md border border-[var(--border-soft)] bg-[var(--surface)] text-[11px] font-black text-muted-fg"
+                              title={`Pick ${index + 1}`}
+                            >
+                              {index + 1}
+                            </span>
                             {best ? <CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> : null}
                             <h4 className="truncate text-sm font-bold text-white">{candidate.track.title}</h4>
                           </div>

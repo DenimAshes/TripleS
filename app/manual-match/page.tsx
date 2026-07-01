@@ -2,7 +2,7 @@ import { CheckCircle2, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { BulkAcceptControls } from "@/components/BulkAcceptControls";
 import { ManualMatchDialog, type ManualCandidateView } from "@/components/ManualMatchDialog";
-import { ServicePill } from "@/components/ServiceBrand";
+import { ManualReviewShortcuts } from "@/components/ManualReviewShortcuts";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { parseManualMatchAlternatives } from "@/lib/services/manualMatchRequest";
@@ -11,7 +11,7 @@ export default async function ManualMatchPage() {
   const session = await getSession();
   const matches = await prisma.manualMatchCandidate.findMany({
     where: { userId: session!.userId, status: "PENDING" },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ confidence: "desc" }, { createdAt: "desc" }],
   });
 
   const alternativesByCandidate = new Map<string, ReturnType<typeof parseManualMatchAlternatives>>();
@@ -23,6 +23,7 @@ export default async function ManualMatchPage() {
     alternativesByCandidate.set(item.id, alts);
     for (const alt of alts) trackIds.add(alt.serviceTrackId);
   }
+
   const tracks = trackIds.size
     ? await prisma.serviceTrack.findMany({ where: { id: { in: Array.from(trackIds) } } })
     : [];
@@ -44,27 +45,35 @@ export default async function ManualMatchPage() {
   });
 
   const empty = enriched.length === 0;
+  const highConfidenceCount = enriched.filter((item) => item.confidence >= 0.85).length;
+  const lowConfidenceCount = enriched.filter((item) => item.confidence <= 0.7).length;
+  const firstItem = enriched[0];
+  const firstItemCandidateIds = firstItem?.alternatives?.length
+    ? firstItem.alternatives.map((candidate) => candidate.track.id).slice(0, 5)
+    : firstItem?.candidate
+      ? [firstItem.candidate.id]
+      : [];
 
   return (
     <AppShell title="Review songs">
-      <section className="mb-4 rounded-xl border border-[var(--border-soft)] bg-[var(--surface)] p-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <ManualReviewShortcuts reviewId={firstItem?.id} candidateTrackIds={firstItemCandidateIds} />
+
+      <section className="mb-4 rounded-xl border border-[var(--border-soft)] bg-[var(--surface)] px-4 py-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h2 className="text-xl font-black tracking-tight text-white md:text-2xl">
+            <h2 className="text-lg font-black tracking-tight text-white md:text-xl">
               {empty ? "Nothing waiting for review" : `${enriched.length} ${enriched.length === 1 ? "song" : "songs"} to review`}
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-fg">
-              Auto-match wasn&apos;t sure which version of these songs to use. Pick the best match or skip — accepted picks
-              feed every rule that touches the source.
+            <p className="mt-1 max-w-2xl text-sm leading-5 text-muted-fg">
+              Pick the right version once. The saved match is reused by every sync rule that touches the source song.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <ServicePill service="SPOTIFY" />
-              <ServicePill service="YOUTUBE" />
-              <ServicePill service="SOUNDCLOUD" />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="pill pill-success">{highConfidenceCount} likely</span>
+              <span className="pill pill-warning">{lowConfidenceCount} weak</span>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-3 sm:justify-end">
-            <div className="text-4xl font-black leading-none tabular-nums text-white">{enriched.length}</div>
+          <div className="flex shrink-0 items-center gap-2 sm:justify-end">
+            <div className="text-3xl font-black leading-none tabular-nums text-white">{enriched.length}</div>
             <span className={`pill ${empty ? "pill-success" : "pill-warning"}`}>
               {empty ? <CheckCircle2 size={12} /> : <Sparkles size={12} />}
               {empty ? "Inbox zero" : "Action needed"}
@@ -72,7 +81,9 @@ export default async function ManualMatchPage() {
           </div>
         </div>
       </section>
+
       <BulkAcceptControls totalPending={enriched.length} />
+
       <div className="space-y-4">
         {enriched.map((item) => <ManualMatchDialog key={item.id} item={item} />)}
         {empty ? (

@@ -1,3 +1,5 @@
+import { parseArtistsJson } from "@/lib/utils/parseArtists";
+
 export class ManualMatchRequestError extends Error {
   constructor(
     public status: number,
@@ -25,6 +27,20 @@ export type ManualMatchAlternative = {
   serviceTrackId: string;
   confidence: number;
   breakdown?: Record<string, number>;
+};
+
+export type ManualMatchPreviewCandidate = {
+  id: string;
+  confidence: number;
+  sourceServiceTrackId: string;
+  sourceService?: string;
+  sourceTitle?: string;
+  sourceArtists?: string[];
+  candidateServiceTrackId: string;
+  candidateService?: string;
+  candidateTitle?: string;
+  candidateArtists?: string[];
+  targetService: string;
 };
 
 function isBreakdown(value: unknown): value is Record<string, number> {
@@ -61,4 +77,35 @@ export function parseManualMatchAlternatives(value: string | null | undefined): 
     });
   }
   return out;
+}
+
+export function buildManualMatchPreviewCandidates<
+  T extends {
+    id: string;
+    confidence: number;
+    sourceServiceTrackId: string;
+    candidateServiceTrackId: string;
+    targetService: string;
+  },
+>(
+  candidates: T[],
+  tracksById: Map<string, { service: string; title: string; artistsJson: string }>,
+): ManualMatchPreviewCandidate[] {
+  return candidates.map((candidate) => {
+    const source = tracksById.get(candidate.sourceServiceTrackId);
+    const target = tracksById.get(candidate.candidateServiceTrackId);
+    return {
+      id: candidate.id,
+      confidence: candidate.confidence,
+      sourceServiceTrackId: candidate.sourceServiceTrackId,
+      sourceService: source?.service,
+      sourceTitle: source?.title,
+      sourceArtists: source ? parseArtistsJson(source.artistsJson) : undefined,
+      candidateServiceTrackId: candidate.candidateServiceTrackId,
+      candidateService: target?.service,
+      candidateTitle: target?.title,
+      candidateArtists: target ? parseArtistsJson(target.artistsJson) : undefined,
+      targetService: candidate.targetService,
+    };
+  });
 }

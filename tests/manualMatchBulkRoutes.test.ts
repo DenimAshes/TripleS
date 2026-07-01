@@ -123,6 +123,51 @@ describe("manual match bulk routes", () => {
     expect(payload).toEqual({ threshold: 0.9, accepted: 1, failed: 0, scheduledRules: 2, errors: [] });
   });
 
+  test("bulk accept preview includes readable source and target songs", async () => {
+    mocks.manualMatchCandidateFindMany.mockResolvedValue([
+      {
+        id: "candidate-1",
+        confidence: 0.92,
+        sourceServiceTrackId: "source-track",
+        candidateServiceTrackId: "target-track",
+        targetService: "YOUTUBE",
+      },
+    ]);
+    mocks.serviceTrackFindMany.mockResolvedValue([
+      { id: "source-track", service: "SPOTIFY", title: "Source song", artistsJson: JSON.stringify(["Source Artist"]) },
+      { id: "target-track", service: "YOUTUBE", title: "Target song", artistsJson: JSON.stringify(["Target Artist"]) },
+    ]);
+
+    const response = await acceptBulk(request("http://localhost/api/manual-match/bulk-accept", { threshold: 0.9, preview: true }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.serviceTrackFindMany).toHaveBeenCalledWith({
+      where: { id: { in: ["source-track", "target-track"] } },
+      select: { id: true, service: true, title: true, artistsJson: true },
+    });
+    expect(payload).toEqual({
+      threshold: 0.9,
+      count: 1,
+      remaining: 0,
+      candidates: [
+        {
+          id: "candidate-1",
+          confidence: 0.92,
+          sourceServiceTrackId: "source-track",
+          sourceService: "SPOTIFY",
+          sourceTitle: "Source song",
+          sourceArtists: ["Source Artist"],
+          candidateServiceTrackId: "target-track",
+          candidateService: "YOUTUBE",
+          candidateTitle: "Target song",
+          candidateArtists: ["Target Artist"],
+          targetService: "YOUTUBE",
+        },
+      ],
+    });
+  });
+
   test("bulk reject writes negative cache and queues follow-up sync", async () => {
     mocks.manualMatchCandidateFindMany.mockResolvedValue([
       {
@@ -168,5 +213,26 @@ describe("manual match bulk routes", () => {
       sourceServiceTrackIds: ["source-track"],
     });
     expect(payload).toEqual({ threshold: 0.5, rejected: 1, failed: 0, scheduledRules: 2, errors: [] });
+  });
+
+  test("bulk reject preview caps visible candidates and reports remaining count", async () => {
+    mocks.manualMatchCandidateFindMany.mockResolvedValue(
+      Array.from({ length: 10 }, (_, index) => ({
+        id: `candidate-${index}`,
+        confidence: 0.4,
+        sourceServiceTrackId: `source-${index}`,
+        candidateServiceTrackId: `target-${index}`,
+        targetService: "SOUNDCLOUD",
+      })),
+    );
+    mocks.serviceTrackFindMany.mockResolvedValue([]);
+
+    const response = await rejectBulk(request("http://localhost/api/manual-match/bulk-reject", { threshold: 0.5, preview: true }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.count).toBe(10);
+    expect(payload.remaining).toBe(2);
+    expect(payload.candidates).toHaveLength(8);
   });
 });
