@@ -15,6 +15,8 @@ import { Prisma } from "@prisma/client";
 import { buildSourcePlaylistGroupMap, ruleBatchKey } from "@/lib/sync/groupAwareRuleLimit";
 
 const WORKER_SERVICES = ["youtube", "spotify", "soundcloud"];
+const WORKER_STALE_WHILE_QUEUED_MS = 30 * 60_000;
+const WORKER_RUNNING_STALE_MS = 60 * 60_000;
 
 type RuleWithDestinations = Awaited<ReturnType<typeof prisma.syncRule.findMany>>[number] & {
   destinations: Awaited<ReturnType<typeof prisma.syncDestination.findMany>>;
@@ -36,6 +38,12 @@ type WorkerSkippedReason = {
   name?: string;
   reason: string;
   detail?: string;
+};
+
+type WorkerWarning = {
+  tone: "warning" | "danger";
+  title: string;
+  detail: string;
 };
 
 async function computeRuleProgress(
@@ -216,6 +224,11 @@ export default async function DashboardPage() {
     .sort((a, b) => a.nextRunAt!.getTime() - b.nextRunAt!.getTime());
   const nextScheduledRun = futureRuns[0]?.nextRunAt ?? null;
   const workerSkippedReasons = parseWorkerSkippedReasons(lastWorkerRun?.skippedJson);
+  const workerWarnings = buildWorkerWarnings({
+    lastWorkerRun,
+    queuedRules: dueRules.length,
+    now,
+  });
   const groupedRules = new Map<string, RuleWithDestinations[]>();
   const standaloneRules: RuleWithDestinations[] = [];
   for (const rule of rules) {
@@ -288,6 +301,23 @@ export default async function DashboardPage() {
           </div>
         ) : null}
         <div className="mt-4 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] p-3">
+          {workerWarnings.length ? (
+            <div className="mb-3 grid gap-2">
+              {workerWarnings.map((warning) => (
+                <div
+                  key={warning.title}
+                  className={`rounded-lg border px-3 py-2 text-sm ${
+                    warning.tone === "danger"
+                      ? "border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[var(--danger-soft)] text-[#fecaca]"
+                      : "border-[color-mix(in_srgb,var(--warning)_35%,var(--border))] bg-[rgba(245,158,11,0.1)] text-[#fcd34d]"
+                  }`}
+                >
+                  <div className="font-semibold text-[var(--text)]">{warning.title}</div>
+                  <div className="mt-0.5 text-xs opacity-90">{warning.detail}</div>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-fg">Worker</div>
@@ -315,8 +345,8 @@ export default async function DashboardPage() {
               {workerSkippedReasons.slice(0, 3).map((item, index) => (
                 <div key={`${item.ruleId || item.reason}:${index}`} className="rounded-md border border-[var(--border-soft)] bg-[var(--surface)] px-2 py-1.5 text-xs text-muted-fg">
                   <span className="font-semibold text-[var(--text)]">{item.name || item.reason}</span>
-                  <span> · {item.reason}</span>
-                  {item.detail ? <span> · {item.detail}</span> : null}
+                  <span> - {item.reason}</span>
+                  {item.detail ? <span> - {item.detail}</span> : null}
                 </div>
               ))}
             </div>
@@ -336,7 +366,7 @@ export default async function DashboardPage() {
               Sync wasn&apos;t sure where to put them. Pick a match or skip.
             </div>
           </div>
-          <span className="text-base font-semibold text-[var(--accent)] whitespace-nowrap">Review now →</span>
+          <span className="text-base font-semibold text-[var(--accent)] whitespace-nowrap">Review now -&gt;</span>
         </Link>
       ) : null}
       <div className="grid gap-4 md:grid-cols-3">
@@ -428,7 +458,7 @@ export default async function DashboardPage() {
           >
             <div className="text-3xl font-black tracking-tight text-[#fcd34d]">{pendingReviewCount}</div>
             <div className="mt-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-fg">
-              Review{stats.manualRequired ? ` · ${stats.manualRequired} last run` : ""}
+              Review{stats.manualRequired ? ` - ${stats.manualRequired} last run` : ""}
               <ArrowRight size={11} className="ml-auto transition duration-200 group-hover/tile:translate-x-0.5" />
             </div>
           </Link>
@@ -494,7 +524,7 @@ function SyncQueueRuleRow({ rule, running }: { rule: RuleWithDestinations; runni
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-[var(--text)]">{rule.name}</div>
           <div className="truncate text-xs text-muted-fg">
-            {rule.sourceService} source · {queueReasonLabel(rule.queuedReason)} · every {rule.intervalMinutes}m
+            {rule.sourceService} source - {queueReasonLabel(rule.queuedReason)} - every {rule.intervalMinutes}m
           </div>
         </div>
       </div>
@@ -548,4 +578,57 @@ function parseWorkerSkippedReasons(value?: string | null): WorkerSkippedReason[]
   } catch {
     return [];
   }
+}
+
+function buildWorkerWarnings({
+  lastWorkerRun,
+  queuedRules,
+  now,
+}: {
+  lastWorkerRun: {
+    status: string;
+    startedAt: Date;
+    finishedAt: Date | null;
+    errorMessage?: string | null;
+  } | null;
+  queuedRules: number;
+  now: number;
+}): WorkerWarning[] {
+  if (queuedRules <= 0 && !lastWorkerRun) return [];
+
+  const warnings: WorkerWarning[] = [];
+  if (queuedRules > 0 && !lastWorkerRun) {
+    warnings.push({
+      tone: "warning",
+      title: "Sync queue is waiting, but worker has never reported in",
+      detail: "Start npm run sync-worker or the worker supervisor so queued rules can run.",
+    });
+    return warnings;
+  }
+
+  if (!lastWorkerRun) return warnings;
+
+  const ageMs = now - lastWorkerRun.startedAt.getTime();
+  if (lastWorkerRun.status === "FAILED") {
+    warnings.push({
+      tone: "danger",
+      title: "Last sync-worker run failed",
+      detail: lastWorkerRun.errorMessage || "Check worker logs before relying on queued sync.",
+    });
+  }
+  if (lastWorkerRun.status === "RUNNING" && !lastWorkerRun.finishedAt && ageMs > WORKER_RUNNING_STALE_MS) {
+    warnings.push({
+      tone: "danger",
+      title: "Sync worker run looks stuck",
+      detail: `It has been running for ${Math.round(ageMs / 60_000)} minutes.`,
+    });
+  }
+  if (queuedRules > 0 && lastWorkerRun.status !== "RUNNING" && ageMs > WORKER_STALE_WHILE_QUEUED_MS) {
+    warnings.push({
+      tone: "warning",
+      title: "Queued sync has not been picked up recently",
+      detail: `Last worker run started ${Math.round(ageMs / 60_000)} minutes ago while ${queuedRules} rule${queuedRules === 1 ? "" : "s"} are waiting.`,
+    });
+  }
+  return warnings;
 }
