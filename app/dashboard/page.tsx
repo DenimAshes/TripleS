@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, ArrowRight, ListMusic } from "lucide-react";
+import { Activity, ArrowRight, ListMusic, RotateCw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ServiceIcon, serviceMeta } from "@/components/ServiceBrand";
 import { PlaylistsAutoRefresh } from "@/components/PlaylistsAutoRefresh";
@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { Prisma } from "@prisma/client";
+import { buildSourcePlaylistGroupMap, ruleBatchKey } from "@/lib/sync/groupAwareRuleLimit";
 
 const WORKER_SERVICES = ["youtube", "spotify", "soundcloud"];
 
@@ -186,6 +187,21 @@ export default async function DashboardPage() {
   const memberByPlaylistKey = new Map(
     groupMembers.map((member) => [`${member.playlist.service}:${member.playlist.servicePlaylistId}`, member]),
   );
+  const sourceGroupMap = buildSourcePlaylistGroupMap(
+    groupMembers.map((member) => ({
+      groupId: member.groupId,
+      playlist: {
+        service: member.playlist.service,
+        servicePlaylistId: member.playlist.servicePlaylistId,
+      },
+    })),
+  );
+  const dueRules = rules.filter((rule) => rule.isEnabled && (!rule.nextRunAt || rule.nextRunAt <= new Date(now)));
+  const dueSyncBatches = new Set(dueRules.map((rule) => ruleBatchKey(rule, sourceGroupMap))).size;
+  const futureRuns = rules
+    .filter((rule) => rule.isEnabled && rule.nextRunAt && rule.nextRunAt > new Date(now))
+    .sort((a, b) => a.nextRunAt!.getTime() - b.nextRunAt!.getTime());
+  const nextScheduledRun = futureRuns[0]?.nextRunAt ?? null;
   const groupedRules = new Map<string, RuleWithDestinations[]>();
   const standaloneRules: RuleWithDestinations[] = [];
   for (const rule of rules) {
@@ -217,6 +233,33 @@ export default async function DashboardPage() {
       <PlaylistsAutoRefresh hasPlaylists={playlists.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
       <RunningJobsAutoRefresh runningCount={runningJobs.length} />
       <SessionStalenessBanner items={staleSessions} />
+      <section className="panel mb-6 flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">
+            <RotateCw size={14} />
+            Sync queue
+          </div>
+          <h2 className="mt-1 text-xl font-black tracking-tight text-white">
+            {dueRules.length
+              ? `${dueRules.length} rule${dueRules.length === 1 ? "" : "s"} ready to run`
+              : runningJobs.length
+                ? `${runningJobs.length} sync ${runningJobs.length === 1 ? "is" : "are"} running`
+                : "No sync work waiting"}
+          </h2>
+          <p className="mt-1 text-sm text-muted-fg">
+            {dueRules.length
+              ? `${dueSyncBatches} grouped batch${dueSyncBatches === 1 ? "" : "es"} will be picked up by cron or worker.`
+              : nextScheduledRun
+                ? `Next scheduled rule is due ${nextScheduledRun.toLocaleString()}.`
+                : "Manual matches and rule edits will appear here when they queue follow-up sync."}
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center sm:min-w-80">
+          <QueueMetric label="Due" value={dueRules.length} tone={dueRules.length ? "accent" : "neutral"} />
+          <QueueMetric label="Batches" value={dueSyncBatches} tone={dueSyncBatches ? "accent" : "neutral"} />
+          <QueueMetric label="Running" value={runningJobs.length} tone={runningJobs.length ? "success" : "neutral"} />
+        </div>
+      </section>
       {pendingReviewCount > 0 ? (
         <Link
           href="/manual-match"
@@ -365,6 +408,17 @@ function StatTile({ value, label, tone }: { value: number; label: string; tone: 
     <div className="panel-inset surface-lift animated-sheen relative overflow-hidden p-5 rounded-lg">
       <div className={`text-3xl font-black tracking-tight ${valueClass}`}>{value}</div>
       <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-fg">{label}</div>
+    </div>
+  );
+}
+
+function QueueMetric({ value, label, tone }: { value: number; label: string; tone: "accent" | "neutral" | "success" }) {
+  const valueClass =
+    tone === "accent" ? "text-[var(--accent)]" : tone === "success" ? "text-emerald-300" : "text-[var(--text)]";
+  return (
+    <div className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2">
+      <div className={`text-2xl font-black tabular-nums ${valueClass}`}>{value}</div>
+      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-fg">{label}</div>
     </div>
   );
 }
