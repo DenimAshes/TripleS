@@ -5,6 +5,7 @@ import { preflightSyncRule } from "@/lib/sync/preflight";
 import { shouldRefreshSourceCache } from "@/lib/sync/sourceCachePolicy";
 import { applyGroupAwareRuleLimit, buildSourcePlaylistGroupMap } from "@/lib/sync/groupAwareRuleLimit";
 import { killChildPids } from "@/worker/childPidRegistry";
+import { failWorkerRun, finishWorkerRun, startWorkerRun, type WorkerSkipReason } from "@/lib/services/workerRunStore";
 
 const RUNNING_JOB_TIMEOUT_MINUTES = Math.max(1, Number(process.env.WORKER_RUNNING_JOB_TIMEOUT_MINUTES ?? 60));
 
@@ -41,10 +42,27 @@ function activeHoursDecision(): { skip: boolean; reason: string } {
 }
 
 async function main() {
+  const workerRun = await startWorkerRun("sync-worker");
+  const skippedReasons: WorkerSkipReason[] = [];
+  let dueCount = 0;
+  let runnableCount = 0;
+  let selectedCount = 0;
+  let ran = 0;
+  let failed = 0;
+  try {
   const window = activeHoursDecision();
   console.log(`[sync-worker] ${window.reason}`);
   if (window.skip) {
     console.log("[sync-worker] Skipping run. Set WORKER_ACTIVE_HOUR_START/END or WORKER_ACCOUNT_TIMEZONE to override.");
+    await finishWorkerRun(workerRun.id, {
+      due: 0,
+      runnable: 0,
+      selected: 0,
+      ran: 0,
+      failed: 0,
+      skipped: 1,
+      skippedReasons: [{ reason: "active_hours", detail: window.reason }],
+    });
     return;
   }
 
@@ -55,6 +73,7 @@ async function main() {
     },
     include: { destinations: { where: { isEnabled: true } } },
   });
+  dueCount = dueRules.length;
 
   const cooled = await getServicesInCooldown();
   if (cooled.size > 0) {
@@ -66,6 +85,7 @@ async function main() {
     const blocked = services.find((s) => cooled.has(s));
     if (blocked) {
       console.log(`[sync-worker] Skipping ${rule.name} (${rule.id}) - service ${blocked} is in cooldown.`);
+      skippedReasons.push({ ruleId: rule.id, name: rule.name, reason: "cooldown", detail: `${blocked} is in cooldown` });
       return false;
     }
     return true;
@@ -91,10 +111,12 @@ async function main() {
     });
     if (!preflight.ok) {
       console.log(`[sync-worker] Preflight failed for ${rule.name} (${rule.id}): ${preflight.reasons.join("; ")}`);
+      skippedReasons.push({ ruleId: rule.id, name: rule.name, reason: "preflight", detail: preflight.reasons.join("; ") });
       continue;
     }
     runnable.push(rule);
   }
+  runnableCount = runnable.length;
 
   shuffleInPlace(runnable);
 
@@ -118,15 +140,18 @@ async function main() {
       })
     : [];
   const groupMap = buildSourcePlaylistGroupMap(groupMembers);
-  const slice = applyGroupAwareRuleLimit(runnable, groupMap, maxPerRun).selected;
+  const limited = applyGroupAwareRuleLimit(runnable, groupMap, maxPerRun);
+  const slice = limited.selected;
+  for (const rule of limited.skipped) {
+    skippedReasons.push({ ruleId: rule.id, name: rule.name, reason: "limit", detail: `WORKER_MAX_RULES_PER_RUN=${maxPerRun}` });
+  }
+  selectedCount = slice.length;
   if (slice.length < runnable.length) {
     console.log(
       `[sync-worker] Limiting to ${slice.length}/${runnable.length} rules this tick by sync group (WORKER_MAX_RULES_PER_RUN=${maxPerRun}).`,
     );
   }
 
-  let ran = 0;
-  let failed = 0;
   let skippedRunning = 0;
   for (const rule of slice) {
     const runningJob = await prisma.syncJob.findFirst({
@@ -136,6 +161,12 @@ async function main() {
     if (runningJob) {
       console.log(`[sync-worker] Skipping ${rule.name} (${rule.id}) because job ${runningJob.id} is already RUNNING since ${runningJob.startedAt.toISOString()}.`);
       skippedRunning += 1;
+      skippedReasons.push({
+        ruleId: rule.id,
+        name: rule.name,
+        reason: "already_running",
+        detail: `Job ${runningJob.id} is RUNNING since ${runningJob.startedAt.toISOString()}`,
+      });
       continue;
     }
     console.log(`Running sync rule ${rule.name} (${rule.id})`);
@@ -151,6 +182,27 @@ async function main() {
   console.log(
     `[sync-worker] summary: due=${dueRules.length} runnable=${runnable.length} sliced=${slice.length} ran=${ran} failed=${failed} skippedRunning=${skippedRunning}`,
   );
+  await finishWorkerRun(workerRun.id, {
+    due: dueCount,
+    runnable: runnableCount,
+    selected: selectedCount,
+    ran,
+    failed,
+    skipped: skippedReasons.length,
+    skippedReasons,
+  });
+  } catch (error) {
+    await failWorkerRun(workerRun.id, error, {
+      due: dueCount,
+      runnable: runnableCount,
+      selected: selectedCount,
+      ran,
+      failed,
+      skipped: skippedReasons.length,
+      skippedReasons,
+    }).catch(() => undefined);
+    throw error;
+  }
 }
 
 async function markStaleRunningJobs(syncRuleId: string, ruleName: string): Promise<void> {

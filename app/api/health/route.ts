@@ -45,7 +45,7 @@ export async function GET() {
 
   const dbPing = await timed("db", () => prisma.$queryRawUnsafe<Array<{ ok: number }>>("SELECT 1 AS ok"));
 
-  const [lastJob, runningJobs, queuedJobs, sessions, dueRules, pendingManualMatches] = await Promise.all([
+  const [lastJob, runningJobs, queuedJobs, sessions, dueRules, pendingManualMatches, lastWorkerRun] = await Promise.all([
     prisma.syncJob.findFirst({ orderBy: { startedAt: "desc" }, select: { startedAt: true, status: true, finishedAt: true } }).catch(() => null),
     prisma.syncJob.count({ where: { status: "RUNNING", finishedAt: null } }).catch(() => -1),
     prisma.browserJob.count({ where: { status: { in: ["queued", "running"] } } }).catch(() => -1),
@@ -62,6 +62,13 @@ export async function GET() {
       })
       .catch(() => [] as Array<{ id: string; sourceService: string; sourcePlaylistId: string }>),
     prisma.manualMatchCandidate.count({ where: { status: "PENDING" } }).catch(() => -1),
+    prisma.workerRun
+      .findFirst({
+        where: { worker: "sync-worker" },
+        orderBy: { startedAt: "desc" },
+        select: { status: true, startedAt: true, finishedAt: true, due: true, runnable: true, selected: true, ran: true, failed: true, skipped: true },
+      })
+      .catch(() => null),
   ]);
   const groupMembers = dueRules.length
     ? await prisma.playlistGroupMember
@@ -111,6 +118,20 @@ export async function GET() {
       dueSyncBatches,
       pendingManualMatches,
     },
+    syncWorker: lastWorkerRun
+      ? {
+          status: lastWorkerRun.status,
+          startedAt: lastWorkerRun.startedAt.toISOString(),
+          finishedAt: lastWorkerRun.finishedAt?.toISOString() ?? null,
+          ageMs: now - lastWorkerRun.startedAt.getTime(),
+          due: lastWorkerRun.due,
+          runnable: lastWorkerRun.runnable,
+          selected: lastWorkerRun.selected,
+          ran: lastWorkerRun.ran,
+          failed: lastWorkerRun.failed,
+          skipped: lastWorkerRun.skipped,
+        }
+      : null,
     sessions: sessionAges,
   };
 

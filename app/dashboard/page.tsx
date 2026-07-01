@@ -31,6 +31,13 @@ export type SyncRuleProgress = {
   }>;
 };
 
+type WorkerSkippedReason = {
+  ruleId?: string;
+  name?: string;
+  reason: string;
+  detail?: string;
+};
+
 async function computeRuleProgress(
   userId: string,
   rules: RuleWithDestinations[],
@@ -121,7 +128,7 @@ async function computeRuleProgress(
 
 export default async function DashboardPage() {
   const session = await getSession();
-  const [accounts, rules, lastJob, playlists, sessionRows, pendingReviewCount, runningJobs, recentJobs, groupMembers] = await Promise.all([
+  const [accounts, rules, lastJob, playlists, sessionRows, pendingReviewCount, runningJobs, recentJobs, groupMembers, lastWorkerRun] = await Promise.all([
     prisma.connectedAccount.findMany({ where: { userId: session!.userId }, orderBy: { service: "asc" } }),
     prisma.syncRule.findMany({ where: { userId: session!.userId }, include: { destinations: true }, orderBy: { createdAt: "asc" } }),
     prisma.syncJob.findFirst({ where: { syncRule: { userId: session!.userId } }, orderBy: { startedAt: "desc" } }),
@@ -146,6 +153,10 @@ export default async function DashboardPage() {
         playlist: { select: { id: true, service: true, servicePlaylistId: true, name: true } },
       },
       orderBy: { service: "asc" },
+    }),
+    prisma.workerRun.findFirst({
+      where: { worker: "sync-worker" },
+      orderBy: { startedAt: "desc" },
     }),
   ]);
   const runningByRule = new Map(
@@ -204,6 +215,7 @@ export default async function DashboardPage() {
     .filter((rule) => rule.isEnabled && rule.nextRunAt && rule.nextRunAt > new Date(now))
     .sort((a, b) => a.nextRunAt!.getTime() - b.nextRunAt!.getTime());
   const nextScheduledRun = futureRuns[0]?.nextRunAt ?? null;
+  const workerSkippedReasons = parseWorkerSkippedReasons(lastWorkerRun?.skippedJson);
   const groupedRules = new Map<string, RuleWithDestinations[]>();
   const standaloneRules: RuleWithDestinations[] = [];
   for (const rule of rules) {
@@ -275,6 +287,41 @@ export default async function DashboardPage() {
             ) : null}
           </div>
         ) : null}
+        <div className="mt-4 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-fg">Worker</div>
+              <div className="mt-1 text-sm font-semibold text-[var(--text)]">
+                {lastWorkerRun
+                  ? `Last ${lastWorkerRun.status.toLowerCase().replaceAll("_", " ")} run ${lastWorkerRun.startedAt.toLocaleString()}`
+                  : "No sync-worker runs recorded yet"}
+              </div>
+              <div className="mt-1 text-xs text-muted-fg">
+                {lastWorkerRun
+                  ? `${lastWorkerRun.ran} ran, ${lastWorkerRun.failed} failed, ${lastWorkerRun.skipped} skipped`
+                  : "Start npm run sync-worker or worker supervisor to record worker activity."}
+              </div>
+            </div>
+            {lastWorkerRun ? (
+              <div className="grid grid-cols-3 gap-2 text-center sm:min-w-72">
+                <QueueMetric label="Runnable" value={lastWorkerRun.runnable} tone={lastWorkerRun.runnable ? "accent" : "neutral"} />
+                <QueueMetric label="Ran" value={lastWorkerRun.ran} tone={lastWorkerRun.ran ? "success" : "neutral"} />
+                <QueueMetric label="Skipped" value={lastWorkerRun.skipped} tone={lastWorkerRun.skipped ? "accent" : "neutral"} />
+              </div>
+            ) : null}
+          </div>
+          {workerSkippedReasons.length ? (
+            <div className="mt-3 grid gap-2">
+              {workerSkippedReasons.slice(0, 3).map((item, index) => (
+                <div key={`${item.ruleId || item.reason}:${index}`} className="rounded-md border border-[var(--border-soft)] bg-[var(--surface)] px-2 py-1.5 text-xs text-muted-fg">
+                  <span className="font-semibold text-[var(--text)]">{item.name || item.reason}</span>
+                  <span> · {item.reason}</span>
+                  {item.detail ? <span> · {item.detail}</span> : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </section>
       {pendingReviewCount > 0 ? (
         <Link
@@ -477,4 +524,28 @@ function queueReasonLabel(reason?: string | null): string {
   if (reason === "rule_enabled") return "Enabled";
   if (reason === "playlist_group_connected") return "Connected";
   return "Queued";
+}
+
+function parseWorkerSkippedReasons(value?: string | null): WorkerSkippedReason[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const out: WorkerSkippedReason[] = [];
+    for (const item of parsed) {
+      if (!item || typeof item !== "object") continue;
+      const raw = item as Record<string, unknown>;
+      const reason = typeof raw.reason === "string" ? raw.reason : "";
+      if (!reason) continue;
+      out.push({
+        ruleId: typeof raw.ruleId === "string" ? raw.ruleId : undefined,
+        name: typeof raw.name === "string" ? raw.name : undefined,
+        reason,
+        detail: typeof raw.detail === "string" ? raw.detail : undefined,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
 }
