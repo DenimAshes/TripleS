@@ -210,9 +210,9 @@ export function CommandPalette() {
         aria-label="Open command palette"
       >
         <Search size={13} className="text-dim-fg group-hover:text-[var(--accent)]" />
-        <span>Jump…</span>
+        <span>Jump...</span>
         <span className="ml-2 inline-flex items-center gap-0.5">
-          <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">⌘</kbd>
+          <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">Ctrl</kbd>
           <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">K</kbd>
         </span>
       </button>
@@ -248,7 +248,7 @@ export function CommandPalette() {
                   setActiveIndex(0);
                 }}
                 onKeyDown={onKeyDown}
-                placeholder="Jump to a page, service, or action…"
+                placeholder="Jump to a page, service, or action..."
                 className="w-full border-0! bg-transparent! py-3 text-sm! text-[var(--text)]! shadow-none! outline-none placeholder:text-dim-fg"
               />
               <kbd className="select-none rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">Esc</kbd>
@@ -267,8 +267,8 @@ export function CommandPalette() {
             <div className="flex items-center justify-between gap-3 border-t border-[var(--border-soft)] bg-[var(--surface-2)]/50 px-4 py-2 text-[11px] text-muted-fg">
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">↑</kbd>
-                  <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">↓</kbd>
+                  <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">Up</kbd>
+                  <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">Down</kbd>
                   navigate
                 </span>
                 <span className="inline-flex items-center gap-1">

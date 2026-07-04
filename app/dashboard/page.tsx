@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { ServiceIcon, serviceMeta } from "@/components/ServiceBrand";
 import { PlaylistsAutoRefresh } from "@/components/PlaylistsAutoRefresh";
 import { RunningJobsAutoRefresh } from "@/components/RunningJobsAutoRefresh";
+import { RunDueSyncQueueButton } from "@/components/RunDueSyncQueueButton";
 import { ServiceCard } from "@/components/ServiceCard";
 import { SessionStalenessBanner, classifySession, type SessionStaleness } from "@/components/SessionStalenessBanner";
 import { SyncRuleCard } from "@/components/SyncRuleCard";
@@ -287,6 +288,15 @@ export default async function DashboardPage() {
             <QueueMetric label="Batches" value={dueSyncBatches} tone={dueSyncBatches ? "accent" : "neutral"} />
             <QueueMetric label="Running" value={runningJobs.length} tone={runningJobs.length ? "success" : "neutral"} />
           </div>
+        </div>
+        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-[var(--text)]">Process waiting sync now</div>
+            <div className="mt-1 text-xs text-muted-fg">
+              Runs due rules for your account with the same cooldown, preflight, and batch limits as the worker.
+            </div>
+          </div>
+          <RunDueSyncQueueButton disabled={!dueRules.length || runningJobs.length > 0} />
         </div>
         {queuePreviewRules.length ? (
           <div className="mt-4 grid gap-2">

@@ -11,7 +11,7 @@ export function CancelSyncButton({ jobId, startedAt }: { jobId: string; startedA
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [elapsed, setElapsed] = useState(() => Math.max(0, Date.now() - new Date(startedAt).getTime()));
+  const [elapsed, setElapsed] = useState<number | null>(null);
 
   useEffect(() => {
     const start = new Date(startedAt).getTime();
@@ -19,9 +19,9 @@ export function CancelSyncButton({ jobId, startedAt }: { jobId: string; startedA
     return () => window.clearInterval(id);
   }, [startedAt]);
 
-  const seconds = Math.floor(elapsed / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const display = minutes > 0 ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+  const seconds = elapsed === null ? null : Math.floor(elapsed / 1000);
+  const minutes = seconds === null ? 0 : Math.floor(seconds / 60);
+  const display = seconds === null ? null : minutes > 0 ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
 
   async function cancel() {
     setBusy(true);
@@ -45,7 +45,7 @@ export function CancelSyncButton({ jobId, startedAt }: { jobId: string; startedA
       <div className="flex items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)] px-2.5 py-1.5 text-xs font-semibold text-[var(--accent)]">
           <Loader2 size={12} className="animate-spin" />
-          Running - {display}
+          {display ? `Running - ${display}` : "Running"}
         </span>
         {confirming ? (
           <span className="inline-flex items-center gap-1.5">
