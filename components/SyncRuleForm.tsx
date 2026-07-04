@@ -53,6 +53,16 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
     }
   }
 
+  const sourceGroups = Array.from(
+    playlists.reduce((groups, playlist) => {
+      const key = playlist.service.toUpperCase();
+      const rows = groups.get(key) || [];
+      rows.push(playlist);
+      groups.set(key, rows);
+      return groups;
+    }, new Map<string, Playlist[]>()),
+  ).sort(([a], [b]) => compareServiceKeys(a, b));
+  const selectedSource = playlists.find((playlist) => playlist.servicePlaylistId === sourceId);
   const writableDestinations = playlists.filter((playlist) => playlist.servicePlaylistId !== sourceId && playlist.isWritable);
   const destinationGroups = Array.from(
     writableDestinations.reduce((groups, playlist) => {
@@ -62,14 +72,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
       groups.set(key, rows);
       return groups;
     }, new Map<string, Playlist[]>()),
-  ).sort(([a], [b]) => {
-    const orderA = SERVICE_ORDER.indexOf(a);
-    const orderB = SERVICE_ORDER.indexOf(b);
-    if (orderA === -1 && orderB === -1) return a.localeCompare(b);
-    if (orderA === -1) return 1;
-    if (orderB === -1) return -1;
-    return orderA - orderB;
-  });
+  ).sort(([a], [b]) => compareServiceKeys(a, b));
   const selectedDestinationCount = writableDestinations.filter((playlist) => destinationIds.has(playlist.servicePlaylistId)).length;
 
   return (
@@ -95,13 +98,28 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
         <label className="block space-y-2">
           <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Listen for changes in</span>
           <select name="sourcePlaylistId" value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="w-full">
-            {playlists.map((playlist) => (
-              <option key={playlist.id} value={playlist.servicePlaylistId}>
-                {serviceMeta(playlist.service).label} - {playlist.name}
-              </option>
+            {sourceGroups.map(([service, rows]) => (
+              <optgroup key={service} label={serviceMeta(service).label}>
+                {rows.map((playlist) => (
+                  <option key={playlist.id} value={playlist.servicePlaylistId}>
+                    {playlist.name}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>
+        {selectedSource ? (
+          <div className={`flex items-center gap-3 rounded-xl border ${serviceMeta(selectedSource.service).border} bg-[var(--surface-2)]/35 px-3 py-2.5`}>
+            <ServiceIcon service={selectedSource.service} size="sm" className="h-7 w-7 rounded-lg" />
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-dim-fg">Current source</div>
+              <div className="truncate text-sm font-semibold text-[var(--text)]">
+                {serviceMeta(selectedSource.service).label} / {selectedSource.name}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-8">
@@ -201,4 +219,13 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
       </button>
     </form>
   );
+}
+
+function compareServiceKeys(a: string, b: string) {
+  const orderA = SERVICE_ORDER.indexOf(a);
+  const orderB = SERVICE_ORDER.indexOf(b);
+  if (orderA === -1 && orderB === -1) return a.localeCompare(b);
+  if (orderA === -1) return 1;
+  if (orderB === -1) return -1;
+  return orderA - orderB;
 }
