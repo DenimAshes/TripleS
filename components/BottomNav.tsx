@@ -9,7 +9,7 @@ const items = [
   { href: "/connections", label: "Connect", icon: PlugZap },
   { href: "/playlists", label: "Lists", icon: ListMusic },
   { href: "/manual-match", label: "Review", icon: Shuffle },
-  { href: "/settings", label: "Rules", icon: Settings },
+  { href: "/settings", label: "Sync", icon: Settings },
 ];
 
 export function BottomNav() {

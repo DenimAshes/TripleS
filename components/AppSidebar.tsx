@@ -10,7 +10,7 @@ const items = [
   { href: "/playlists", label: "Playlists", icon: ListMusic },
   { href: "/manual-match", label: "Review songs", icon: Shuffle },
   { href: "/history", label: "History", icon: Clock3 },
-  { href: "/settings", label: "Sync rules", icon: Settings },
+  { href: "/settings", label: "Sync groups", icon: Settings },
 ];
 
 const opsItems = [

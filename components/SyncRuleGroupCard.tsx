@@ -155,7 +155,7 @@ export function SyncRuleGroupCard({
                       {progressByRule
                         .get(rule.id)!
                         .destinations.map((destination) => `${destination.synced}/${progressByRule.get(rule.id)!.sourceTotal} ${destination.service}`)
-                        .join(" · ")}
+                        .join(" / ")}
                     </div>
                   ) : null}
                 </div>

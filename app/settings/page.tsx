@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, PlugZap, Plus, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, ArrowRight, GitBranch, ListChecks, PlugZap, Plus, RadioTower, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SyncRuleForm } from "@/components/SyncRuleForm";
 import { SyncRuleCard } from "@/components/SyncRuleCard";
@@ -7,11 +7,12 @@ import { SyncRuleGroupCard } from "@/components/SyncRuleGroupCard";
 import { DeleteRuleButton } from "@/components/DeleteRuleButton";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
+import type { ReactNode } from "react";
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ rule?: string; new?: string }> }) {
   const session = await getSession();
   const params = await searchParams;
-  const [playlists, rules, groupMembers] = await Promise.all([
+  const [playlists, rules, groupMembers, runningJobs, recentJobs, pendingReviewCount] = await Promise.all([
     prisma.playlist.findMany({ where: { userId: session!.userId, hidden: false }, orderBy: [{ service: "asc" }, { name: "asc" }] }),
     prisma.syncRule.findMany({ where: { userId: session!.userId }, include: { destinations: true }, orderBy: { createdAt: "desc" } }),
     prisma.playlistGroupMember.findMany({
@@ -22,7 +23,33 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       },
       orderBy: { service: "asc" },
     }),
+    prisma.syncJob.findMany({
+      where: { status: "RUNNING", syncRule: { userId: session!.userId } },
+      select: { id: true, syncRuleId: true, startedAt: true },
+      orderBy: { startedAt: "desc" },
+    }),
+    prisma.syncJob.findMany({
+      where: { syncRule: { userId: session!.userId } },
+      select: { id: true, syncRuleId: true, status: true, startedAt: true, finishedAt: true, errorMessage: true },
+      orderBy: { startedAt: "desc" },
+      take: 80,
+    }),
+    prisma.manualMatchCandidate.count({ where: { userId: session!.userId, status: "PENDING" } }),
   ]);
+  const runningByRule = new Map(
+    runningJobs.map((job) => [job.syncRuleId, { id: job.id, startedAt: job.startedAt.toISOString() }]),
+  );
+  const latestJobByRule = new Map<string, { id: string; status: string; startedAt: string; finishedAt: string | null; errorMessage: string | null }>();
+  for (const job of recentJobs) {
+    if (latestJobByRule.has(job.syncRuleId)) continue;
+    latestJobByRule.set(job.syncRuleId, {
+      id: job.id,
+      status: job.status,
+      startedAt: job.startedAt.toISOString(),
+      finishedAt: job.finishedAt?.toISOString() ?? null,
+      errorMessage: job.errorMessage,
+    });
+  }
   const memberByPlaylistKey = new Map(
     groupMembers.map((member) => [`${member.playlist.service}:${member.playlist.servicePlaylistId}`, member]),
   );
@@ -52,11 +79,43 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     };
   });
   const selectedRule = params.new ? undefined : rules.find((rule) => rule.id === params.rule) || standaloneRules[0] || rules[0];
+  const enabledSources = rules.filter((rule) => rule.isEnabled).length;
+  const destinationCount = rules.reduce((sum, rule) => sum + rule.destinations.filter((destination) => destination.isEnabled).length, 0);
+  const failedRuleCount = rules.filter((rule) => {
+    const job = latestJobByRule.get(rule.id);
+    return job?.status === "FAILED" || job?.status === "PARTIAL_SUCCESS";
+  }).length;
 
   return (
-    <AppShell title="Sync rules">
+    <AppShell title="Sync groups">
       <div className="grid gap-8 lg:grid-cols-[1fr_420px]">
         <div className="space-y-4">
+          <section className="panel surface-lift animated-sheen relative overflow-hidden p-5">
+            <span className="pointer-events-none absolute inset-y-4 left-0 w-1 rounded-full bg-[var(--accent)] opacity-80" />
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">
+                  <GitBranch size={14} />
+                  Linked playlist sync
+                </div>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-white">Groups first, rules underneath</h2>
+                <p className="mt-2 max-w-2xl text-sm text-muted-fg">
+                  A group is one playlist mirrored across platforms. Enable any platform as a source when changes there should flow to the others.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[34rem]">
+                <SettingsMetric icon={<GitBranch size={15} />} label="Groups" value={String(ruleGroups.length)} />
+                <SettingsMetric icon={<RadioTower size={15} />} label="Sources" value={`${enabledSources}/${rules.length}`} tone={enabledSources ? "ok" : "neutral"} />
+                <SettingsMetric icon={<ListChecks size={15} />} label="Targets" value={String(destinationCount)} />
+                <SettingsMetric
+                  icon={failedRuleCount || pendingReviewCount ? <AlertTriangle size={15} /> : <Activity size={15} />}
+                  label={failedRuleCount ? "Issues" : "Review"}
+                  value={failedRuleCount ? String(failedRuleCount) : String(pendingReviewCount)}
+                  tone={failedRuleCount || pendingReviewCount ? "warn" : "ok"}
+                />
+              </div>
+            </div>
+          </section>
           <Link
             href="/connections"
             className="panel group surface-lift animated-sheen relative flex items-center justify-between gap-4 overflow-hidden p-4 text-sm transition hover:border-[var(--border)] hover:shadow-[0_18px_36px_-30px_var(--accent-glow)]"
@@ -96,17 +155,26 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </div>
         <section className="space-y-4">
           <div className="flex items-baseline justify-between gap-2 px-1">
-            <h2 className="text-lg font-bold text-[var(--text)]">Rules</h2>
+            <h2 className="text-lg font-bold text-[var(--text)]">Sync map</h2>
             <span className="pill pill-accent surface-lift">{ruleGroups.length + standaloneRules.length} total</span>
           </div>
           {rules.length ? (
             <>
               {ruleGroups.map((item) =>
                 item.group ? (
-                  <SyncRuleGroupCard key={item.group.id} groupName={item.group.name} members={item.members} rules={item.rules} />
+                  <SyncRuleGroupCard
+                    key={item.group.id}
+                    groupName={item.group.name}
+                    members={item.members}
+                    rules={item.rules}
+                    runningByRule={runningByRule}
+                    latestJobByRule={latestJobByRule}
+                  />
                 ) : null,
               )}
-              {standaloneRules.map((rule) => <SyncRuleCard key={rule.id} rule={rule} />)}
+              {standaloneRules.map((rule) => (
+                <SyncRuleCard key={rule.id} rule={rule} runningJob={runningByRule.get(rule.id) ?? null} />
+              ))}
             </>
           ) : (
             <div className="panel p-6 text-sm text-center text-muted-fg">No rules yet.</div>
@@ -121,5 +189,28 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </section>
       </div>
     </AppShell>
+  );
+}
+
+function SettingsMetric({
+  icon,
+  label,
+  value,
+  tone = "neutral",
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  tone?: "neutral" | "ok" | "warn";
+}) {
+  const toneClass = tone === "ok" ? "text-emerald-300" : tone === "warn" ? "text-[#fcd34d]" : "text-[var(--text)]";
+  return (
+    <div className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)]/55 px-3 py-2">
+      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-dim-fg">
+        {icon}
+        {label}
+      </div>
+      <div className={`mt-1 text-lg font-black tabular-nums ${toneClass}`}>{value}</div>
+    </div>
   );
 }

@@ -35,7 +35,7 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "nav-playlists", group: "Navigate", icon: <ListMusic size={15} />, label: "Playlists", href: "/playlists", hint: "Pick a source & mirrors" },
   { id: "nav-review", group: "Navigate", icon: <Shuffle size={15} />, label: "Review songs", href: "/manual-match", hint: "Resolve uncertain matches" },
   { id: "nav-history", group: "Navigate", icon: <Clock3 size={15} />, label: "History", href: "/history", hint: "Logs & failures" },
-  { id: "nav-rules", group: "Navigate", icon: <Settings size={15} />, label: "Sync rules", href: "/settings", hint: "Schedules, modes, deletes" },
+  { id: "nav-rules", group: "Navigate", icon: <Settings size={15} />, label: "Sync groups", href: "/settings", hint: "Linked playlists & source controls" },
   { id: "nav-admin", group: "Navigate", icon: <KeyRound size={15} />, label: "Admin sessions", href: "/admin/sessions", hint: "Operator-only" },
 ];
 
