@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
+const SERVICE_ORDER = ["SPOTIFY", "YOUTUBE", "SOUNDCLOUD"];
+
 export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?: SyncRule & { destinations: SyncDestination[] } }) {
   const router = useRouter();
   const [sourceId, setSourceId] = useState(rule?.sourcePlaylistId || playlists[0]?.servicePlaylistId || "");
@@ -52,6 +54,23 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
   }
 
   const writableDestinations = playlists.filter((playlist) => playlist.servicePlaylistId !== sourceId && playlist.isWritable);
+  const destinationGroups = Array.from(
+    writableDestinations.reduce((groups, playlist) => {
+      const key = playlist.service.toUpperCase();
+      const rows = groups.get(key) || [];
+      rows.push(playlist);
+      groups.set(key, rows);
+      return groups;
+    }, new Map<string, Playlist[]>()),
+  ).sort(([a], [b]) => {
+    const orderA = SERVICE_ORDER.indexOf(a);
+    const orderB = SERVICE_ORDER.indexOf(b);
+    if (orderA === -1 && orderB === -1) return a.localeCompare(b);
+    if (orderA === -1) return 1;
+    if (orderB === -1) return -1;
+    return orderA - orderB;
+  });
+  const selectedDestinationCount = writableDestinations.filter((playlist) => destinationIds.has(playlist.servicePlaylistId)).length;
 
   return (
     <form onSubmit={submit} className="panel p-6">
@@ -86,32 +105,54 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
       </div>
 
       <div className="mt-8">
-        <div className="mb-3 text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Apply changes to</div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {writableDestinations.map((playlist) => {
-            const checked = destinationIds.has(playlist.servicePlaylistId);
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Apply changes to</div>
+          {writableDestinations.length ? (
+            <div className="pill">{selectedDestinationCount}/{writableDestinations.length} selected</div>
+          ) : null}
+        </div>
+        <div className="space-y-3">
+          {destinationGroups.map(([service, rows]) => {
+            const meta = serviceMeta(service);
+            const selected = rows.filter((playlist) => destinationIds.has(playlist.servicePlaylistId)).length;
             return (
-              <label
-                key={playlist.id}
-                className={`group flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium transition duration-200 ${
-                  checked
-                    ? "border-blue-500/40 bg-blue-500/5 text-white"
-                    : "border-white/5 bg-white/[0.02] text-slate-400 hover:border-white/10 hover:bg-white/[0.04]"
-                }`}
-              >
-                <input
-                  name="destinations"
-                  type="checkbox"
-                  value={playlist.servicePlaylistId}
-                  defaultChecked={checked}
-                  className="!h-4 !w-4 cursor-pointer accent-blue-500"
-                />
-                <ServiceIcon service={playlist.service} size="sm" />
-                <span className="min-w-0 flex-1 truncate">
-                  <span className="text-xs font-bold text-blue-500/70">{serviceMeta(playlist.service).shortLabel}:</span>
-                  <span className="ml-1">{playlist.name}</span>
-                </span>
-              </label>
+              <section key={service} className={`rounded-xl border ${meta.border} bg-[var(--surface-2)]/35 p-3`}>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <ServiceIcon service={service} size="sm" className="h-6 w-6 rounded-lg" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-[var(--text)]">{meta.label}</div>
+                      <div className="text-[11px] text-muted-fg">
+                        {selected}/{rows.length} destination{rows.length === 1 ? "" : "s"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {rows.map((playlist) => {
+                    const checked = destinationIds.has(playlist.servicePlaylistId);
+                    return (
+                      <label
+                        key={playlist.id}
+                        className={`group flex min-w-0 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm font-medium transition duration-200 ${
+                          checked
+                            ? `${meta.soft} shadow-[0_12px_28px_-26px_currentColor]`
+                            : "border-white/5 bg-white/[0.02] text-slate-400 hover:border-white/10 hover:bg-white/[0.04] hover:text-[var(--text)]"
+                        }`}
+                      >
+                        <input
+                          name="destinations"
+                          type="checkbox"
+                          value={playlist.servicePlaylistId}
+                          defaultChecked={checked}
+                          className="!h-4 !w-4 shrink-0 cursor-pointer accent-blue-500"
+                        />
+                        <span className="min-w-0 flex-1 truncate">{playlist.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
             );
           })}
           {!writableDestinations.length ? (
