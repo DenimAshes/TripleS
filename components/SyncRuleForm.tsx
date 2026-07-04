@@ -12,16 +12,40 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
   const [sourceId, setSourceId] = useState(rule?.sourcePlaylistId || playlists[0]?.servicePlaylistId || "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const destinationIds = new Set(rule?.destinations.map((destination) => destination.playlistId) || []);
+  const [selectedDestinationIds, setSelectedDestinationIds] = useState(
+    () => new Set(rule?.destinations.map((destination) => destination.playlistId) || []),
+  );
+
+  function changeSource(nextSourceId: string) {
+    setSourceId(nextSourceId);
+    setSelectedDestinationIds((current) => {
+      if (!current.has(nextSourceId)) return current;
+      const next = new Set(current);
+      next.delete(nextSourceId);
+      return next;
+    });
+  }
+
+  function toggleDestination(playlistId: string, checked: boolean) {
+    setSelectedDestinationIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(playlistId);
+      } else {
+        next.delete(playlistId);
+      }
+      return next;
+    });
+  }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError(null);
     const data = new FormData(event.currentTarget);
-    const source = playlists.find((item) => item.servicePlaylistId === data.get("sourcePlaylistId"));
+    const source = playlists.find((item) => item.servicePlaylistId === sourceId);
     const destinations = playlists
-      .filter((item) => item.isWritable && data.getAll("destinations").includes(item.servicePlaylistId))
+      .filter((item) => item.isWritable && selectedDestinationIds.has(item.servicePlaylistId) && item.servicePlaylistId !== sourceId)
       .map((item) => ({ service: item.service, playlistId: item.servicePlaylistId }));
 
     try {
@@ -31,7 +55,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
         body: JSON.stringify({
           name: data.get("name"),
           sourceService: source?.service,
-          sourcePlaylistId: data.get("sourcePlaylistId"),
+          sourcePlaylistId: sourceId,
           mode: data.get("mode"),
           intervalMinutes: Number(data.get("intervalMinutes")),
           isEnabled: data.get("isEnabled") === "on",
@@ -73,7 +97,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
       return groups;
     }, new Map<string, Playlist[]>()),
   ).sort(([a], [b]) => compareServiceKeys(a, b));
-  const selectedDestinationCount = writableDestinations.filter((playlist) => destinationIds.has(playlist.servicePlaylistId)).length;
+  const selectedDestinationCount = writableDestinations.filter((playlist) => selectedDestinationIds.has(playlist.servicePlaylistId)).length;
 
   return (
     <form onSubmit={submit} className="panel p-6">
@@ -97,7 +121,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
 
         <label className="block space-y-2">
           <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Listen for changes in</span>
-          <select name="sourcePlaylistId" value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="w-full">
+          <select name="sourcePlaylistId" value={sourceId} onChange={(event) => changeSource(event.target.value)} className="w-full">
             {sourceGroups.map(([service, rows]) => (
               <optgroup key={service} label={serviceMeta(service).label}>
                 {rows.map((playlist) => (
@@ -132,7 +156,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
         <div className="space-y-3">
           {destinationGroups.map(([service, rows]) => {
             const meta = serviceMeta(service);
-            const selected = rows.filter((playlist) => destinationIds.has(playlist.servicePlaylistId)).length;
+            const selected = rows.filter((playlist) => selectedDestinationIds.has(playlist.servicePlaylistId)).length;
             return (
               <section key={service} className={`rounded-xl border ${meta.border} bg-[var(--surface-2)]/35 p-3`}>
                 <div className="mb-2 flex items-center justify-between gap-3">
@@ -148,7 +172,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {rows.map((playlist) => {
-                    const checked = destinationIds.has(playlist.servicePlaylistId);
+                    const checked = selectedDestinationIds.has(playlist.servicePlaylistId);
                     return (
                       <label
                         key={playlist.id}
@@ -162,7 +186,8 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
                           name="destinations"
                           type="checkbox"
                           value={playlist.servicePlaylistId}
-                          defaultChecked={checked}
+                          checked={checked}
+                          onChange={(event) => toggleDestination(playlist.servicePlaylistId, event.target.checked)}
                           className="!h-4 !w-4 shrink-0 cursor-pointer accent-blue-500"
                         />
                         <span className="min-w-0 flex-1 truncate">{playlist.name}</span>
