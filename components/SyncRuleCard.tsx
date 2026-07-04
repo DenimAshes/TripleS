@@ -1,6 +1,6 @@
 import type { SyncDestination, SyncRule } from "@prisma/client";
 import Link from "next/link";
-import { Pencil, Play } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Pencil, Play, RadioTower } from "lucide-react";
 import { CancelSyncButton } from "./CancelSyncButton";
 import { RunSyncButton } from "./RunSyncButton";
 import { ServiceIcon, ServicePill, serviceMeta } from "./ServiceBrand";
@@ -40,14 +40,24 @@ export type SyncRuleCardProgress = {
   }>;
 };
 
+export type SyncRuleJobSummary = {
+  id: string;
+  status: string;
+  startedAt: string;
+  finishedAt?: string | null;
+  errorMessage?: string | null;
+};
+
 export function SyncRuleCard({
   rule,
   progress,
   runningJob,
+  latestJob,
 }: {
   rule: SyncRule & { destinations: SyncDestination[] };
   progress?: SyncRuleCardProgress;
   runningJob?: { id: string; startedAt: string } | null;
+  latestJob?: SyncRuleJobSummary | null;
 }) {
   const lastRunRel = formatRelative(rule.lastRunAt);
   const nextRunRel = rule.isEnabled ? formatRelative(rule.nextRunAt) : null;
@@ -61,6 +71,15 @@ export function SyncRuleCard({
           ? "service-glow-soundcloud"
           : "";
   const running = Boolean(runningJob);
+  const activeDestinations = rule.destinations.filter((destination) => destination.isEnabled);
+  const latestFailed = latestJob?.status === "FAILED" || latestJob?.status === "PARTIAL_SUCCESS";
+  const routeState = running
+    ? { icon: <Clock3 size={14} />, label: "Running", className: "pill-accent" }
+    : latestFailed
+      ? { icon: <AlertTriangle size={14} />, label: latestJob.status === "PARTIAL_SUCCESS" ? "Partial" : "Issue", className: "text-[#fca5a5]" }
+      : rule.isEnabled
+        ? { icon: <RadioTower size={14} />, label: "Listening", className: "text-emerald-300" }
+        : { icon: <AlertTriangle size={14} />, label: "Off", className: "text-muted-fg" };
 
   return (
     <div
@@ -78,26 +97,57 @@ export function SyncRuleCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-3">
             <ServiceIcon service={rule.sourceService} size="sm" className="transition duration-200 group-hover:scale-105" />
-            <h3 className="text-lg font-bold tracking-tight text-white">{rule.name}</h3>
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-dim-fg">Source route</div>
+              <h3 className="truncate text-lg font-bold tracking-tight text-white">{rule.name}</h3>
+            </div>
             <StatusBadge status={rule.isEnabled ? "connected" : "not_connected"} />
-            {running ? (
-              <span className="pill pill-accent">
+            <span className={`pill ${routeState.className}`}>
+              {running ? (
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-70" />
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
                 </span>
-                Running
+              ) : (
+                routeState.icon
+              )}
+              {routeState.label}
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-3 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)]/45 p-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.35fr)] md:items-center">
+            <div className="min-w-0">
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-dim-fg">Listen from</div>
+              <ServicePill service={rule.sourceService} className="max-w-full" />
+            </div>
+            <ArrowRight size={16} className="hidden text-dim-fg md:block" />
+            <div className="min-w-0">
+              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-dim-fg">
+                Apply to {activeDestinations.length} destination{activeDestinations.length === 1 ? "" : "s"}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {activeDestinations.map((item) => (
+                  <ServicePill key={`${item.service}-${item.playlistId}`} service={item.service} className="rounded-lg py-0.5" />
+                ))}
+                {!activeDestinations.length ? <span className="pill text-[#fca5a5]">No destinations</span> : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="pill">{modeLabel(rule.mode)}</span>
+            {latestJob ? (
+              <span className={`pill ${latestFailed ? "text-[#fca5a5]" : latestJob.status === "SUCCEEDED" ? "text-emerald-300" : ""}`}>
+                {latestFailed ? <AlertTriangle size={13} /> : latestJob.status === "SUCCEEDED" ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}
+                Last {latestJob.status.toLowerCase().replaceAll("_", " ")}
               </span>
             ) : null}
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <ServicePill service={rule.sourceService} />
-            <span className="text-xs font-semibold text-dim-fg">to</span>
-            {rule.destinations.map((item) => (
-              <ServicePill key={`${item.service}-${item.playlistId}`} service={item.service} />
-            ))}
-            <span className="pill">{modeLabel(rule.mode)}</span>
-          </div>
+          {latestFailed && latestJob?.errorMessage ? (
+            <div className="mt-2 truncate rounded-lg border border-rose-500/20 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-200" title={latestJob.errorMessage}>
+              {latestJob.errorMessage}
+            </div>
+          ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <Link href={`/settings?rule=${rule.id}`} className="btn btn-ghost text-xs">

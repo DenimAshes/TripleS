@@ -28,7 +28,7 @@ function formatRelative(iso: string, nowMs: number): string {
 }
 
 function formatDuration(ms: number | null): string {
-  if (ms == null) return "—";
+  if (ms == null) return "-";
   if (ms < 1_000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
@@ -87,7 +87,7 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
       </button>
       {open ? (
         <div className="mt-3 space-y-1.5">
-          {loading ? <div className="text-xs text-dim-fg">Loading…</div> : null}
+          {loading ? <div className="text-xs text-dim-fg">Loading...</div> : null}
           {error ? <div className="text-xs text-[#fca5a5]">{error}</div> : null}
           {jobs && jobs.length === 0 ? (
             <div className="text-xs text-dim-fg">No runs yet.</div>
@@ -101,12 +101,12 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
                 <div className="flex items-center gap-2">
                   <StatusBadge status={job.status.toLowerCase()} />
                   <span className="text-muted-fg">{formatRelative(job.startedAt, nowMs)}</span>
-                  <span className="text-dim-fg">·</span>
+                  <span className="text-dim-fg">/</span>
                   <span className="text-dim-fg tabular-nums">{formatDuration(job.durationMs)}</span>
                 </div>
                 <div className="text-dim-fg tabular-nums">
                   {job.synced ? <span className="text-emerald-400">+{job.synced} </span> : null}
-                  {job.alreadySynced ? <span className="text-muted-fg">≈{job.alreadySynced} </span> : null}
+                  {job.alreadySynced ? <span className="text-muted-fg">={job.alreadySynced} </span> : null}
                   {job.manualRequired ? <span className="text-[#fcd34d]">?{job.manualRequired} </span> : null}
                   {job.notFound ? <span className="text-[#fca5a5]">!{job.notFound} </span> : null}
                   {job.removed ? <span className="text-[#fca5a5]">-{job.removed}</span> : null}
@@ -123,10 +123,10 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
           {jobs?.length ? (
             <div className="pt-1 text-[10px] text-dim-fg">
               <span className="text-emerald-400">+</span> added{" "}
-              <span className="ml-2 text-muted-fg">≈</span> already there{" "}
+              <span className="ml-2 text-muted-fg">=</span> already there{" "}
               <span className="ml-2 text-[#fcd34d]">?</span> needs review{" "}
               <span className="ml-2 text-[#fca5a5]">!</span> not found{" "}
-              <span className="ml-2 text-[#fca5a5]">−</span> removed
+              <span className="ml-2 text-[#fca5a5]">-</span> removed
             </div>
           ) : null}
         </div>

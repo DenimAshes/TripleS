@@ -173,7 +173,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 ) : null,
               )}
               {standaloneRules.map((rule) => (
-                <SyncRuleCard key={rule.id} rule={rule} runningJob={runningByRule.get(rule.id) ?? null} />
+                <SyncRuleCard
+                  key={rule.id}
+                  rule={rule}
+                  runningJob={runningByRule.get(rule.id) ?? null}
+                  latestJob={latestJobByRule.get(rule.id) ?? null}
+                />
               ))}
             </>
           ) : (

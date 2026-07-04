@@ -423,6 +423,7 @@ export default async function DashboardPage() {
                 rule={rule}
                 progress={ruleProgress.get(rule.id)}
                 runningJob={runningByRule.get(rule.id) ?? null}
+                latestJob={latestJobByRule.get(rule.id) ?? null}
               />
             ))}
           </>
