@@ -98,7 +98,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <GitBranch size={14} />
                   Linked playlist sync
                 </div>
-                <h2 className="mt-1 text-2xl font-black tracking-tight text-white">Groups first, rules underneath</h2>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-white">Groups first, source routes underneath</h2>
                 <p className="mt-2 max-w-2xl text-sm text-muted-fg">
                   A group is one playlist mirrored across platforms. Enable any platform as a source when changes there should flow to the others.
                 </p>
@@ -145,7 +145,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <Trash2 size={16} />
                 </div>
                 <div>
-                  <div className="text-base font-semibold text-[var(--text)]">Delete selected rule</div>
+                  <div className="text-base font-semibold text-[var(--text)]">Delete selected source route</div>
                   <div className="mt-1 text-sm text-muted-fg">Removes its destinations and sync history.</div>
                 </div>
               </div>
@@ -184,7 +184,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             className="group surface-lift animated-sheen relative flex items-center justify-center gap-2 overflow-hidden rounded-lg border border-dashed border-[var(--border-soft)] bg-gradient-to-b from-[var(--surface-2)] to-transparent px-4 py-4 text-center text-sm font-semibold text-muted-fg transition duration-200 hover:border-[var(--border-accent)] hover:bg-gradient-to-b hover:from-[var(--accent-soft)] hover:to-transparent hover:text-[var(--accent)]"
           >
             <Plus size={16} className="transition duration-200 group-hover:rotate-90" />
-            Create rule
+            Create source route
           </a>
         </section>
       </div>

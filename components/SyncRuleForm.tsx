@@ -8,32 +8,47 @@ import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?: SyncRule & { destinations: SyncDestination[] } }) {
   const router = useRouter();
   const [sourceId, setSourceId] = useState(rule?.sourcePlaylistId || playlists[0]?.servicePlaylistId || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const destinationIds = new Set(rule?.destinations.map((destination) => destination.playlistId) || []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSaving(true);
+    setError(null);
     const data = new FormData(event.currentTarget);
     const source = playlists.find((item) => item.servicePlaylistId === data.get("sourcePlaylistId"));
     const destinations = playlists
       .filter((item) => item.isWritable && data.getAll("destinations").includes(item.servicePlaylistId))
       .map((item) => ({ service: item.service, playlistId: item.servicePlaylistId }));
 
-    await fetch(rule ? `/api/sync-rules/${rule.id}` : "/api/sync-rules", {
-      method: rule ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: data.get("name"),
-        sourceService: source?.service,
-        sourcePlaylistId: data.get("sourcePlaylistId"),
-        mode: data.get("mode"),
-        intervalMinutes: Number(data.get("intervalMinutes")),
-        isEnabled: data.get("isEnabled") === "on",
-        destinations,
-      }),
-    });
+    try {
+      const response = await fetch(rule ? `/api/sync-rules/${rule.id}` : "/api/sync-rules", {
+        method: rule ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.get("name"),
+          sourceService: source?.service,
+          sourcePlaylistId: data.get("sourcePlaylistId"),
+          mode: data.get("mode"),
+          intervalMinutes: Number(data.get("intervalMinutes")),
+          isEnabled: data.get("isEnabled") === "on",
+          destinations,
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setError(body?.error || `Could not save source route (${response.status})`);
+        return;
+      }
 
-    router.push(rule ? `/settings?rule=${rule.id}` : "/settings");
-    router.refresh();
+      router.push(rule ? `/settings?rule=${rule.id}` : "/settings");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save source route.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const writableDestinations = playlists.filter((playlist) => playlist.servicePlaylistId !== sourceId && playlist.isWritable);
@@ -41,25 +56,25 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
   return (
     <form onSubmit={submit} className="panel p-6">
       <div>
-        <h2 className="text-2xl font-black tracking-tight text-white">{rule ? "Edit sync rule" : "New sync rule"}</h2>
+        <h2 className="text-2xl font-black tracking-tight text-white">{rule ? "Edit source route" : "New source route"}</h2>
         <p className="mt-2 text-sm text-muted-fg">
-          Pick one source playlist and the destination playlists that should receive new songs.
+          Choose where changes are listened for, then choose which playlists should receive those changes.
         </p>
       </div>
 
       <div className="mt-8 space-y-5">
         <label className="block space-y-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Rule name</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Route name</span>
           <input
             name="name"
             defaultValue={rule?.name || "Music Bridge"}
-            placeholder="e.g. Daily Mix Sync"
+            placeholder="e.g. Daily Mix bridge"
             className="w-full"
           />
         </label>
 
         <label className="block space-y-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Source playlist</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Listen for changes in</span>
           <select name="sourcePlaylistId" value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="w-full">
             {playlists.map((playlist) => (
               <option key={playlist.id} value={playlist.servicePlaylistId}>
@@ -71,7 +86,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
       </div>
 
       <div className="mt-8">
-        <div className="mb-3 text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Copy to</div>
+        <div className="mb-3 text-[10px] font-bold uppercase tracking-widest text-blue-400/70">Apply changes to</div>
         <div className="grid gap-2 sm:grid-cols-2">
           {writableDestinations.map((playlist) => {
             const checked = destinationIds.has(playlist.servicePlaylistId);
@@ -101,7 +116,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
           })}
           {!writableDestinations.length ? (
             <div className="rounded-xl border border-dashed border-[var(--border-soft)] p-4 text-sm text-muted-fg sm:col-span-2">
-              No writable destination playlists are available yet.
+              No writable destination playlists are available yet. Connect another platform or refresh playlists first.
             </div>
           ) : null}
         </div>
@@ -109,10 +124,10 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
 
       <div className="mt-8 grid gap-6 sm:grid-cols-3">
         <label className="block space-y-2">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Sync mode</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">How strict</span>
           <select name="mode" defaultValue={rule?.mode || "ADD_ONLY"} className="w-full">
             <option value="ADD_ONLY">Add new songs only</option>
-            <option value="ADD_AND_REMOVE">Add and remove</option>
+            <option value="ADD_AND_REMOVE">Add and remove songs</option>
           </select>
         </label>
         <label className="block space-y-2">
@@ -130,12 +145,18 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
             <span className="absolute inset-0 rounded-full bg-white/5 transition-colors peer-checked:bg-blue-600" />
             <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-slate-400 transition-transform peer-checked:translate-x-4 peer-checked:bg-white" />
           </span>
-          <span className="uppercase tracking-widest">Rule active</span>
+          <span className="uppercase tracking-widest">Listen from this source</span>
         </label>
       </div>
 
-      <button type="submit" className="btn btn-primary mt-8 w-full">
-        {rule ? "Save changes" : "Create sync rule"}
+      {error ? (
+        <div className="mt-6 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200">
+          {error}
+        </div>
+      ) : null}
+
+      <button type="submit" disabled={saving} className="btn btn-primary mt-8 w-full">
+        {saving ? "Saving..." : rule ? "Save source route" : "Create source route"}
       </button>
     </form>
   );
