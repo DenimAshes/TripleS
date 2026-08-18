@@ -30,6 +30,7 @@
     "worker:all": "node scripts/worker-supervisor.mjs",
     "state:restore": "tsx scripts/restore-worker-state.ts",
     "state:encode": "tsx scripts/encode-worker-state.ts",
+    "state:push": "tsx scripts/push-worker-state.ts",
     "chrome": "tsx worker/chrome.ts",
     "login": "tsx worker/login.ts",
     "browser:serve": "tsx worker/browser-service.ts",
