@@ -465,75 +465,80 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
     getDestStats(destination)[field] += 1;
   };
   let deferredByBatchLimit = false;
-  const sourcePlaylist = await getDestinationPlaylist(rule.sourceService, rule.sourcePlaylistId);
-  if (!sourcePlaylist) {
-    throw new Error(
-      `Source playlist ${rule.sourceService}:${rule.sourcePlaylistId} is not cached in DB; refresh playlists list before running sync.`,
-    );
-  }
-  const cachedSourceTracks = !refreshSourceTracks ? await getPlaylistTracksFromDb(sourcePlaylist.id) : [];
-  const expectedSourceTracks = sourcePlaylist.trackCount ?? 0;
-  const sourceCacheComplete = isReadComplete(cachedSourceTracks.length, expectedSourceTracks);
-  let sourceTracks: NormalizedTrack[];
-  if (sourceCacheComplete) {
-    sourceTracks = cachedSourceTracks;
-  } else {
-    const sourceAdapter = getAdapter(rule.sourceService, rule.userId);
-    const liveTracks = await sourceAdapter.getPlaylistTracks(rule.sourcePlaylistId);
-    const expectedForLive = Math.max(expectedSourceTracks, cachedSourceTracks.length);
-    if (!isReadComplete(liveTracks.length, expectedForLive)) {
-      throw new PartialSourceReadError(liveTracks.length, expectedForLive);
-    }
-    const snapshotResult = await writePlaylistSnapshot(sourcePlaylist.id, liveTracks, {
-      expectedCount: expectedForLive,
-    });
-    if (!snapshotResult.stored) {
-      throw new PartialSourceReadError(liveTracks.length, expectedForLive);
-    }
-    sourceTracks = liveTracks;
-  }
-  const sourceGroupMember = sourcePlaylist
-    ? await prisma.playlistGroupMember.findUnique({ where: { playlistId: sourcePlaylist.id } })
-    : null;
-  const groupId = sourceGroupMember?.groupId;
-  const sourceExcludedTrackIds = new Set(
-    groupId && sourcePlaylist
-      ? (
-          await prisma.excludedTrack.findMany({
-            where: { groupId, playlistId: sourcePlaylist.id },
-            select: { serviceTrackId: true },
-          })
-        ).map((item) => item.serviceTrackId)
-      : [],
-  );
-  const overrides = groupId
-    ? await prisma.trackOverride.findMany({
-        where: { groupId },
-      })
-    : [];
-  const overrideBySourceAndService = new Map(overrides.map((item) => [`${item.sourceTrackId}:${item.targetService}`, item.targetTrackId]));
-  const overrideTrackRows = overrides.length
-    ? await prisma.serviceTrack.findMany({
-        where: { id: { in: Array.from(new Set(overrides.map((item) => item.targetTrackId))) } },
-      })
-    : [];
-  const overrideTrackById = new Map(overrideTrackRows.map((track) => [track.id, track]));
-  const serviceExclusions = groupId
-    ? await prisma.syncTrackExclusion.findMany({
-        where: { groupId },
-      })
-    : [];
-  const excludedSourceAndService = new Set(serviceExclusions.map((item) => `${item.sourceTrackId}:${item.targetService}`));
-
   let wallClockTimer: ReturnType<typeof setTimeout> | null = null;
-  const wallClockPromise = new Promise<never>((_, reject) => {
-    wallClockTimer = setTimeout(() => {
-      reject(new Error(`Sync job exceeded wall-clock timeout of ${SYNC_JOB_TIMEOUT_MS}ms`));
-    }, SYNC_JOB_TIMEOUT_MS);
-    (wallClockTimer as { unref?: () => void }).unref?.();
-  });
 
+  // The source phase runs inside this try so a failed source read gets the
+  // same bookkeeping as a destination failure: job marked FAILED with an
+  // errorKind, service cooldown, NEEDS_LOGIN on the account, plus the
+  // finally-block cleanup of browser child processes and pooled sessions.
   try {
+    const sourcePlaylist = await getDestinationPlaylist(rule.sourceService, rule.sourcePlaylistId);
+    if (!sourcePlaylist) {
+      throw new Error(
+        `Source playlist ${rule.sourceService}:${rule.sourcePlaylistId} is not cached in DB; refresh playlists list before running sync.`,
+      );
+    }
+    const cachedSourceTracks = !refreshSourceTracks ? await getPlaylistTracksFromDb(sourcePlaylist.id) : [];
+    const expectedSourceTracks = sourcePlaylist.trackCount ?? 0;
+    const sourceCacheComplete = isReadComplete(cachedSourceTracks.length, expectedSourceTracks);
+    let sourceTracks: NormalizedTrack[];
+    if (sourceCacheComplete) {
+      sourceTracks = cachedSourceTracks;
+    } else {
+      const sourceAdapter = getAdapter(rule.sourceService, rule.userId);
+      const liveTracks = await sourceAdapter.getPlaylistTracks(rule.sourcePlaylistId);
+      const expectedForLive = Math.max(expectedSourceTracks, cachedSourceTracks.length);
+      if (!isReadComplete(liveTracks.length, expectedForLive)) {
+        throw new PartialSourceReadError(liveTracks.length, expectedForLive);
+      }
+      const snapshotResult = await writePlaylistSnapshot(sourcePlaylist.id, liveTracks, {
+        expectedCount: expectedForLive,
+      });
+      if (!snapshotResult.stored) {
+        throw new PartialSourceReadError(liveTracks.length, expectedForLive);
+      }
+      sourceTracks = liveTracks;
+    }
+    const sourceGroupMember = sourcePlaylist
+      ? await prisma.playlistGroupMember.findUnique({ where: { playlistId: sourcePlaylist.id } })
+      : null;
+    const groupId = sourceGroupMember?.groupId;
+    const sourceExcludedTrackIds = new Set(
+      groupId && sourcePlaylist
+        ? (
+            await prisma.excludedTrack.findMany({
+              where: { groupId, playlistId: sourcePlaylist.id },
+              select: { serviceTrackId: true },
+            })
+          ).map((item) => item.serviceTrackId)
+        : [],
+    );
+    const overrides = groupId
+      ? await prisma.trackOverride.findMany({
+          where: { groupId },
+        })
+      : [];
+    const overrideBySourceAndService = new Map(overrides.map((item) => [`${item.sourceTrackId}:${item.targetService}`, item.targetTrackId]));
+    const overrideTrackRows = overrides.length
+      ? await prisma.serviceTrack.findMany({
+          where: { id: { in: Array.from(new Set(overrides.map((item) => item.targetTrackId))) } },
+        })
+      : [];
+    const overrideTrackById = new Map(overrideTrackRows.map((track) => [track.id, track]));
+    const serviceExclusions = groupId
+      ? await prisma.syncTrackExclusion.findMany({
+          where: { groupId },
+        })
+      : [];
+    const excludedSourceAndService = new Set(serviceExclusions.map((item) => `${item.sourceTrackId}:${item.targetService}`));
+
+    const wallClockPromise = new Promise<never>((_, reject) => {
+      wallClockTimer = setTimeout(() => {
+        reject(new Error(`Sync job exceeded wall-clock timeout of ${SYNC_JOB_TIMEOUT_MS}ms`));
+      }, SYNC_JOB_TIMEOUT_MS);
+      (wallClockTimer as { unref?: () => void }).unref?.();
+    });
+
     await Promise.race([wallClockPromise, Promise.all(rule.destinations.map(async (destination) => {
       throwIfActiveJobAborted();
       const targetKey = serviceKey(destination.service);
