@@ -17,6 +17,19 @@ export type WorkerRunSummary = {
   skippedReasons?: WorkerSkipReason[];
 };
 
+export type WorkerRunStatus = "SUCCESS" | "PARTIAL_SUCCESS" | "FAILED";
+
+/**
+ * A tick where every selected rule failed is a failed run, not a partial one.
+ * Both the dashboard warning and the worker exit code read this, so they stay
+ * in agreement instead of a green run hiding a fleet of broken rules.
+ */
+export function workerRunStatusFor(summary: Pick<WorkerRunSummary, "ran" | "failed">): WorkerRunStatus {
+  if (summary.failed > 0 && summary.ran === 0) return "FAILED";
+  if (summary.failed > 0) return "PARTIAL_SUCCESS";
+  return "SUCCESS";
+}
+
 function serializeSkippedReasons(reasons: WorkerSkipReason[] | undefined): string | null {
   if (!reasons?.length) return null;
   return JSON.stringify(reasons.slice(0, 12));
@@ -33,11 +46,16 @@ export async function startWorkerRun(worker: string) {
 }
 
 export async function finishWorkerRun(id: string, summary: WorkerRunSummary) {
+  const status = workerRunStatusFor(summary);
   return prisma.workerRun.update({
     where: { id },
     data: {
-      status: summary.failed > 0 ? "PARTIAL_SUCCESS" : "SUCCESS",
+      status,
       finishedAt: new Date(),
+      errorMessage:
+        status === "FAILED"
+          ? `Every selected rule failed (${summary.failed}/${summary.selected}); no rule completed.`
+          : null,
       due: summary.due,
       runnable: summary.runnable,
       selected: summary.selected,
