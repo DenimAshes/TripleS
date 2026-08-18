@@ -23,6 +23,7 @@
     "cleanup:orphans": "tsx scripts/cleanup-orphaned-playlists.ts",
     "cleanup:test": "tsx scripts/cleanup-test-data.ts",
     "sweep:stale-jobs": "tsx scripts/sweep-stale-jobs.ts",
+    "cooldown:clear": "tsx scripts/clear-service-cooldown.ts",
     "lint:migrations": "tsx scripts/lint-migrations.ts",
     "match:calibrate": "tsx scripts/match-calibration.ts",
     "sync-worker": "tsx scripts/sync-worker.ts",
