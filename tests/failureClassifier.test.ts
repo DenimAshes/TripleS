@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  attributeErrorToService,
   classifyError,
   cooldownMsForFailureCount,
   isCooldownError,
   nextRunAfterFailure,
   recommendedActionForFailure,
+  serviceFromError,
 } from "../lib/sync/failureClassifier";
 
 describe("isCooldownError", () => {
@@ -63,5 +65,35 @@ describe("recommendedActionForFailure", () => {
     expect(recommendedActionForFailure(new Error("SoundCloud API 403"))).toContain("Refresh the browser session");
     expect(recommendedActionForFailure(new Error("captcha-delivery"))).toContain("saved browser profile");
     expect(recommendedActionForFailure(new Error("timed out after 600000ms"))).toContain("increase the runner timeout");
+  });
+});
+
+describe("serviceFromError", () => {
+  it("reads the service a runner tagged onto the error", () => {
+    const error = attributeErrorToService(new Error("failed with exit code 1"), "SoundCloud");
+    expect(serviceFromError(error)).toBe("soundcloud");
+  });
+
+  it("prefers the tag over service names in the message", () => {
+    const error = attributeErrorToService(new Error("YouTube browser runner (tracks) failed"), "soundcloud");
+    expect(serviceFromError(error)).toBe("soundcloud");
+  });
+
+  it("falls back to the message when exactly one service is named", () => {
+    expect(serviceFromError(new Error("YouTube browser runner (tracks) failed"))).toBe("youtube");
+    expect(serviceFromError(new Error("SoundCloud add hard-block (captcha)"))).toBe("soundcloud");
+  });
+
+  it("refuses to guess when the message names several services", () => {
+    expect(serviceFromError(new Error("Rule YouTube -> SoundCloud failed"))).toBeNull();
+  });
+
+  it("returns null for messages without a service name", () => {
+    expect(serviceFromError(new Error("ECONNRESET"))).toBeNull();
+    expect(serviceFromError(null)).toBeNull();
+  });
+
+  it("ignores service names embedded in longer words", () => {
+    expect(serviceFromError(new Error("myyoutubeclone timed out"))).toBeNull();
   });
 });

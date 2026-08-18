@@ -24,6 +24,46 @@ export function classifyError(error: unknown): FailureKind {
   return "unknown";
 }
 
+const SERVICE_NAMES = ["youtube", "spotify", "soundcloud"] as const;
+export type FailingService = (typeof SERVICE_NAMES)[number];
+
+type ServiceAttributedError = Error & { service?: string };
+
+/**
+ * Tags an error with the service whose runner produced it. Without this the
+ * only clue is the message text, and bookkeeping ends up cooling down every
+ * service on the rule — including the one that worked.
+ */
+export function attributeErrorToService<E extends Error>(error: E, service: string): E {
+  (error as ServiceAttributedError).service = service.toLowerCase();
+  return error;
+}
+
+function mentionsServiceName(message: string, service: string): boolean {
+  const haystack = message.toLowerCase();
+  const isWordChar = (char: string | undefined) => char !== undefined && /[a-z0-9]/.test(char);
+  for (let index = haystack.indexOf(service); index >= 0; index = haystack.indexOf(service, index + 1)) {
+    if (!isWordChar(haystack[index - 1]) && !isWordChar(haystack[index + service.length])) return true;
+  }
+  return false;
+}
+
+/**
+ * Resolves the failing service from an explicit tag, falling back to the
+ * message only when exactly one service is named there — "YouTube -> SoundCloud"
+ * style text must not be read as an attribution.
+ */
+export function serviceFromError(error: unknown): FailingService | null {
+  const tagged = (error as ServiceAttributedError | null)?.service;
+  if (typeof tagged === "string") {
+    const match = SERVICE_NAMES.find((service) => service === tagged.toLowerCase());
+    if (match) return match;
+  }
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const mentioned = SERVICE_NAMES.filter((service) => mentionsServiceName(message, service));
+  return mentioned.length === 1 ? mentioned[0] : null;
+}
+
 export function isRetryableError(error: unknown): boolean {
   const kind = classifyError(error);
   return kind === "timeout" || kind === "network" || kind === "rate_limit" || kind === "transient";

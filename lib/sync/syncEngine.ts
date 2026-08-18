@@ -19,7 +19,7 @@ import {
 } from "./matchContext";
 import { isReadComplete, PartialSourceReadError, writePlaylistSnapshot } from "./snapshot";
 import { parseArtistsJson } from "@/lib/utils/parseArtists";
-import { classifyError, nextRunAfterFailure } from "./failureClassifier";
+import { classifyError, nextRunAfterFailure, serviceFromError } from "./failureClassifier";
 import { createLogger } from "@/lib/utils/logger";
 
 const log = createLogger("triples:sync-engine");
@@ -1046,12 +1046,19 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       },
     });
     const destServices = rule.destinations.map((destination) => destination.service);
-    await recordCooldownForRule([rule.sourceService, ...destServices], error).catch(() => {});
+    const ruleServices = [rule.sourceService, ...destServices];
+    // Attribute the failure to the service whose runner produced it. Cooling
+    // down every service on the rule punished the healthy side too: a captcha
+    // on a SoundCloud write also parked the YouTube source for hours.
+    const failingService = serviceFromError(error);
+    const matched = failingService ? ruleServices.filter((service) => service.toLowerCase() === failingService) : [];
+    const affectedServices = matched.length ? matched : ruleServices;
+    await recordCooldownForRule(affectedServices, error).catch(() => {});
     // Surface auth failures on the ConnectedAccount so the UI can show a
     // "re-login" prompt instead of leaving the user wondering why every
     // sync fails. Best-effort: don't let bookkeeping mask the real error.
     if (errorKind === "auth") {
-      const affected = new Set([rule.sourceService, ...destServices]);
+      const affected = new Set(affectedServices);
       for (const service of affected) {
         await prisma.connectedAccount
           .updateMany({
