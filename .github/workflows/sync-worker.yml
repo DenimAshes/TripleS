@@ -44,19 +44,20 @@ jobs:
           sleep $JITTER
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
+        timeout-minutes: 10
         run: npm install
 
       - name: Cache CloakBrowser binary
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cloakbrowser
           key: cloakbrowser-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -64,9 +65,11 @@ jobs:
             cloakbrowser-${{ runner.os }}-
 
       - name: Install Playwright system deps
+        timeout-minutes: 10
         run: npx playwright install-deps chromium
 
       - name: Install emoji + extended fonts
+        timeout-minutes: 6
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -75,17 +78,20 @@ jobs:
           sudo fc-cache -f
 
       - name: Ensure CloakBrowser binary
+        timeout-minutes: 10
         run: npm run cloak:install
 
       - name: Restore browser sessions from secrets
+        timeout-minutes: 5
         run: npm run state:restore
 
       - name: Run due sync rules
+        timeout-minutes: 30
         run: npm run sync-worker
 
       - name: Upload debug artifacts on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: worker-debug-${{ github.run_id }}
           path: |
