@@ -225,6 +225,8 @@ async function scrollMainContent(page: Page): Promise<boolean> {
     // load more rows, the next round sees them and resets the idle counter.
     const rows = document.querySelectorAll("ytmusic-responsive-list-item-renderer");
     rows[rows.length - 1]?.scrollIntoView({ block: "end" });
+    const scroller = document.scrollingElement ?? document.documentElement;
+    scroller.scrollTop = scroller.scrollHeight;
     return false;
   });
 }
@@ -506,7 +508,9 @@ async function collectPlaylistTracks(page: Page): Promise<NormalizedTrack[]> {
     // rounds before deciding the list is exhausted — cutting this short is
     // what left large playlists short of their real length.
     idleRounds += 1;
-    if (idleRounds >= ((await hasPendingContinuation(page)) ? 8 : 4)) break;
+    const wellShort = expectedCount ? byId.size < Math.floor(expectedCount * 0.9) : false;
+    const patience = wellShort ? 20 : (await hasPendingContinuation(page)) ? 8 : 4;
+    if (idleRounds >= patience) break;
   }
 
   const tracks = Array.from(byId.values());

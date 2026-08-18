@@ -7,7 +7,12 @@ import { debugArtifactPath, SERVICE_URLS } from "../config";
 import { sleep } from "../sleep";
 import { acquireSession, evictSession, sessionReuseEnabled } from "../sessionPool";
 import { playlistPathsMatch, soundCloudPathFromUrl } from "./soundcloudPlaylistMatch";
-import { toggleTrackInPlaylistViaUi, type UiToggleIntent, type UiToggleResult } from "./soundcloudUiWrite";
+import {
+  createPlaylistViaUi,
+  toggleTrackInPlaylistViaUi,
+  type UiToggleIntent,
+  type UiToggleResult,
+} from "./soundcloudUiWrite";
 import { isPersistentMode, runPersistentLoop } from "./_persistentLoop";
 import { pathToFileURL } from "node:url";
 
@@ -614,9 +619,73 @@ export async function addSoundCloudTrackToPlaylist(playlistIdOrUrl: string, trac
   });
 }
 
+/**
+ * The create dialog only exists on a track page, so creating a playlist needs
+ * some track to open it from. Any track the account already has works: it is
+ * removed again right after the playlist is created.
+ */
+async function resolveSeedTrackPermalink(page: Page, runtime: SoundCloudRuntime): Promise<string | undefined> {
+  const owned = await listOwnedPlaylistApiItems(page, runtime);
+  for (const item of owned) {
+    const id = item.id != null ? String(item.id) : soundCloudPathFromUrl(item.permalink_url);
+    if (!id) continue;
+    const resolved = await resolvePlaylistViaApi(page, runtime, id).catch(() => undefined);
+    const firstTrackId = resolved?.tracks?.find((track) => track.id != null)?.id;
+    if (firstTrackId == null) continue;
+    const track = await resolveTrackViaApi(page, runtime, String(firstTrackId)).catch(() => undefined);
+    if (track?.permalink_url) return track.permalink_url;
+  }
+  return undefined;
+}
+
+async function findOwnedPlaylistByTitle(
+  page: Page,
+  runtime: SoundCloudRuntime,
+  title: string,
+): Promise<SoundCloudApiPlaylist | undefined> {
+  const target = title.trim().toLowerCase();
+  const owned = await listOwnedPlaylistApiItems(page, runtime);
+  return owned.find((playlist) => (playlist.title ?? "").trim().toLowerCase() === target);
+}
+
 export async function createSoundCloudPlaylist(name: string): Promise<SoundCloudPlaylist> {
   return withContext(async (_ctx, page) => {
     const runtime = await getRuntime(page);
+    const mode = soundCloudWriteMode();
+
+    if (mode !== "api") {
+      const seed = await resolveSeedTrackPermalink(page, runtime);
+      if (!seed && mode === "ui") {
+        throw new Error("SoundCloud UI create needs a track to open the dialog from, and none was found in this account's playlists.");
+      }
+      if (seed) {
+        try {
+          const result = await createPlaylistViaUi(page, { name, seedTrackPermalinkUrl: seed });
+          if (result.seedTrackAdded) {
+            // The dialog creates the playlist with the opened track inside it;
+            // callers expect an empty playlist, so take the seed back out.
+            await toggleTrackInPlaylistViaUi(page, { trackPermalinkUrl: seed, playlistTitle: name, intent: "remove" }).catch((error) => {
+              console.error(
+                `[soundcloud] created "${name}" but could not remove the seed track: ${error instanceof Error ? error.message : String(error)}`,
+              );
+            });
+          }
+          const created = await findOwnedPlaylistByTitle(page, runtime, name);
+          const normalizedUi = created ? normalizePlaylist(created, runtime) : undefined;
+          if (normalizedUi) {
+            console.error(`[soundcloud] created "${name}" through the add-to-playlist dialog.`);
+            return normalizedUi;
+          }
+          throw new Error(`SoundCloud created "${name}" but it could not be read back.`);
+        } catch (error) {
+          if (mode === "ui") throw error;
+          console.error(
+            `[soundcloud] UI create failed, falling back to the api-v2 write: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+    }
+
     const playlist = await apiPost<SoundCloudApiPlaylist>(page, runtime, "/playlists", {
       playlist: {
         title: name,
