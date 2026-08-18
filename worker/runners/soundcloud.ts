@@ -6,6 +6,7 @@ import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
 import { sleep } from "../sleep";
 import { acquireSession, evictSession, sessionReuseEnabled } from "../sessionPool";
+import { playlistPathsMatch, soundCloudPathFromUrl } from "./soundcloudPlaylistMatch";
 import { toggleTrackInPlaylistViaUi, type UiToggleIntent, type UiToggleResult } from "./soundcloudUiWrite";
 import { isPersistentMode, runPersistentLoop } from "./_persistentLoop";
 import { pathToFileURL } from "node:url";
@@ -158,9 +159,25 @@ function withClientId(url: string, clientId: string): string {
 async function apiGet<T>(page: Page, runtime: SoundCloudRuntime, url: string): Promise<T> {
   const requestUrl = withClientId(url, runtime.clientId);
   return page.evaluate(async ({ requestUrl, timeoutMs }) => {
+    // Reads need the same OAuth header the writes send. Cookies alone identify
+    // the session well enough for public data, so playlist listings quietly
+    // came back without the account's private sets — which made playlist
+    // refresh incomplete and let "create the missing playlist" fire for
+    // playlists that were there all along.
+    const cookies = Object.fromEntries(
+      document.cookie.split(";").map((item) => {
+        const [key, ...value] = item.trim().split("=");
+        return [decodeURIComponent(key), decodeURIComponent(value.join("="))];
+      }),
+    );
+    const oauthToken = cookies.oauth_token;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const response = await fetch(requestUrl, { credentials: "include", signal: controller.signal }).finally(() => clearTimeout(timer));
+    const response = await fetch(requestUrl, {
+      credentials: "include",
+      signal: controller.signal,
+      headers: oauthToken ? { Authorization: `OAuth ${oauthToken}` } : {},
+    }).finally(() => clearTimeout(timer));
     const text = await response.text();
     if (!response.ok) {
       throw new Error(`SoundCloud API ${response.status}: ${text.slice(0, 300)}`);
@@ -301,16 +318,6 @@ async function collectWhileScrolling<T>(page: Page, extract: () => Promise<T[]>,
 function normalizeSoundCloudPath(url: string): string {
   const parsed = new URL(url);
   return parsed.pathname.replace(/^\/+|\/+$/g, "");
-}
-
-function soundCloudPathFromUrl(url?: string): string | undefined {
-  if (!url) return undefined;
-  try {
-    const parsed = new URL(url);
-    return parsed.pathname.replace(/^\/+|\/+$/g, "");
-  } catch {
-    return undefined;
-  }
 }
 
 function parseDurationMs(value: string): number | undefined {
@@ -487,11 +494,24 @@ async function resolvePlaylistViaApi(page: Page, runtime: SoundCloudRuntime, pla
     : playlistIdOrUrl.replace(/^\/+|\/+$/g, "");
   const wantedId = /^\d+$/.test(playlistIdOrUrl) ? playlistIdOrUrl : null;
   const owned = await listOwnedPlaylistApiItems(page, runtime);
-  return owned.find((playlist) => {
+  const exact = owned.find((playlist) => {
     const apiId = playlist.id == null ? null : String(playlist.id);
     const path = soundCloudPathFromUrl(playlist.permalink_url);
     return (wantedId && apiId === wantedId) || (!!wantedPath && path === wantedPath);
   });
+  if (exact) return exact;
+
+  // Renaming the account rewrites the user segment of every stored id, so the
+  // exact path stops matching anything. The slug and the private-set secret
+  // survive a rename; matching on those keeps writes working instead of
+  // reporting the playlist as gone and re-creating it.
+  const renamed = owned.find((playlist) => playlistPathsMatch(playlistIdOrUrl, playlist.permalink_url));
+  if (renamed) {
+    console.error(
+      `[soundcloud] resolved "${playlistIdOrUrl}" to "${soundCloudPathFromUrl(renamed.permalink_url)}" by playlist slug; the stored id predates an account rename.`,
+    );
+  }
+  return renamed;
 }
 
 async function resolveTrackViaApi(page: Page, runtime: SoundCloudRuntime, trackIdOrUrl: string): Promise<SoundCloudApiTrack | undefined> {
