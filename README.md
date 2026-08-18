@@ -197,7 +197,9 @@ Add and remove drive SoundCloud's own "Add to playlist" dialog, which writes thr
 SOUNDCLOUD_WRITE_MODE="auto"   # auto (UI first, api-v2 fallback) | ui | api
 ```
 
-Playlist creation still goes through `api-v2` and can still hit the captcha block; when that happens the app reports the block and leaves the playlist unchanged.
+Playlist creation goes through the same dialog for the same reason. Its create form only exists on a track page, so creation opens the dialog from a track the account already owns and removes that seed track once the playlist exists. Deleting a playlist still uses `api-v2`, which is not challenged.
+
+Reads send the `Authorization: OAuth` header too — without it api-v2 returns only public playlists, so private sets used as sync destinations were invisible.
 
 The browser tools page is available at:
 
