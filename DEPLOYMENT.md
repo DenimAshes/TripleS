@@ -65,6 +65,19 @@ npm run --silent state:encode -- soundcloud
 
 Paste each output into the matching GitHub secret. The older `YOUTUBE_STATE_JSON_BASE64` and `SOUNDCLOUD_STATE_JSON_BASE64` names still work, but the compressed `*_GZIP_BASE64` values are much smaller and fit GitHub's secret size limit more reliably. After that, the scheduled worker restores `worker/state/*.json` in the GitHub runner and your computer does not need to keep those files for normal operation.
 
+### Session Refresh (Database Wins Over Secrets)
+
+`npm run state:restore` reads the `WorkerSessionState` table **first** and only falls back to the `*_STATE_GZIP_BASE64` secrets when the row is missing. So once a row exists — uploaded through `/admin/sessions` or `state:push` — updating the GitHub secret changes nothing. Refresh the row instead:
+
+```powershell
+npm run state:push -- youtube soundcloud --dry-run
+npm run state:push -- youtube soundcloud
+```
+
+The dry run prints how many cookies the local file and the stored row each carry, plus which known session cookies are present, so a partial export (for example a single-domain Cookie-Editor dump missing `SID`/`__Secure-1PSID`) is visible before it is stored. The real run writes the previous row to `worker/state/<service>-backup-<timestamp>.json` first.
+
+A stored session that restores cleanly but is missing the login cookies fails at runtime with `YouTube Music session is not logged in` on every rule, while `state:restore` still reports success — check the row, not just the restore log, when the worker cannot read playlists.
+
 ## Database Setup
 
 Run migrations against the hosted Neon database:
