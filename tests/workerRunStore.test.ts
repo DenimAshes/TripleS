@@ -14,7 +14,7 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }));
 
-import { failWorkerRun, finishWorkerRun, startWorkerRun } from "../lib/services/workerRunStore";
+import { failWorkerRun, finishWorkerRun, startWorkerRun, workerRunStatusFor } from "../lib/services/workerRunStore";
 
 describe("worker run store", () => {
   beforeEach(() => {
@@ -90,5 +90,35 @@ describe("worker run store", () => {
         skippedJson: JSON.stringify([{ reason: "preflight", detail: "missing session" }]),
       }),
     });
+  });
+test("keeps mixed runs partial and records no error message", async () => {
+    await finishWorkerRun("run-1", { due: 3, runnable: 3, selected: 3, ran: 2, failed: 1, skipped: 0 });
+
+    const call = mocks.update.mock.calls[0][0];
+    expect(call.data).toMatchObject({ status: "PARTIAL_SUCCESS", ran: 2, failed: 1 });
+    expect(call.data.errorMessage).toBeNull();
+  });
+
+  test("marks a run where nothing completed as FAILED so the dashboard warns", async () => {
+    await finishWorkerRun("run-1", { due: 4, runnable: 4, selected: 2, ran: 0, failed: 2, skipped: 0 });
+
+    const call = mocks.update.mock.calls[0][0];
+    expect(call.data).toMatchObject({ status: "FAILED", ran: 0, failed: 2 });
+    expect(call.data.errorMessage).toBe("Every selected rule failed (2/2); no rule completed.");
+  });
+});
+
+describe("workerRunStatusFor", () => {
+  test("is SUCCESS when nothing failed", () => {
+    expect(workerRunStatusFor({ ran: 3, failed: 0 })).toBe("SUCCESS");
+    expect(workerRunStatusFor({ ran: 0, failed: 0 })).toBe("SUCCESS");
+  });
+
+  test("is PARTIAL_SUCCESS when some rules completed alongside failures", () => {
+    expect(workerRunStatusFor({ ran: 1, failed: 1 })).toBe("PARTIAL_SUCCESS");
+  });
+
+  test("is FAILED when every rule failed", () => {
+    expect(workerRunStatusFor({ ran: 0, failed: 2 })).toBe("FAILED");
   });
 });

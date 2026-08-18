@@ -5,7 +5,13 @@ import { preflightSyncRule } from "@/lib/sync/preflight";
 import { shouldRefreshSourceCache } from "@/lib/sync/sourceCachePolicy";
 import { applyGroupAwareRuleLimit, buildSourcePlaylistGroupMap } from "@/lib/sync/groupAwareRuleLimit";
 import { killChildPids } from "@/worker/childPidRegistry";
-import { failWorkerRun, finishWorkerRun, startWorkerRun, type WorkerSkipReason } from "@/lib/services/workerRunStore";
+import {
+  failWorkerRun,
+  finishWorkerRun,
+  startWorkerRun,
+  workerRunStatusFor,
+  type WorkerSkipReason,
+} from "@/lib/services/workerRunStore";
 
 const RUNNING_JOB_TIMEOUT_MINUTES = Math.max(1, Number(process.env.WORKER_RUNNING_JOB_TIMEOUT_MINUTES ?? 60));
 
@@ -171,8 +177,20 @@ async function main() {
     }
     console.log(`Running sync rule ${rule.name} (${rule.id})`);
     try {
-      await runSync(rule.id);
-      ran += 1;
+      // runSync resolves with the job even when the job itself failed, so
+      // read the written status instead of treating "no throw" as success.
+      const job = await runSync(rule.id);
+      if (job.status === "CANCELLED") {
+        console.log(`[sync-worker] ${rule.name} (${rule.id}) was cancelled.`);
+        skippedReasons.push({ ruleId: rule.id, name: rule.name, reason: "cancelled", detail: job.errorMessage ?? undefined });
+      } else if (job.status === "FAILED") {
+        failed += 1;
+        console.error(
+          `[sync-worker] ${rule.name} (${rule.id}) finished FAILED${job.errorKind ? ` (${job.errorKind})` : ""}: ${job.errorMessage ?? "no error message recorded"}`,
+        );
+      } else {
+        ran += 1;
+      }
     } catch (error) {
       failed += 1;
       console.error(`[sync-worker] runSync ${rule.id} failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -182,6 +200,12 @@ async function main() {
   console.log(
     `[sync-worker] summary: due=${dueRules.length} runnable=${runnable.length} sliced=${slice.length} ran=${ran} failed=${failed} skippedRunning=${skippedRunning}`,
   );
+  if (workerRunStatusFor({ ran, failed }) === "FAILED") {
+    console.error(
+      `[sync-worker] Every selected rule failed (${failed}/${slice.length}) and none completed; exiting non-zero so scheduled runs stop reporting success.`,
+    );
+    process.exitCode = 1;
+  }
   await finishWorkerRun(workerRun.id, {
     due: dueCount,
     runnable: runnableCount,
