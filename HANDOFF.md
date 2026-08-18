@@ -117,7 +117,8 @@ Browser verification:
 
 ## Next Work
 
-1. Playlist creation (`create`, `create-b64`) still goes through `api-v2` and still hits the DataDome block. The dialog has a `Create playlist` entry, so the same UI path can cover it.
-2. Run a full sync-rule flow end to end now that SoundCloud writes land, and clear the `serviceCooldown` rows left over from the captcha failures.
-3. YouTube source reads can come back incomplete on large playlists (90 of 171 tracks on `Амстердамм`), which the snapshot guard correctly refuses. Scroll/pagination in the YouTube runner needs work for playlists of that size.
-4. Remote worker deployment is live: `.github/workflows/sync-worker.yml` runs every two hours. Sessions come from the `WorkerSessionState` table (see `npm run state:push`), not from the `*_STATE_GZIP_BASE64` secrets.
+1. Track matching is the weak spot now: a sync of `Снимите тонер` produced `already=3 manual=7`, so most YouTube tracks did not match a SoundCloud result confidently. `npm run match:calibrate` and the manual-match queue are the levers.
+2. The scheduled worker only runs between 07:00 and 24:00 Europe/Riga (`WORKER_ACTIVE_HOUR_*`), so a night-time `workflow_dispatch` exits without doing anything. Widen the window locally when verifying.
+3. YouTube reads are rate-sensitive: a run can still fail with `page.goto: net::ERR_TIMED_OUT` on a playlist page. The failure is transient and retried on the next tick, but repeated timeouts are worth watching.
+4. Rows YouTube counts but renders without a watchable video keep large playlists a little under their declared count (159 of 171, 100 of 105). That is inside the 10% completeness tolerance; do not chase it as a bug.
+5. Remote worker deployment is live: `.github/workflows/sync-worker.yml` runs every two hours. Sessions come from the `WorkerSessionState` table (see `npm run state:push`), not from the `*_STATE_GZIP_BASE64` secrets. A parked service is cleared with `npm run cooldown:clear`.
