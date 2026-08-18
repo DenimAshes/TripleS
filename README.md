@@ -189,7 +189,15 @@ To let playlist refresh and sync use the browser-backed SoundCloud reader, set:
 SOUNDCLOUD_BROWSER_AUTOMATION="true"
 ```
 
-The SoundCloud browser path supports playlist listing, playlist track reading, search, playlist creation and add/remove commands through the saved browser session. Read operations are verified locally. Write operations currently use SoundCloud's internal web API from the logged-in session and may be blocked by SoundCloud captcha/anti-abuse responses; when that happens the app reports the block and leaves the playlist unchanged.
+The SoundCloud browser path supports playlist listing, playlist track reading, search, playlist creation and add/remove commands through the saved browser session.
+
+Add and remove drive SoundCloud's own "Add to playlist" dialog, which writes through a same-origin server action. The older `api-v2` `PUT /playlists/{id}` route is behind a DataDome challenge that rejects automated writes, so it is kept only as a fallback. Override the choice with:
+
+```env
+SOUNDCLOUD_WRITE_MODE="auto"   # auto (UI first, api-v2 fallback) | ui | api
+```
+
+Playlist creation still goes through `api-v2` and can still hit the captcha block; when that happens the app reports the block and leaves the playlist unchanged.
 
 The browser tools page is available at:
 

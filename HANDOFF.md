@@ -77,7 +77,11 @@ YOUTUBE_BROWSER_AUTOMATION="true"
 - Added the SoundCloud browser-backed path: `worker/runners/soundcloud.ts`, `npm run sc -- list|tracks|search|add|remove|create`, `SoundCloudBrowserAdapter`, settings card, and `SOUNDCLOUD_BROWSER_AUTOMATION`.
 - Added `/soundcloud-browser` plus internal `/api/soundcloud-browser/*` routes for playlist loading, track viewing, search, add and remove controls.
 - Added `lib/services/soundcloud/soundcloudCache.ts` so the SoundCloud browser tools can reuse DB and memory cache behavior similar to the YouTube browser tools.
-- SoundCloud read operations are verified. Write operations are implemented but currently blocked by SoundCloud captcha/anti-abuse on the internal playlist update API in the tested session.
+- SoundCloud reads are verified. Writes no longer use the `api-v2` `PUT /playlists/{id}` route: DataDome answers it with an interstitial challenge (`t=it`) even from the logged-in page context, on a residential IP, with a live `datadome` cookie. Passing the device check refreshes the cookie but the next write is challenged again.
+- SoundCloud's current layout (`/n/<track>?v2_layout=true`) writes through a same-origin server action instead: `POST /n/<track>` with `[{"trackUrns":[...],"playlistUrn":"..."}]`. That endpoint is not challenged, so `worker/runners/soundcloudUiWrite.ts` drives the "Add to playlist" dialog and the api-v2 write is only a fallback (`SOUNDCLOUD_WRITE_MODE=auto|ui|api`).
+- Verified headless on `Снимите тонер`: add moved it 3 -> 4 tracks and remove took it back to 3, both confirmed by the row label flipping between `Add to playlist` and `Added`, with the server action returning 200 each time.
+- The SoundCloud account handle is now `lightblesss`, not `drdyue`. Writable playlists: `lightblesss/sets/na-fontane` and `lightblesss/sets/kalvin-klyajn`.
+- The dialog lists playlists that `api-v2` playlist listing omits (`Снимите тонер`, `несчастливый плейлист`), and its track counts can lag the API by a few entries.
 
 ## Verification
 
@@ -98,10 +102,10 @@ npm run yt -- add "PLkEG3hafrR607OtRgPKwpOFniIvCp_4hc" "Kai Angel quiet turn up"
 SoundCloud verification:
 
 - `worker/state/soundcloud.json` exists.
-- `npm run sc -- list` found 2 playlists, including writable `drdyue/sets/na-fontane`.
-- `npm run sc -- tracks "drdyue/sets/na-fontane"` returned 86 tracks.
+- `npm run sc -- list` found 2 playlists, including writable `lightblesss/sets/na-fontane`.
 - `npm run sc -- search "The Weeknd Blinding Lights"` returned 40 tracks.
-- `npm run sc -- add "drdyue/sets/na-fontane" "theweeknd/blinding-lights"` was blocked by SoundCloud API 403 captcha, so write-flow needs a UI-based fallback or a manual captcha recovery path before it can be considered production-ready.
+- `npm run sc -- add "lightblesss/sets/na-fontane" "theweeknd/blinding-lights"` reported `add via UI applied` and `{ "added": true }`.
+- `npm run sc -- remove "lightblesss/sets/na-fontane" "theweeknd/blinding-lights"` reported `remove via UI applied` and `{ "removed": true }`, leaving the playlist at its original 83 tracks.
 
 Browser verification:
 
@@ -113,7 +117,7 @@ Browser verification:
 
 ## Next Work
 
-1. Harden SoundCloud write-flow: current API PUT can return captcha 403. Either add a UI-click fallback in the real Chrome session or document a manual captcha recovery step.
-2. Browser-verify `/soundcloud-browser` after starting the dev server.
-3. Run a full sync-rule flow against a disposable writable playlist once SoundCloud write-flow is unblocked.
-4. Design remote worker deployment. Most practical free path is GitHub Actions cron with `worker/state/*.json` stored as secrets and restored before sync.
+1. Playlist creation (`create`, `create-b64`) still goes through `api-v2` and still hits the DataDome block. The dialog has a `Create playlist` entry, so the same UI path can cover it.
+2. Run a full sync-rule flow end to end now that SoundCloud writes land, and clear the `serviceCooldown` rows left over from the captcha failures.
+3. YouTube source reads can come back incomplete on large playlists (90 of 171 tracks on `Амстердамм`), which the snapshot guard correctly refuses. Scroll/pagination in the YouTube runner needs work for playlists of that size.
+4. Remote worker deployment is live: `.github/workflows/sync-worker.yml` runs every two hours. Sessions come from the `WorkerSessionState` table (see `npm run state:push`), not from the `*_STATE_GZIP_BASE64` secrets.
