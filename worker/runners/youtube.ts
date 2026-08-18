@@ -200,20 +200,32 @@ async function assertLoggedIn(page: Page): Promise<void> {
 
 async function scrollMainContent(page: Page): Promise<boolean> {
   return page.evaluate(() => {
+    // `ytmusic-app-layout` reports scrollHeight far above its clientHeight but
+    // ignores scrollBy, so picking a container by measurements alone parked the
+    // reader at the first ~90 rows with the continuation renderer still
+    // pending. Try each candidate and keep the one that actually moves.
     const candidates = [
-      document.querySelector("ytmusic-app-layout"),
-      document.querySelector("#contents"),
       document.scrollingElement,
       document.documentElement,
+      document.querySelector("ytmusic-app-layout"),
+      document.querySelector("#contents"),
     ].filter(Boolean) as Element[];
 
-    const scrollable =
-      candidates.find((el) => el.scrollHeight > el.clientHeight + 20) ||
-      document.scrollingElement ||
-      document.documentElement;
-    const before = scrollable.scrollTop;
-    scrollable.scrollBy({ top: Math.max(600, Math.floor(scrollable.clientHeight * 0.85)), behavior: "auto" });
-    return scrollable.scrollTop > before;
+    for (const element of candidates) {
+      if (element.scrollHeight <= element.clientHeight + 20) continue;
+      const before = element.scrollTop;
+      element.scrollBy({ top: Math.max(600, Math.floor(element.clientHeight * 0.85)), behavior: "auto" });
+      if (element.scrollTop > before) return true;
+    }
+
+    // Nothing scrolled, so the page is at the end of what is rendered. Nudge
+    // the last row into view anyway to poke the lazy loader, but report no
+    // movement: the nudge is not progress, and treating it as progress kept the
+    // loop scrolling against the bottom until its round cap. If the nudge does
+    // load more rows, the next round sees them and resets the idle counter.
+    const rows = document.querySelectorAll("ytmusic-responsive-list-item-renderer");
+    rows[rows.length - 1]?.scrollIntoView({ block: "end" });
+    return false;
   });
 }
 
@@ -458,31 +470,52 @@ async function extractVisibleTracks(page: Page): Promise<NormalizedTrack[]> {
   return Array.from(byId.values());
 }
 
+async function hasPendingContinuation(page: Page): Promise<boolean> {
+  return page.evaluate(
+    () => document.querySelectorAll("tp-yt-paper-spinner[active], ytmusic-continuation-item-renderer").length > 0,
+  );
+}
+
 async function collectPlaylistTracks(page: Page): Promise<NormalizedTrack[]> {
   const byId = new Map<string, NormalizedTrack>();
   const expectedCount = await getExpectedPlaylistTrackCount(page);
   await scrollToTop(page);
 
-  let stableRounds = 0;
-  for (let i = 0; i < 80; i++) {
+  let idleRounds = 0;
+  let rounds = 0;
+  for (let i = 0; i < 120; i++) {
+    rounds = i + 1;
     const before = byId.size;
     const visible = await extractVisibleTracks(page);
     for (const track of visible) byId.set(track.sourceTrackId, track);
     if (expectedCount && byId.size >= expectedCount) break;
+
     const moved = await scrollMainContent(page);
-    await sleep(700);
-    // Even when expectedCount is missing or wrong, keep scrolling until two
-    // consecutive scrolls yield no new tracks (lazy-rendered rows below the
-    // fold won't appear until they're scrolled into view).
-    if (byId.size === before) {
-      stableRounds += 1;
-      if (!moved && stableRounds >= 2) break;
-    } else {
-      stableRounds = 0;
+    await sleep(moved ? 700 : 1400);
+    if (byId.size !== before) {
+      idleRounds = 0;
+      continue;
     }
+    // Rows keep arriving while the page still scrolls, and a long stretch of
+    // scrolling with no new rows is normal before a continuation lands, so
+    // only a page that cannot scroll any further counts as idle.
+    if (moved) continue;
+
+    // At the bottom with nothing new. A pending continuation renderer means
+    // YouTube is still fetching the next page, so wait through more idle
+    // rounds before deciding the list is exhausted — cutting this short is
+    // what left large playlists short of their real length.
+    idleRounds += 1;
+    if (idleRounds >= ((await hasPendingContinuation(page)) ? 8 : 4)) break;
   }
 
   const tracks = Array.from(byId.values());
+  // Playlists count rows that carry no watchable video (removed or private
+  // tracks), so the collected total can sit below the declared count even at
+  // the end of the list; the caller's completeness tolerance covers that.
+  console.error(
+    `[youtube] collected ${tracks.length}${expectedCount ? ` of ${expectedCount} declared` : ""} track(s) after ${rounds} scroll round(s).`,
+  );
   return expectedCount ? tracks.slice(0, expectedCount) : tracks;
 }
 
