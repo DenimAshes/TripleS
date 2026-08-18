@@ -3,6 +3,7 @@ import path from "node:path";
 import { CancelledError, getActiveJobAbortSignal } from "@/lib/jobs/activeJobContext";
 import { registerChildPid, unregisterChildPid } from "@/worker/childPidRegistry";
 import { sanitizeRunnerEnv } from "@/worker/runnerGuard";
+import { attributeErrorToService } from "@/lib/sync/failureClassifier";
 
 function tsxCliPath(): string {
   return process.env.TSX_CLI_PATH || path.join(/*turbopackIgnore: true*/ process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
@@ -115,7 +116,9 @@ export function runBrowserRunnerCli({
         reason,
         stderrTail: tail(stderr.trim()),
       });
-      if (error) reject(error);
+      // Tag the rejection so the sync engine cools down the service that
+      // actually failed instead of every service on the rule.
+      if (error) reject(attributeErrorToService(error, serviceName));
       else resolve(stdout);
     };
 
