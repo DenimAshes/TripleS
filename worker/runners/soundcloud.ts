@@ -6,6 +6,7 @@ import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
 import { sleep } from "../sleep";
 import { acquireSession, evictSession, sessionReuseEnabled } from "../sessionPool";
+import { toggleTrackInPlaylistViaUi, type UiToggleIntent, type UiToggleResult } from "./soundcloudUiWrite";
 import { isPersistentMode, runPersistentLoop } from "./_persistentLoop";
 import { pathToFileURL } from "node:url";
 
@@ -510,6 +511,51 @@ function playlistTrackIds(playlist: SoundCloudApiPlaylist): number[] {
   return ids;
 }
 
+type SoundCloudWriteMode = "auto" | "ui" | "api";
+
+function soundCloudWriteMode(): SoundCloudWriteMode {
+  const value = (process.env.SOUNDCLOUD_WRITE_MODE ?? "auto").toLowerCase();
+  return value === "ui" || value === "api" ? value : "auto";
+}
+
+/**
+ * DataDome challenges `PUT /playlists/{id}` on api-v2 for this account, while
+ * the layout's own "Add to playlist" dialog writes through a same-origin server
+ * action that is not challenged. So the UI path runs first and the api-v2 write
+ * stays as the fallback. Returns null when the UI path cannot be attempted.
+ */
+async function tryUiToggle(
+  page: Page,
+  playlist: SoundCloudApiPlaylist,
+  track: SoundCloudApiTrack,
+  intent: UiToggleIntent,
+): Promise<UiToggleResult | null> {
+  const mode = soundCloudWriteMode();
+  if (mode === "api") return null;
+
+  const playlistTitle = playlist.title?.trim();
+  const trackPermalinkUrl = track.permalink_url;
+  if (!playlistTitle || !trackPermalinkUrl) {
+    const missing = !playlistTitle ? "playlist title" : "track permalink";
+    if (mode === "ui") throw new Error(`SoundCloud UI write needs the ${missing}, which this resolve did not return.`);
+    return null;
+  }
+
+  try {
+    const result = await toggleTrackInPlaylistViaUi(page, { trackPermalinkUrl, playlistTitle, intent });
+    // stderr keeps the runner's stdout parseable as JSON for the CLI wrapper.
+    console.error(
+      `[soundcloud] ${intent} via UI ${result.changed ? "applied" : "was already in the desired state"}: ${result.rowText}`,
+    );
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (mode === "ui") throw error;
+    console.error(`[soundcloud] UI ${intent} failed, falling back to the api-v2 write: ${message}`);
+    return null;
+  }
+}
+
 async function updatePlaylistTrackIds(
   page: Page,
   runtime: SoundCloudRuntime,
@@ -539,6 +585,9 @@ export async function addSoundCloudTrackToPlaylist(playlistIdOrUrl: string, trac
     const trackId = Number(track.id);
     const ids = playlistTrackIds(playlist);
     if (ids.includes(trackId)) return { added: false };
+
+    const viaUi = await tryUiToggle(page, playlist, track, "add");
+    if (viaUi) return { added: viaUi.changed };
 
     await updatePlaylistTrackIds(page, runtime, playlist, [...ids, trackId]);
     return { added: true };
@@ -585,6 +634,9 @@ export async function removeSoundCloudTrackFromPlaylist(playlistIdOrUrl: string,
     const trackId = Number(track.id);
     const ids = playlistTrackIds(playlist);
     if (!ids.includes(trackId)) return { removed: false };
+
+    const viaUi = await tryUiToggle(page, playlist, track, "remove");
+    if (viaUi) return { removed: viaUi.changed };
 
     await updatePlaylistTrackIds(page, runtime, playlist, ids.filter((id) => id !== trackId));
     return { removed: true };
