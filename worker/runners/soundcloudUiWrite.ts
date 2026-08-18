@@ -156,4 +156,59 @@ export async function toggleTrackInPlaylistViaUi(
   throw new Error(`SoundCloud did not confirm the ${intent} for "${playlistTitle}" (row label never changed).`);
 }
 
+export type UiCreateResult = { created: boolean; seedTrackAdded: boolean };
+
+/**
+ * Creates a playlist through the same dialog. The form lives behind the icon
+ * button next to the dialog's "Create playlist" entry, and because the dialog
+ * belongs to a track page the new playlist is created with that track in it —
+ * so the caller is told whether the seed track landed and can remove it.
+ */
+export async function createPlaylistViaUi(
+  page: Page,
+  options: { name: string; seedTrackPermalinkUrl: string; visibility?: "private" | "public" },
+): Promise<UiCreateResult> {
+  const { name, seedTrackPermalinkUrl, visibility = "private" } = options;
+  const path = trackPagePath(seedTrackPermalinkUrl);
+  if (!path) throw new Error(`SoundCloud seed track permalink is unusable: ${seedTrackPermalinkUrl}`);
+
+  await page.goto(`https://soundcloud.com/n/${path}?v2_layout=true`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.waitForTimeout(4000);
+  await openPickerDialog(page);
+
+  const opened = await page.evaluate(() => {
+    const dialog =
+      Array.from(document.querySelectorAll("[role='dialog'], .MuiDialog-container, .MuiModal-root")).find((node) =>
+        /Create playlist/i.test(node.textContent || ""),
+      ) ?? null;
+    if (!dialog) return false;
+    // The create control is an icon button with no label; every other button
+    // in the dialog is either a row action or the close button.
+    const button = Array.from(dialog.querySelectorAll("button")).find((candidate) => {
+      const label = (candidate.textContent || "").trim();
+      const aria = candidate.getAttribute("aria-label") || "";
+      return !label && !/close/i.test(aria);
+    }) as HTMLElement | undefined;
+    if (!button) return false;
+    button.click();
+    return true;
+  });
+  if (!opened) throw new Error("SoundCloud dialog has no create-playlist control.");
+
+  const form = page.locator("[role='dialog'], .MuiDialog-container, .MuiModal-root").filter({ hasText: "Playlist title" }).last();
+  await form.waitFor({ state: "visible", timeout: 30_000 });
+  await form.locator("input[type='text']").first().fill(name);
+  await form.getByText(visibility === "private" ? "Private" : "Public", { exact: true }).first().click();
+  await form.getByRole("button", { name: "Save" }).first().click();
+
+  // Creation is confirmed by the new row appearing in the picker.
+  for (let attempt = 0; attempt < 14; attempt += 1) {
+    await page.waitForTimeout(1500);
+    const row = await inspectRow(page, name, false);
+    if (row.found) return { created: true, seedTrackAdded: labelMeansPresent(row.label ?? "") };
+  }
+
+  throw new Error(`SoundCloud did not confirm creating "${name}" (no row for it after saving).`);
+}
+
 export const __testables = { labelMeansPresent };
