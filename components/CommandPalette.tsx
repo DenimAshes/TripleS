@@ -16,7 +16,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ServiceIcon } from "./ServiceBrand";
+import { ServiceIcon, SoundCloudGlyph, YouTubeGlyph } from "./ServiceBrand";
 
 type CommandItem = {
   id: string;
@@ -36,6 +36,8 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "nav-review", group: "Navigate", icon: <Shuffle size={15} />, label: "Review songs", href: "/manual-match", hint: "Resolve uncertain matches" },
   { id: "nav-history", group: "Navigate", icon: <Clock3 size={15} />, label: "History", href: "/history", hint: "Logs & failures" },
   { id: "nav-rules", group: "Navigate", icon: <Settings size={15} />, label: "Sync groups", href: "/settings", hint: "Linked playlists & source controls" },
+  { id: "nav-yt-tools", group: "Navigate", icon: <YouTubeGlyph size={15} />, label: "YouTube Music tools", href: "/youtube-browser", hint: "Browser session: read, search, add", keywords: "browser lab ytm automation" },
+  { id: "nav-sc-tools", group: "Navigate", icon: <SoundCloudGlyph size={15} />, label: "SoundCloud tools", href: "/soundcloud-browser", hint: "Browser session: read, search, add", keywords: "browser lab sc automation" },
   { id: "nav-admin", group: "Navigate", icon: <KeyRound size={15} />, label: "Admin sessions", href: "/admin/sessions", hint: "Operator-only" },
 ];
 
@@ -206,14 +208,14 @@ export function CommandPalette() {
         ref={triggerRef}
         type="button"
         onClick={openPalette}
-        className="surface-lift group hidden items-center gap-2 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)] sm:inline-flex"
+        className="surface-lift group hidden items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)] sm:inline-flex"
         aria-label="Open command palette"
       >
         <Search size={13} className="text-dim-fg group-hover:text-[var(--accent)]" />
         <span>Jump...</span>
         <span className="ml-2 inline-flex items-center gap-0.5">
-          <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">Ctrl</kbd>
-          <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">K</kbd>
+          <kbd className="kbd">Ctrl</kbd>
+          <kbd className="kbd">K</kbd>
         </span>
       </button>
 
@@ -230,13 +232,12 @@ export function CommandPalette() {
             aria-label="Close palette"
             onClick={closePalette}
             tabIndex={-1}
-            className="absolute inset-0 cursor-default bg-black/55 backdrop-blur-sm animate-fade-in"
+            className="absolute inset-0 cursor-default bg-[var(--scrim)] backdrop-blur-sm"
           />
           <div
             ref={dialogRef}
-            className="relative w-full max-w-xl overflow-hidden rounded-2xl border border-[var(--border)] bg-[rgba(15,17,25,0.92)] shadow-[0_30px_80px_-30px_rgba(0,0,0,0.7)] backdrop-blur-xl animate-slide-in-up"
+            className="panel relative w-full max-w-xl overflow-hidden border-[var(--border)] shadow-[var(--shadow-overlay)]"
           >
-            <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-80" />
             <div className="flex items-center gap-2 border-b border-[var(--border-soft)] px-4">
               <Search size={16} className="text-dim-fg" />
               <input
@@ -251,7 +252,7 @@ export function CommandPalette() {
                 placeholder="Jump to a page, service, or action..."
                 className="w-full border-0! bg-transparent! py-3 text-sm! text-[var(--text)]! shadow-none! outline-none placeholder:text-dim-fg"
               />
-              <kbd className="select-none rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">Esc</kbd>
+              <kbd className="kbd select-none">Esc</kbd>
             </div>
 
             <div ref={listRef} className="max-h-[55vh] overflow-y-auto p-2">
@@ -264,15 +265,15 @@ export function CommandPalette() {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-[var(--border-soft)] bg-[var(--surface-2)]/50 px-4 py-2 text-[11px] text-muted-fg">
+            <div className="flex items-center justify-between gap-3 border-t border-[var(--border-soft)] bg-[var(--surface-2)]/50 px-4 py-2 text-xs text-muted-fg">
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">Up</kbd>
-                  <kbd className="rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">Down</kbd>
+                  <kbd className="kbd">Up</kbd>
+                  <kbd className="kbd">Down</kbd>
                   navigate
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="inline-flex items-center rounded border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">
+                  <kbd className="kbd">
                     <CornerDownLeft size={10} />
                   </kbd>
                   open
@@ -301,7 +302,7 @@ function renderGroups(items: CommandItem[], activeIndex: number, run: (item: Com
   });
   return Array.from(groups.entries()).map(([group, entries]) => (
     <div key={group} className="mb-1 last:mb-0">
-      <div className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-dim-fg">{group}</div>
+      <div className="eyebrow px-3 pb-1 pt-2 text-muted-fg">{group}</div>
       <div className="space-y-0.5">
         {entries.map(({ item, index }) => {
           const active = index === activeIndex;
@@ -312,7 +313,7 @@ function renderGroups(items: CommandItem[], activeIndex: number, run: (item: Com
               data-cmd-index={index}
               onMouseEnter={() => setActiveIndex(index)}
               onClick={() => run(item)}
-              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition ${
+              className={`flex w-full items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2 text-left text-sm transition ${
                 active
                   ? "bg-[var(--accent-soft)] text-[var(--text)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
                   : "text-muted-fg hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
@@ -324,7 +325,7 @@ function renderGroups(items: CommandItem[], activeIndex: number, run: (item: Com
                 <span className="hidden truncate text-xs text-dim-fg sm:inline">{item.hint}</span>
               ) : null}
               {active ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--accent)]">
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)]">
                   Go <CornerDownLeft size={10} />
                 </span>
               ) : null}

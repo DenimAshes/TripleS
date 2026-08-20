@@ -45,6 +45,8 @@ type SoundCloudApiTrack = {
   id?: number | string;
   title?: string;
   duration?: number;
+  full_duration?: number;
+  policy?: string;
   permalink_url?: string;
   artwork_url?: string;
   user?: SoundCloudApiUser;
@@ -436,6 +438,22 @@ function normalizePlaylist(
   };
 }
 
+// api-v2 reports `duration` as whatever this session is allowed to stream, so
+// label-owned tracks come back as a 30-second preview (`policy: "SNIP"`) while
+// `full_duration` holds the real length. Trusting `duration` made every snippet
+// look 30s long, and the matcher's duration penalty (-0.45) then buried pairs
+// whose title and artist matched exactly. Where no real length is available,
+// report none: a missing signal costs a little score, a wrong one loses the
+// match outright.
+function trackDurationMs(track: SoundCloudApiTrack): number | undefined {
+  const full = track.full_duration;
+  const shown = track.duration;
+  if (full && (!shown || full > shown)) return full;
+  const snippet = track.policy?.toUpperCase().startsWith("SNIP") ?? false;
+  if (snippet) return undefined;
+  return shown;
+}
+
 function normalizeTrack(track: SoundCloudApiTrack): NormalizedTrack | undefined {
   const title = track.title?.trim();
   const id = soundCloudPathFromUrl(track.permalink_url) || (track.id == null ? undefined : String(track.id));
@@ -444,7 +462,7 @@ function normalizeTrack(track: SoundCloudApiTrack): NormalizedTrack | undefined 
   return {
     title,
     artists: [track.user?.username?.trim() || "Unknown artist"],
-    durationMs: track.duration,
+    durationMs: trackDurationMs(track),
     sourceService: "soundcloud",
     sourceTrackId: id,
     url: track.permalink_url,

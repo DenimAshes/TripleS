@@ -124,14 +124,6 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
     isExcluded: excludedIds.has(state.serviceTrackId),
   }));
   const meta = serviceMeta(playlist.service);
-  const glow =
-    meta.key === "SPOTIFY"
-      ? "service-glow-spotify"
-      : meta.key === "YOUTUBE"
-        ? "service-glow-youtube"
-        : meta.key === "SOUNDCLOUD"
-          ? "service-glow-soundcloud"
-          : "";
   const linkedServices = Array.from(new Set(groupServices.filter((service) => service !== playlist.service)));
   const matchedRows = trackRows.filter((row) => (row.linkedServices?.length ?? 0) > 0).length;
   const matchRatio = trackRows.length === 0 ? 0 : Math.round((matchedRows / trackRows.length) * 100);
@@ -148,11 +140,7 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
         lastFetchedAt={lastFetchedIso}
       />
 
-      <section
-        className={`panel group surface-lift animated-gradient-frame animated-sheen ${glow} relative mb-6 overflow-hidden p-5 animate-slide-in-up md:p-6`}
-      >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-70" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_at_15%_0%,rgba(79,141,255,0.08),transparent_52%)] opacity-60 transition duration-500 group-hover:opacity-100" />
+      <section className={`${meta.tint} relative mb-7 border-b border-[var(--border-soft)] pb-6`}>
         <div className="relative flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-4">
             {playlist.imageUrl ? (
@@ -160,10 +148,10 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
               <img
                 src={playlist.imageUrl}
                 alt=""
-                className="h-20 w-20 shrink-0 rounded-xl object-cover ring-1 ring-[var(--border-soft)] transition duration-300 group-hover:scale-[1.03] group-hover:ring-[var(--border)]"
+                className="h-20 w-20 shrink-0 rounded-[var(--radius)] object-cover ring-1 ring-[var(--border-soft)]"
               />
             ) : (
-              <ServiceIcon service={playlist.service} size="lg" className="h-20 w-20 rounded-xl" />
+              <ServiceIcon service={playlist.service} size="lg" className="h-20 w-20 rounded-[var(--radius)]" />
             )}
             <div className="min-w-0">
               <Link href="/playlists" className="inline-flex items-center gap-1 text-sm text-muted-fg hover:text-[var(--text)]">
@@ -183,8 +171,11 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
                   fetched {lastFetchedLabel}
                 </span>
               </div>
-              <h2 className="mt-3 truncate text-2xl font-black tracking-tight text-white md:text-3xl">{playlist.name}</h2>
-              {playlist.description ? <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-fg">{playlist.description}</p> : null}
+              {/* No playlist name here. AppShell already prints it as this page's
+                  h1 a few pixels above, so the hero was showing the same string
+                  twice — the one page still doing what the shared header was
+                  introduced to stop. */}
+              {playlist.description ? <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-fg">{playlist.description}</p> : null}
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -194,26 +185,26 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
         </div>
 
         {group ? (
-          <div className="relative mt-5 grid gap-3 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)]/60 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center">
+          <div className="relative mt-6 grid gap-4 border-t border-[var(--border-soft)] pt-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center">
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-fg">
+              <div className="eyebrow flex items-center gap-1.5">
                 <Sparkles size={12} />
                 Sync coverage
               </div>
               <p className="mt-1 text-sm text-muted-fg">
-                <span className="font-semibold text-white">{matchedRows}</span> of{" "}
+                <span className="font-semibold text-[var(--text)]">{matchedRows}</span> of{" "}
                 <span className="tabular-nums">{trackRows.length}</span> tracks linked across other services
                 <span className="ml-2 text-dim-fg">/ {matchRatio}%</span>
               </p>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-3)]">
                 <div
-                  className="h-full rounded-full bg-[linear-gradient(90deg,var(--accent),var(--accent-hover),var(--success),var(--accent))] bg-[length:220%_100%] shadow-[0_0_18px_var(--accent-glow)] transition-[width] duration-700 animate-gradient-pan"
+                  className="dist-bar-fill h-full bg-gradient-to-r from-[var(--accent)] via-[var(--accent-hover)] to-success transition-[width] duration-700"
                   style={{ width: `${matchRatio}%` }}
                 />
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dim-fg">
+              <span className="eyebrow text-muted-fg">
                 <Link2 size={11} className="-mt-0.5 mr-1 inline" />
                 Mirrors
               </span>
@@ -221,7 +212,7 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
                 linkedServices.map((service) => {
                   const sMeta = serviceMeta(service);
                   return (
-                    <span key={service} className={`pill ${sMeta.soft}`}>
+                    <span key={service} className={`pill ${sMeta.pill}`}>
                       <ServiceIcon service={service} size="sm" className="h-4 w-4" />
                       {sMeta.shortLabel}
                     </span>
@@ -253,7 +244,7 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
       ) : null}
 
       {states.length === 0 ? (
-        <div className="panel p-6 text-sm text-muted-fg">No songs to show yet.</div>
+        <p className="py-6 text-sm text-muted-fg">No songs to show yet.</p>
       ) : (
         <PlaylistTracksTable tracks={trackRows} service={playlist.service} />
       )}

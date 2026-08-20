@@ -101,7 +101,7 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
   const stale = lastFetchedIso ? nowMs - new Date(lastFetchedIso).getTime() > 24 * 3_600_000 : false;
 
   return (
-    <div className={`panel-inset animated-sheen ${glow} relative flex flex-col gap-3 overflow-hidden p-4 text-sm sm:flex-row sm:items-center sm:justify-between`}>
+    <div className={`panel-inset  ${glow} relative flex flex-col gap-3 overflow-hidden p-4 text-sm sm:flex-row sm:items-center sm:justify-between`}>
       <span className={`pointer-events-none absolute inset-y-2 left-0 w-0.5 rounded-full ${meta.bg} opacity-70`} />
       <div className="relative min-w-0">
         <div className="flex flex-wrap items-center gap-2">
@@ -122,7 +122,7 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
           <span>last updated {formatRelative(props.lastFetchedAt, nowMs)}</span>
         </div>
         {state === "missing" ? (
-          <div className="mt-1.5 text-xs text-[#fcd34d]">
+          <div className="mt-1.5 text-xs text-warning-fg">
             Connect {meta.label} in{" "}
             <Link href="/connections" className="font-medium text-[var(--accent)] hover:underline">
               Connections
@@ -132,14 +132,14 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
         ) : null}
         {state === "needs_login" || state === "warn" ? (
           <div
-            className="mt-1.5 max-w-3xl truncate text-xs text-[#fcd34d]"
+            className="mt-1.5 max-w-3xl truncate text-xs text-warning-fg"
             title={props.lastError || "Session needs attention. Reconnect it in Connections."}
           >
             {props.lastError ? props.lastError.split("\n")[0].slice(0, 110) : "Session needs attention. Reconnect it in Connections."}
           </div>
         ) : null}
         {state === "mock" ? (
-          <div className="mt-1.5 text-xs text-[#fcd34d]">
+          <div className="mt-1.5 text-xs text-warning-fg">
             Account is still flagged as mock. Reconnect it in{" "}
             <Link href="/connections" className="font-medium text-[var(--accent)] hover:underline">
               Connections
@@ -148,7 +148,7 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
           </div>
         ) : null}
         {outcome ? (
-          <div className={`mt-1.5 inline-flex items-center gap-1.5 text-xs ${outcome.ok ? "text-emerald-400" : "text-[#fca5a5]"}`}>
+          <div className={`mt-1.5 inline-flex items-center gap-1.5 text-xs ${outcome.ok ? "text-success" : "text-danger-fg"}`}>
             {outcome.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
             {outcome.message}
           </div>

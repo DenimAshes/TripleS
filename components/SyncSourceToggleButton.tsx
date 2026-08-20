@@ -43,9 +43,9 @@ export function SyncSourceToggleButton({
         type="button"
         onClick={toggle}
         disabled={busy}
-        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition disabled:opacity-60 ${
+        className={`inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] border px-2.5 text-xs font-semibold transition disabled:opacity-60 ${
           enabled
-            ? "border-emerald-500/35 bg-emerald-500/12 text-emerald-200 hover:bg-emerald-500/18"
+            ? "border-success/35 bg-success/12 text-success-fg hover:bg-success/18"
             : "border-[var(--border-soft)] bg-[var(--surface)] text-dim-fg hover:text-[var(--text)]"
         }`}
         title={enabled ? `${serviceLabel} changes are monitored` : `${serviceLabel} changes are ignored`}
@@ -53,7 +53,7 @@ export function SyncSourceToggleButton({
         {busy ? <Loader2 size={13} className="animate-spin" /> : <Power size={13} />}
         {enabled ? "Listening" : "Off"}
       </button>
-      {error ? <span className="max-w-44 text-right text-[11px] font-medium text-rose-300">{error}</span> : null}
+      {error ? <span className="max-w-44 text-right text-xs font-medium text-danger-fg">{error}</span> : null}
     </div>
   );
 }

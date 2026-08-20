@@ -54,7 +54,7 @@ export function RunDueSyncQueueButton({ disabled }: { disabled?: boolean }) {
         {running ? "Running queue..." : "Run due sync"}
       </button>
       {message ? <p className="max-w-72 text-left text-xs text-muted-fg sm:text-right">{message}</p> : null}
-      {error ? <p className="max-w-72 text-left text-xs text-[#fca5a5] sm:text-right">{error}</p> : null}
+      {error ? <p className="max-w-72 text-left text-xs text-danger-fg sm:text-right">{error}</p> : null}
     </div>
   );
 }

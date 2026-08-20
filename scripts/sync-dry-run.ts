@@ -10,6 +10,7 @@ import {
   resolveInternalTrackId,
   bulkUpsertServiceTracks,
 } from "@/lib/sync/matchContext";
+import { AUTO_MATCH_THRESHOLD, MANUAL_REVIEW_THRESHOLD } from "@/lib/sync/matchThresholds";
 import { findMatch, prewarmLocalCatalog } from "@/lib/sync/matchEngine";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import { parseArtistsJson } from "@/lib/utils/parseArtists";
@@ -47,8 +48,6 @@ const makeNoSearchAdapter = (): MusicServiceAdapter => ({
   isConnected: () => true,
 });
 
-const AUTO_MATCH_THRESHOLD = Number(process.env.WORKER_AUTO_MATCH_THRESHOLD ?? 0.82);
-const MANUAL_REVIEW_THRESHOLD = Number(process.env.WORKER_MANUAL_REVIEW_THRESHOLD ?? 0.65);
 const SOURCE_CACHE_TTL_HOURS = Math.max(0, Number(process.env.SYNC_DRY_SOURCE_CACHE_TTL_HOURS ?? 24));
 const MAX_TRACKS_PER_RUN = Number(process.env.WORKER_MAX_TRACKS_PER_RUN ?? 10);
 const SKIP_PREVIOUSLY_LOGGED = process.env.WORKER_SKIP_PREVIOUSLY_LOGGED !== "false";

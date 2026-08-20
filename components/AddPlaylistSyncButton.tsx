@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { pollBrowserJob, startBrowserJob } from "./browserJobClient";
+import { Callout } from "./Callout";
 import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
 export type SyncPlaylistOption = {
@@ -55,11 +56,11 @@ function Artwork({ playlist }: { playlist: SyncPlaylistOption }) {
   if (playlist.imageUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={playlist.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-[var(--border-soft)]" />
+      <img src={playlist.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]" />
     );
   }
   return (
-    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[var(--surface)] text-dim-fg ring-1 ring-[var(--border-soft)]">
+    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-sm)] bg-[var(--surface)] text-dim-fg ring-1 ring-[var(--border-soft)]">
       <ListMusic size={16} strokeWidth={1.6} />
     </div>
   );
@@ -225,20 +226,20 @@ export function AddPlaylistSyncButton({
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm">
-          <div className="panel max-h-[calc(100vh-1.5rem)] w-full max-w-4xl overflow-hidden shadow-[0_24px_80px_-20px_rgba(0,0,0,0.75)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-3 backdrop-blur-sm">
+          <div className="panel max-h-[calc(100vh-1.5rem)] w-full max-w-4xl overflow-hidden shadow-[var(--shadow-overlay)]">
             <div className="flex items-center justify-between border-b border-[var(--border-soft)] p-4 sm:p-5">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent-fg">
+                <div className="eyebrow flex items-center gap-2">
                   <Wand2 size={14} />
                   Sync setup
                 </div>
-                <h2 className="mt-1 text-lg font-bold text-white">Choose where this playlist should mirror</h2>
+                <h2 className="heading-section mt-1">Choose where this playlist should mirror</h2>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-lg p-2 text-muted-fg transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                className="rounded-[var(--radius-sm)] p-2 text-muted-fg transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
                 aria-label="Close"
               >
                 <X size={18} />
@@ -248,11 +249,11 @@ export function AddPlaylistSyncButton({
             <div className="max-h-[calc(100vh-8rem)] overflow-auto p-4 sm:p-5">
               <div className="grid gap-2 sm:grid-cols-3">
                 <button type="button" onClick={() => applyPreset("youtube")} className="btn btn-ghost justify-center">
-                  <ServiceIcon service="YOUTUBE" size="sm" className="h-5 w-5 rounded-md" />
+                  <ServiceIcon service="YOUTUBE" size="sm" className="h-5 w-5 rounded-[var(--radius-sm)]" />
                   YouTube only
                 </button>
                 <button type="button" onClick={() => applyPreset("soundcloud")} className="btn btn-ghost justify-center">
-                  <ServiceIcon service="SOUNDCLOUD" size="sm" className="h-5 w-5 rounded-md" />
+                  <ServiceIcon service="SOUNDCLOUD" size="sm" className="h-5 w-5 rounded-[var(--radius-sm)]" />
                   SoundCloud only
                 </button>
                 <button type="button" onClick={() => applyPreset("all")} className="btn btn-primary justify-center">
@@ -272,16 +273,16 @@ export function AddPlaylistSyncButton({
                   return (
                     <section
                       key={service}
-                      className={`relative overflow-hidden rounded-xl border p-4 transition ${
+                      className={`relative overflow-hidden rounded-[var(--radius)] border p-4 transition ${
                         target?.enabled ? `${meta.border} bg-[var(--surface-2)]` : "border-[var(--border-soft)] bg-[var(--surface)]"
                       }`}
                     >
-                      <span className={`absolute inset-y-3 left-0 w-1 rounded-r ${meta.bg}`} />
+                      <span className={`absolute inset-y-3 left-0 w-1 rounded-r-[var(--hairline-radius)] ${meta.bg}`} />
                       <div className="flex items-start justify-between gap-3 pl-1">
                         <div className="flex min-w-0 items-center gap-3">
                           <ServiceIcon service={service} />
                           <div className="min-w-0">
-                            <h3 className="font-bold text-white">{meta.label}</h3>
+                            <h3 className="heading-row">{meta.label}</h3>
                             <p className="text-sm text-muted-fg">
                               {target?.enabled ? "Tracks will be copied here." : "Not included yet."}
                             </p>
@@ -290,9 +291,9 @@ export function AddPlaylistSyncButton({
                         <button
                           type="button"
                           onClick={() => setTarget(service, { enabled: !target?.enabled })}
-                          className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition ${
+                          className={`inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-sm font-semibold transition ${
                             target?.enabled
-                              ? "border-emerald-500/40 bg-emerald-600 text-white"
+                              ? "border-success/40 bg-success text-[var(--text)]"
                               : "border-[var(--border-soft)] bg-[var(--surface-2)] text-muted-fg hover:text-[var(--text)]"
                           }`}
                         >
@@ -307,9 +308,9 @@ export function AddPlaylistSyncButton({
                             <button
                               type="button"
                               onClick={() => setTarget(service, { mode: "existing" })}
-                              className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                              className={`rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition ${
                                 target.mode === "existing"
-                                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-white"
+                                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]"
                                   : "border-[var(--border-soft)] bg-[var(--surface)] text-muted-fg"
                               }`}
                             >
@@ -319,9 +320,9 @@ export function AddPlaylistSyncButton({
                               type="button"
                               onClick={() => setTarget(service, { mode: "create" })}
                               disabled={!canCreate}
-                              className={`rounded-lg border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${
+                              className={`rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${
                                 target.mode === "create"
-                                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-white"
+                                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]"
                                   : "border-[var(--border-soft)] bg-[var(--surface)] text-muted-fg"
                               }`}
                               title={!canCreate ? "Create the YouTube Music playlist there first, then choose it here." : undefined}
@@ -335,7 +336,7 @@ export function AddPlaylistSyncButton({
                               <select
                                 value={target.playlistId}
                                 onChange={(event) => setTarget(service, { playlistId: event.target.value })}
-                                className="w-full appearance-none rounded-lg border border-[var(--border-soft)] bg-[var(--surface)] px-3 py-2.5 pr-9 text-sm text-[var(--text)]"
+                                className="w-full appearance-none rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] px-3 py-2.5 pr-9 text-sm text-[var(--text)]"
                               >
                                 <option value="">Choose playlist</option>
                                 {writableOptions.map((playlist) => (
@@ -349,16 +350,16 @@ export function AddPlaylistSyncButton({
                                 className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-dim-fg"
                               />
                               {selectedPlaylist ? (
-                                <div className="mt-2 flex items-center gap-2 rounded-lg border border-[var(--border-soft)] bg-[var(--surface)] p-2">
+                                <div className="mt-2 flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] p-2">
                                   <Artwork playlist={selectedPlaylist} />
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-white">{selectedPlaylist.name}</div>
+                                    <div className="truncate text-sm font-semibold text-[var(--text)]">{selectedPlaylist.name}</div>
                                     <div className="text-xs text-muted-fg">{selectedPlaylist.trackCount} songs</div>
                                   </div>
                                 </div>
                               ) : null}
                               {!writableOptions.length ? (
-                                <p className="mt-2 text-xs text-amber-200">
+                                <p className="mt-2 text-xs text-warning-fg">
                                   No writable unlinked playlists found for {meta.label}.
                                 </p>
                               ) : null}
@@ -368,7 +369,7 @@ export function AddPlaylistSyncButton({
                               value={target.newName}
                               onChange={(event) => setTarget(service, { newName: event.target.value })}
                               placeholder={`New ${meta.label} playlist name`}
-                              className="w-full rounded-lg border border-[var(--border-soft)] bg-[var(--surface)] px-3 py-2.5 text-sm"
+                              className="w-full rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] px-3 py-2.5 text-sm"
                             />
                           )}
                         </div>
@@ -379,7 +380,7 @@ export function AddPlaylistSyncButton({
               </div>
 
               {createTargets.length > 1 ? (
-                <div className="mt-4 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                <div className="mt-4 rounded-[var(--radius-sm)] border border-warning/25 bg-warning/10 px-3 py-2 text-sm text-warning-fg">
                   Create one new destination at a time. Choose existing playlists for the other service.
                 </div>
               ) : null}
@@ -392,17 +393,10 @@ export function AddPlaylistSyncButton({
                   {humanStatus(status)}
                 </div>
               ) : null}
-              {error ? (
-                <div className="mt-4 panel-inset border border-[color-mix(in_srgb,var(--danger)_25%,var(--border))] bg-[var(--danger-soft)] px-3 py-2 text-sm text-[#fca5a5]">
-                  {error}
-                </div>
-              ) : null}
+              {error ? <Callout tone="danger" className="mt-4">{error}</Callout> : null}
               {pendingReviewCount ? (
-                <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4">
-                  <div className="text-sm font-bold text-amber-100">{pendingReviewCount} songs need review</div>
-                  <p className="mt-1 text-sm text-amber-100/75">
-                    Pick the right versions once, then sync can reuse those choices.
-                  </p>
+                <Callout tone="warning" className="mt-4" title={`${pendingReviewCount} songs need review`}>
+                  <p className="text-sm">Pick the right versions once, then sync can reuse those choices.</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link href="/manual-match" className="btn btn-primary">
                       Review songs
@@ -420,20 +414,19 @@ export function AddPlaylistSyncButton({
                     </button>
                   </div>
                   {initialWarnings.length ? (
-                    <div className="mt-3 space-y-1 text-xs text-amber-100/75">
+                    <div className="mt-3 space-y-1 text-xs opacity-80">
                       {initialWarnings.map((warning) => (
                         <div key={warning}>{warning}</div>
                       ))}
                     </div>
                   ) : null}
-                </div>
+                </Callout>
               ) : null}
               {pendingReviewCount === 0 ? (
-                <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4">
-                  <div className="text-sm font-bold text-emerald-100">Initial sync finished</div>
-                  {syncSummary ? <p className="mt-1 text-sm text-emerald-100/75">{syncSummary}</p> : null}
+                <Callout tone="success" className="mt-4" title="Initial sync finished">
+                  {syncSummary ? <p className="text-sm">{syncSummary}</p> : null}
                   {initialWarnings.length ? (
-                    <div className="mt-3 space-y-1 text-xs text-emerald-100/75">
+                    <div className="mt-3 space-y-1 text-xs opacity-80">
                       {initialWarnings.map((warning) => (
                         <div key={warning}>{warning}</div>
                       ))}
@@ -454,7 +447,7 @@ export function AddPlaylistSyncButton({
                       Done
                     </button>
                   </div>
-                </div>
+                </Callout>
               ) : null}
 
               <div className="mt-5 flex flex-col-reverse gap-2 border-t border-[var(--border-soft)] pt-4 sm:flex-row sm:justify-end">

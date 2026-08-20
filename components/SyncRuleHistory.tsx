@@ -86,17 +86,14 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
         {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
       </button>
       {open ? (
-        <div className="mt-3 space-y-1.5">
+        <div className="rows mt-2">
           {loading ? <div className="text-xs text-dim-fg">Loading...</div> : null}
-          {error ? <div className="text-xs text-[#fca5a5]">{error}</div> : null}
+          {error ? <div className="text-xs text-danger-fg">{error}</div> : null}
           {jobs && jobs.length === 0 ? (
             <div className="text-xs text-dim-fg">No runs yet.</div>
           ) : null}
           {jobs?.map((job) => (
-            <div
-              key={job.id}
-              className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)]/60 p-2.5 text-xs"
-            >
+            <div key={job.id} className="py-2 text-xs">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <StatusBadge status={job.status.toLowerCase()} />
@@ -105,28 +102,28 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
                   <span className="text-dim-fg tabular-nums">{formatDuration(job.durationMs)}</span>
                 </div>
                 <div className="text-dim-fg tabular-nums">
-                  {job.synced ? <span className="text-emerald-400">+{job.synced} </span> : null}
+                  {job.synced ? <span className="text-success">+{job.synced} </span> : null}
                   {job.alreadySynced ? <span className="text-muted-fg">={job.alreadySynced} </span> : null}
-                  {job.manualRequired ? <span className="text-[#fcd34d]">?{job.manualRequired} </span> : null}
-                  {job.notFound ? <span className="text-[#fca5a5]">!{job.notFound} </span> : null}
-                  {job.removed ? <span className="text-[#fca5a5]">-{job.removed}</span> : null}
+                  {job.manualRequired ? <span className="text-warning-fg">?{job.manualRequired} </span> : null}
+                  {job.notFound ? <span className="text-danger-fg">!{job.notFound} </span> : null}
+                  {job.removed ? <span className="text-danger-fg">-{job.removed}</span> : null}
                 </div>
               </div>
               {job.errorMessage ? (
-                <div className="mt-1.5 truncate text-[#fca5a5]" title={job.errorMessage}>
-                  {job.errorKind ? <span className="font-semibold uppercase">[{job.errorKind}] </span> : null}
+                <div className="mt-1.5 truncate text-danger-fg" title={job.errorMessage}>
+                  {job.errorKind ? <span className="font-semibold">[{job.errorKind}] </span> : null}
                   {job.errorMessage}
                 </div>
               ) : null}
             </div>
           ))}
           {jobs?.length ? (
-            <div className="pt-1 text-[10px] text-dim-fg">
-              <span className="text-emerald-400">+</span> added{" "}
+            <div className="pt-1 text-xs text-dim-fg">
+              <span className="text-success">+</span> added{" "}
               <span className="ml-2 text-muted-fg">=</span> already there{" "}
-              <span className="ml-2 text-[#fcd34d]">?</span> needs review{" "}
-              <span className="ml-2 text-[#fca5a5]">!</span> not found{" "}
-              <span className="ml-2 text-[#fca5a5]">-</span> removed
+              <span className="ml-2 text-warning-fg">?</span> needs review{" "}
+              <span className="ml-2 text-danger-fg">!</span> not found{" "}
+              <span className="ml-2 text-danger-fg">-</span> removed
             </div>
           ) : null}
         </div>

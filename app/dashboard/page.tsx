@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Activity, ArrowRight, ListMusic, RotateCw } from "lucide-react";
+import { Activity, ArrowRight, Cpu, ListMusic, RotateCw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { ServiceIcon, serviceMeta } from "@/components/ServiceBrand";
+import { Callout } from "@/components/Callout";
+import { ServiceIcon, ServicePill, serviceMeta } from "@/components/ServiceBrand";
 import { PlaylistsAutoRefresh } from "@/components/PlaylistsAutoRefresh";
 import { RunningJobsAutoRefresh } from "@/components/RunningJobsAutoRefresh";
 import { RunDueSyncQueueButton } from "@/components/RunDueSyncQueueButton";
@@ -257,119 +258,107 @@ export default async function DashboardPage() {
   });
 
   return (
-    <AppShell title="Dashboard">
+    <AppShell
+      title="Dashboard"
+      description="What the worker is about to do, and what the last run produced."
+    >
       <PlaylistsAutoRefresh hasPlaylists={playlists.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
       <RunningJobsAutoRefresh runningCount={runningJobs.length} />
       <SessionStalenessBanner items={staleSessions} />
-      <section className="panel mb-6 p-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">
-              <RotateCw size={14} />
-              Sync queue
-            </div>
-            <h2 className="mt-1 text-xl font-black tracking-tight text-white">
-              {dueRules.length
-                ? `${dueRules.length} rule${dueRules.length === 1 ? "" : "s"} ready to run`
-                : runningJobs.length
-                  ? `${runningJobs.length} sync ${runningJobs.length === 1 ? "is" : "are"} running`
-                  : "No sync work waiting"}
-            </h2>
-            <p className="mt-1 text-sm text-muted-fg">
-              {dueRules.length
-                ? `${dueSyncBatches} grouped batch${dueSyncBatches === 1 ? "" : "es"} will be picked up by cron or worker.`
-                : nextScheduledRun
-                  ? `Next scheduled rule is due ${nextScheduledRun.toLocaleString()}.`
-                  : "Manual matches and rule edits will appear here when they queue follow-up sync."}
-            </p>
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-center sm:min-w-80">
-            <QueueMetric label="Due" value={dueRules.length} tone={dueRules.length ? "accent" : "neutral"} />
-            <QueueMetric label="Batches" value={dueSyncBatches} tone={dueSyncBatches ? "accent" : "neutral"} />
-            <QueueMetric label="Running" value={runningJobs.length} tone={runningJobs.length ? "success" : "neutral"} />
-          </div>
-        </div>
-        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-[var(--text)]">Process waiting sync now</div>
-            <div className="mt-1 text-xs text-muted-fg">
-              Runs due rules for your account with the same cooldown, preflight, and batch limits as the worker.
-            </div>
-          </div>
+      {/* Two sections, not one panel with the second buried inside it. The
+          queue and the worker are separate facts about separate machinery, and
+          nesting the worker box inside the queue box was what made this page
+          open on a single 700px frame. */}
+      <section className="section">
+        <div className="section-head items-center">
+          <h2 className="heading-section flex items-center gap-2">
+            <RotateCw size={15} className="text-accent" />
+            {dueRules.length
+              ? `${dueRules.length} rule${dueRules.length === 1 ? "" : "s"} ready to run`
+              : runningJobs.length
+                ? `${runningJobs.length} sync ${runningJobs.length === 1 ? "is" : "are"} running`
+                : "No sync work waiting"}
+          </h2>
           <RunDueSyncQueueButton disabled={!dueRules.length || runningJobs.length > 0} />
         </div>
+        <p className="max-w-2xl text-sm leading-6 text-muted-fg">
+          {dueRules.length
+            ? `${dueSyncBatches} grouped batch${dueSyncBatches === 1 ? "" : "es"} will be picked up by cron or worker. Running it here applies the same cooldown, preflight and batch limits as the worker does.`
+            : nextScheduledRun
+              ? `Next scheduled rule is due ${nextScheduledRun.toLocaleString()}.`
+              : "Manual matches and rule edits will appear here when they queue follow-up sync."}
+        </p>
+        <div className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
+          <QueueMetric label="Due" value={dueRules.length} tone={dueRules.length ? "accent" : "neutral"} />
+          <QueueMetric label="Batches" value={dueSyncBatches} tone={dueSyncBatches ? "accent" : "neutral"} />
+          <QueueMetric label="Running" value={runningJobs.length} tone={runningJobs.length ? "success" : "neutral"} />
+        </div>
         {queuePreviewRules.length ? (
-          <div className="mt-4 grid gap-2">
+          <div className="rows mt-5 border-t border-[var(--border-soft)]">
             {queuePreviewRules.map((rule) => (
               <SyncQueueRuleRow key={rule.id} rule={rule} running={Boolean(runningByRule.get(rule.id))} />
             ))}
             {hiddenQueueRules > 0 ? (
-              <div className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2 text-xs text-muted-fg">
+              <div className="py-3 text-xs text-muted-fg">
                 + {hiddenQueueRules} more queued rule{hiddenQueueRules === 1 ? "" : "s"}
               </div>
             ) : null}
           </div>
         ) : null}
-        <div className="mt-4 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] p-3">
-          {workerWarnings.length ? (
-            <div className="mb-3 grid gap-2">
-              {workerWarnings.map((warning) => (
-                <div
-                  key={warning.title}
-                  className={`rounded-lg border px-3 py-2 text-sm ${
-                    warning.tone === "danger"
-                      ? "border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[var(--danger-soft)] text-[#fecaca]"
-                      : "border-[color-mix(in_srgb,var(--warning)_35%,var(--border))] bg-[rgba(245,158,11,0.1)] text-[#fcd34d]"
-                  }`}
-                >
-                  <div className="font-semibold text-[var(--text)]">{warning.title}</div>
-                  <div className="mt-0.5 text-xs opacity-90">{warning.detail}</div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-fg">Worker</div>
-              <div className="mt-1 text-sm font-semibold text-[var(--text)]">
-                {lastWorkerRun
-                  ? `Last ${lastWorkerRun.status.toLowerCase().replaceAll("_", " ")} run ${lastWorkerRun.startedAt.toLocaleString()}`
-                  : "No sync-worker runs recorded yet"}
-              </div>
-              <div className="mt-1 text-xs text-muted-fg">
-                {lastWorkerRun
-                  ? `${lastWorkerRun.ran} ran, ${lastWorkerRun.failed} failed, ${lastWorkerRun.skipped} skipped`
-                  : "Start npm run sync-worker or worker supervisor to record worker activity."}
-              </div>
-            </div>
-            {lastWorkerRun ? (
-              <div className="grid grid-cols-3 gap-2 text-center sm:min-w-72">
-                <QueueMetric label="Runnable" value={lastWorkerRun.runnable} tone={lastWorkerRun.runnable ? "accent" : "neutral"} />
-                <QueueMetric label="Ran" value={lastWorkerRun.ran} tone={lastWorkerRun.ran ? "success" : "neutral"} />
-                <QueueMetric label="Skipped" value={lastWorkerRun.skipped} tone={lastWorkerRun.skipped ? "accent" : "neutral"} />
-              </div>
-            ) : null}
-          </div>
-          {workerSkippedReasons.length ? (
-            <div className="mt-3 grid gap-2">
-              {workerSkippedReasons.slice(0, 3).map((item, index) => (
-                <div key={`${item.ruleId || item.reason}:${index}`} className="rounded-md border border-[var(--border-soft)] bg-[var(--surface)] px-2 py-1.5 text-xs text-muted-fg">
-                  <span className="font-semibold text-[var(--text)]">{item.name || item.reason}</span>
-                  <span> - {item.reason}</span>
-                  {item.detail ? <span> - {item.detail}</span> : null}
-                </div>
-              ))}
-            </div>
-          ) : null}
+      </section>
+
+      <section className="section">
+        <div className="section-head">
+          <h2 className="heading-section flex items-center gap-2">
+            <Cpu size={15} className="text-accent" />
+            Worker
+          </h2>
+          <span className="text-xs text-muted-fg">
+            {lastWorkerRun
+              ? `${lastWorkerRun.ran} ran · ${lastWorkerRun.failed} failed · ${lastWorkerRun.skipped} skipped`
+              : "no runs recorded"}
+          </span>
         </div>
+        {workerWarnings.length ? (
+          <div className="mb-4 grid gap-2">
+            {workerWarnings.map((warning) => (
+              <Callout key={warning.title} tone={warning.tone === "danger" ? "danger" : "warning"} title={warning.title}>
+                <span className="text-xs opacity-90">{warning.detail}</span>
+              </Callout>
+            ))}
+          </div>
+        ) : null}
+        <p className="text-sm text-muted-fg">
+          {lastWorkerRun
+            ? `Last ${lastWorkerRun.status.toLowerCase().replaceAll("_", " ")} run ${lastWorkerRun.startedAt.toLocaleString()}`
+            : "No sync-worker runs recorded yet. Start npm run sync-worker or the worker supervisor to record activity."}
+        </p>
+        {lastWorkerRun ? (
+          <div className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
+            <QueueMetric label="Runnable" value={lastWorkerRun.runnable} tone={lastWorkerRun.runnable ? "accent" : "neutral"} />
+            <QueueMetric label="Ran" value={lastWorkerRun.ran} tone={lastWorkerRun.ran ? "success" : "neutral"} />
+            <QueueMetric label="Skipped" value={lastWorkerRun.skipped} tone={lastWorkerRun.skipped ? "accent" : "neutral"} />
+          </div>
+        ) : null}
+        {workerSkippedReasons.length ? (
+          <div className="rows mt-5 border-t border-[var(--border-soft)]">
+            {workerSkippedReasons.slice(0, 3).map((item, index) => (
+              <div key={`${item.ruleId || item.reason}:${index}`} className="py-2 text-xs text-muted-fg">
+                <span className="font-semibold text-[var(--text)]">{item.name || item.reason}</span>
+                <span> · {item.reason}</span>
+                {item.detail ? <span> · {item.detail}</span> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </section>
       {pendingReviewCount > 0 ? (
         <Link
           href="/manual-match"
-          className="panel-accent mb-8 flex items-center justify-between gap-4 p-6 transition duration-200 hover:shadow-[0_0_24px_rgba(79,141,255,0.15)]"
+          className="panel-accent surface-lift section flex items-center justify-between gap-4 p-6"
         >
           <div>
-            <div className="text-base font-semibold text-[var(--text)]">
+            <div className="heading-panel">
               {pendingReviewCount} {pendingReviewCount === 1 ? "song needs" : "songs need"} your review
             </div>
             <div className="mt-1 text-sm text-muted-fg">
@@ -379,7 +368,14 @@ export default async function DashboardPage() {
           <span className="text-base font-semibold text-[var(--accent)] whitespace-nowrap">Review now -&gt;</span>
         </Link>
       ) : null}
-      <div className="grid gap-4 md:grid-cols-3">
+      <section className="section">
+        <div className="section-head">
+          <h2 className="heading-section">Connections</h2>
+          <Link href="/connections" className="text-xs font-semibold text-[var(--accent)] hover:underline">
+            Manage
+          </Link>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
         {["SPOTIFY", "YOUTUBE", "SOUNDCLOUD"].map((service) => {
           const account = accounts.find((item) => item.service === service);
           return (
@@ -393,17 +389,18 @@ export default async function DashboardPage() {
             />
           );
         })}
-      </div>
+        </div>
+      </section>
 
-      <section className="mt-10 space-y-4">
-        <div className="flex items-baseline justify-between gap-4 px-1">
-          <h2 className="text-2xl font-bold text-[var(--text)]">Playlist copies</h2>
-          <span className="text-xs font-semibold text-accent-fg uppercase tracking-wider">
+      <section className="section">
+        <div className="section-head">
+          <h2 className="heading-section">Playlist copies</h2>
+          <span className="pill pill-accent">
             {ruleGroups.length + standaloneRules.length} item{ruleGroups.length + standaloneRules.length === 1 ? "" : "s"}
           </span>
         </div>
         {rules.length ? (
-          <>
+          <div className="rows">
             {ruleGroups.map((item) =>
               item.group ? (
                 <SyncRuleGroupCard
@@ -426,74 +423,61 @@ export default async function DashboardPage() {
                 latestJob={latestJobByRule.get(rule.id) ?? null}
               />
             ))}
-          </>
-        ) : (
-          <div className="panel p-8 text-center text-sm text-muted-fg">
-            No sync rules yet. Open a playlist and pick a destination to connect them.
           </div>
+        ) : (
+          <p className="py-6 text-sm text-muted-fg">
+            No sync rules yet. Open a playlist and pick a destination to connect them.
+          </p>
         )}
       </section>
 
-      <section className="mt-10 panel group surface-lift animated-gradient-frame animated-sheen relative overflow-hidden p-6">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-70" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_at_15%_0%,rgba(79,141,255,0.08),transparent_52%)] opacity-60 transition duration-500 group-hover:opacity-100" />
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">
-              <Activity size={14} />
-              Latest activity
-            </div>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-white">
-              {lastJob
-                ? lastJob.finishedAt?.toLocaleString() || lastJob.startedAt.toLocaleString()
-                : "No runs yet"}
-            </h2>
-            <p className="mt-1 text-sm text-muted-fg">Outcome of the most recent sync run across your rules.</p>
-          </div>
+      <section className="section">
+        <div className="section-head items-center">
+          <h2 className="heading-section flex items-center gap-2">
+            <Activity size={15} className="text-accent" />
+            Latest run
+          </h2>
           <div className="flex items-center gap-2">
             {lastJob ? <StatusBadge status={lastJob.status.toLowerCase()} /> : null}
-            <Link href="/history" className="btn btn-ghost surface-lift">
+            <Link href="/history" className="btn btn-ghost">
               History <ArrowRight size={14} />
             </Link>
           </div>
         </div>
-        <div className="relative mt-6 grid gap-3 sm:grid-cols-4">
+        <p className="text-sm text-muted-fg">
+          {lastJob
+            ? lastJob.finishedAt?.toLocaleString() || lastJob.startedAt.toLocaleString()
+            : "No runs yet"}
+        </p>
+        <div className="mt-5 grid grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-4">
           <StatTile value={stats.synced} label="Added" tone="accent" />
           <StatTile value={stats.alreadySynced || 0} label="Already there" tone="neutral" />
           <StatTile value={stats.notFound} label="Not found" tone="danger" />
-          <Link
-            href="/manual-match"
-            className={`panel-inset surface-lift animated-sheen group/tile relative overflow-hidden p-5 rounded-lg transition duration-200 hover:shadow-[0_18px_36px_-30px_var(--accent-glow)] ${
-              pendingReviewCount > 0 ? "ring-1 ring-[var(--border-accent)]" : ""
-            }`}
-          >
-            <div className="text-3xl font-black tracking-tight text-[#fcd34d]">{pendingReviewCount}</div>
-            <div className="mt-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-fg">
-              Review{stats.manualRequired ? ` - ${stats.manualRequired} last run` : ""}
-              <ArrowRight size={11} className="ml-auto transition duration-200 group-hover/tile:translate-x-0.5" />
+          <Link href="/manual-match" className="group block">
+            <div className="text-3xl font-semibold tracking-tight tabular-nums text-warning-fg">{pendingReviewCount}</div>
+            <div className="eyebrow mt-2 flex items-center gap-1 text-muted-fg transition-colors group-hover:text-[var(--text)]">
+              Review{stats.manualRequired ? ` · ${stats.manualRequired} last run` : ""}
+              <ArrowRight size={12} />
             </div>
           </Link>
         </div>
         {bySourceEntries.length ? (
-          <div className="relative mt-6">
-            <h3 className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-accent-fg">
-              <ListMusic size={13} /> Match sources
+          <div className="mt-7">
+            <h3 className="eyebrow mb-1 flex items-center gap-1.5 text-muted-fg">
+              <ListMusic size={14} /> Match sources
             </h3>
-            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+            <div className="rows max-w-md">
               {bySourceEntries.map(([source, count]) => {
                 const upper = source.toUpperCase();
                 const known = upper === "SPOTIFY" || upper === "YOUTUBE" || upper === "SOUNDCLOUD";
                 const meta = known ? serviceMeta(upper) : null;
                 return (
-                  <div
-                    key={source}
-                    className="surface-lift flex items-center justify-between gap-2 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2 transition hover:border-[var(--border)]"
-                  >
+                  <div key={source} className="flex items-center justify-between gap-2 py-2">
                     <div className="flex min-w-0 items-center gap-2">
                       {meta ? <ServiceIcon service={upper} size="sm" /> : null}
-                      <span className="truncate text-xs text-muted-fg">{meta?.label ?? source}</span>
+                      <span className="truncate text-sm text-muted-fg">{matchSourceLabel(source, meta?.label)}</span>
                     </div>
-                    <div className="text-lg font-semibold tabular-nums text-white">{count}</div>
+                    <span className="text-sm font-semibold tabular-nums text-[var(--text)]">{count}</span>
                   </div>
                 );
               })}
@@ -507,48 +491,45 @@ export default async function DashboardPage() {
 
 function StatTile({ value, label, tone }: { value: number; label: string; tone: "accent" | "neutral" | "danger" }) {
   const valueClass =
-    tone === "accent" ? "text-[var(--accent)]" : tone === "danger" ? "text-[#fca5a5]" : "text-[var(--text)]";
+    tone === "accent" ? "text-[var(--accent)]" : tone === "danger" ? "text-danger-fg" : "text-[var(--text)]";
   return (
-    <div className="panel-inset surface-lift animated-sheen relative overflow-hidden p-5 rounded-lg">
-      <div className={`text-3xl font-black tracking-tight ${valueClass}`}>{value}</div>
-      <div className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-fg">{label}</div>
+    <div>
+      <div className={`text-3xl font-semibold tracking-tight tabular-nums ${valueClass}`}>{value}</div>
+      <div className="eyebrow mt-2 text-muted-fg">{label}</div>
     </div>
   );
 }
 
 function QueueMetric({ value, label, tone }: { value: number; label: string; tone: "accent" | "neutral" | "success" }) {
   const valueClass =
-    tone === "accent" ? "text-[var(--accent)]" : tone === "success" ? "text-emerald-300" : "text-[var(--text)]";
+    tone === "accent" ? "text-[var(--accent)]" : tone === "success" ? "text-success-fg" : "text-[var(--text)]";
   return (
-    <div className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2">
-      <div className={`text-2xl font-black tabular-nums ${valueClass}`}>{value}</div>
-      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-fg">{label}</div>
+    <div className="min-w-16">
+      <div className={`text-2xl font-semibold tabular-nums ${valueClass}`}>{value}</div>
+      <div className="eyebrow mt-1 text-muted-fg">{label}</div>
     </div>
   );
 }
 
 function SyncQueueRuleRow({ rule, running }: { rule: RuleWithDestinations; running: boolean }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-w-0 flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-center gap-3">
         <ServiceIcon service={rule.sourceService} size="sm" />
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-[var(--text)]">{rule.name}</div>
+          <div className="heading-row truncate">{rule.name}</div>
           <div className="truncate text-xs text-muted-fg">
-            {rule.sourceService} source - {queueReasonLabel(rule.queuedReason)} - every {rule.intervalMinutes}m
+            {serviceMeta(rule.sourceService).label} source - {queueReasonLabel(rule.queuedReason)} - every{" "}
+            {rule.intervalMinutes}m
           </div>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         {rule.destinations.map((destination) => (
-          <span
+          <ServicePill
             key={`${rule.id}:${destination.service}:${destination.playlistId}`}
-            className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[var(--border-soft)] bg-[var(--surface)] px-2 text-xs font-semibold text-muted-fg"
-            title={destination.service}
-          >
-            <ServiceIcon service={destination.service} size="sm" className="h-4 w-4 rounded-md" />
-            {destination.service}
-          </span>
+            service={destination.service}
+          />
         ))}
         <span className={`pill ${running ? "pill-accent animate-pulse" : "pill-warning"}`}>
           {running ? "Running" : "Waiting"}
@@ -556,6 +537,24 @@ function SyncQueueRuleRow({ rule, running }: { rule: RuleWithDestinations; runni
       </div>
     </div>
   );
+}
+
+// The match-source strip printed the matcher's own keys straight through, so
+// the dashboard read "no_match", "search_manual" and "stored" at the reader.
+// A brand label wins when the key is a service; otherwise unpick the snake_case.
+function matchSourceLabel(source: string, brandLabel?: string): string {
+  if (brandLabel) return brandLabel;
+  const known: Record<string, string> = {
+    stored: "Reused earlier match",
+    search: "Found by search",
+    search_manual: "Found after manual review",
+    no_match: "No match found",
+    isrc: "Matched by ISRC",
+    manual: "Chosen by hand",
+  };
+  if (known[source]) return known[source];
+  const words = source.replaceAll("_", " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : source;
 }
 
 function queueReasonLabel(reason?: string | null): string {

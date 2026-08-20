@@ -56,14 +56,14 @@ export function TrackPreviewButton({
       <button
         type="button"
         onClick={() => (src ? setOpen((value) => !value) : window.open(url || "", "_blank", "noopener,noreferrer"))}
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--border-soft)] bg-[var(--surface)] px-2.5 text-xs font-semibold text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
+        className="btn btn-ghost h-8 px-2.5 text-xs"
         title={src ? "Play a short preview" : "Open track"}
       >
         {src ? open ? <Pause size={13} /> : <Play size={13} /> : <ExternalLink size={13} />}
         {src ? (open ? "Stop" : "Preview") : "Open"}
       </button>
       {open && src ? (
-        <div className="absolute bottom-10 right-0 z-30 w-72 overflow-hidden rounded-xl border border-[var(--border-soft)] bg-black shadow-[0_22px_80px_-24px_rgba(0,0,0,0.95)]">
+        <div className="panel absolute bottom-10 right-0 z-30 w-72 overflow-hidden shadow-[var(--shadow-overlay)]">
           <iframe
             title="Track preview"
             src={src}

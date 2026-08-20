@@ -1,10 +1,10 @@
 import type { SyncDestination, SyncRule } from "@prisma/client";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Pencil, Play, RadioTower } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Pencil, Play } from "lucide-react";
+import { Callout } from "./Callout";
 import { CancelSyncButton } from "./CancelSyncButton";
 import { RunSyncButton } from "./RunSyncButton";
-import { ServiceIcon, ServicePill, serviceMeta } from "./ServiceBrand";
-import { StatusBadge } from "./StatusBadge";
+import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 import { SyncRuleHistory } from "./SyncRuleHistory";
 
 function modeLabel(mode: string) {
@@ -16,17 +16,31 @@ function modeLabel(mode: string) {
   return labels[mode] || mode;
 }
 
+function humanizeMs(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "a moment";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
+}
+
 function formatRelative(target: Date | null | undefined): string | null {
   if (!target) return null;
   const diff = target.getTime() - Date.now();
-  const abs = Math.abs(diff);
-  const minutes = Math.round(abs / 60_000);
-  if (minutes < 1) return diff > 0 ? "in a moment" : "just now";
-  if (minutes < 60) return diff > 0 ? `in ${minutes}m` : `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return diff > 0 ? `in ${hours}h` : `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return diff > 0 ? `in ${days}d` : `${days}d ago`;
+  if (Math.abs(diff) < 60_000) return diff > 0 ? "in a moment" : "just now";
+  return diff > 0 ? `in ${humanizeMs(diff)}` : `${humanizeMs(-diff)} ago`;
+}
+
+// A scheduled run whose time has passed is not "next" — it is late. Rendering it
+// as `Next 12h ago` (which is what a plain relative format produced) hid exactly
+// the case worth noticing: the worker is not keeping up with this rule.
+export function formatNextRun(target: Date | null | undefined): { label: string; late: boolean } | null {
+  if (!target) return null;
+  const diff = target.getTime() - Date.now();
+  if (diff > 0) return { label: `next in ${humanizeMs(diff)}`, late: false };
+  if (diff > -120_000) return { label: "due now", late: false };
+  return { label: `overdue by ${humanizeMs(-diff)}`, late: true };
 }
 
 export type SyncRuleCardProgress = {
@@ -60,147 +74,125 @@ export function SyncRuleCard({
   latestJob?: SyncRuleJobSummary | null;
 }) {
   const lastRunRel = formatRelative(rule.lastRunAt);
-  const nextRunRel = rule.isEnabled ? formatRelative(rule.nextRunAt) : null;
+  const nextRun = rule.isEnabled ? formatNextRun(rule.nextRunAt) : null;
   const sourceMeta = serviceMeta(rule.sourceService);
-  const glow =
-    sourceMeta.key === "SPOTIFY"
-      ? "service-glow-spotify"
-      : sourceMeta.key === "YOUTUBE"
-        ? "service-glow-youtube"
-        : sourceMeta.key === "SOUNDCLOUD"
-          ? "service-glow-soundcloud"
-          : "";
   const running = Boolean(runningJob);
   const activeDestinations = rule.destinations.filter((destination) => destination.isEnabled);
-  const latestFailed = latestJob?.status === "FAILED" || latestJob?.status === "PARTIAL_SUCCESS";
-  const routeState = running
-    ? { icon: <Clock3 size={14} />, label: "Running", className: "pill-accent" }
-    : latestFailed
-      ? { icon: <AlertTriangle size={14} />, label: latestJob.status === "PARTIAL_SUCCESS" ? "Partial" : "Issue", className: "text-[#fca5a5]" }
-      : rule.isEnabled
-        ? { icon: <RadioTower size={14} />, label: "Listening", className: "text-emerald-300" }
-        : { icon: <AlertTriangle size={14} />, label: "Off", className: "text-muted-fg" };
+  const partial = latestJob?.status === "PARTIAL_SUCCESS";
+  const failed = latestJob?.status === "FAILED";
+
+  // One badge, not seven pills of equal weight: this is the rule's state, and
+  // everything else on the card is detail underneath it.
+  const state = running
+    ? { label: "Running", className: "pill-accent" }
+    : failed
+      ? { label: "Failed", className: "pill-danger" }
+      : partial
+        ? { label: "Partial", className: "pill-warning" }
+        : !rule.isEnabled
+          ? { label: "Paused", className: "" }
+          : { label: "Listening", className: "pill-success" };
 
   return (
-    <div
-      className={`panel group surface-lift animated-sheen ${glow} relative overflow-hidden p-6 ${sourceMeta.border} ${running ? "shadow-[0_28px_70px_-46px_var(--accent-glow)]" : ""}`}
-    >
-      <span
-        className={`pointer-events-none absolute inset-y-4 left-0 w-1 rounded-full ${sourceMeta.bg} transition duration-300 ${running ? "opacity-100" : "opacity-60 group-hover:opacity-100"}`}
-      />
-      <div className={`pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full ${sourceMeta.bg} opacity-10 blur-[80px] transition duration-500 group-hover:opacity-20`} />
-      {running ? (
-        <span className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent" />
-      ) : null}
-
-      <div className="relative flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-3">
-            <ServiceIcon service={rule.sourceService} size="sm" className="transition duration-200 group-hover:scale-105" />
-            <div className="min-w-0">
-              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-dim-fg">Source route</div>
-              <h3 className="truncate text-lg font-bold tracking-tight text-white">{rule.name}</h3>
-            </div>
-            <StatusBadge status={rule.isEnabled ? "connected" : "not_connected"} />
-            <span className={`pill ${routeState.className}`}>
-              {running ? (
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--accent)] opacity-70" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
-                </span>
-              ) : (
-                routeState.icon
-              )}
-              {routeState.label}
-            </span>
-          </div>
-
-          <div className="mt-4 grid gap-3 rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)]/45 p-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.35fr)] md:items-center">
-            <div className="min-w-0">
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-dim-fg">Listen from</div>
-              <ServicePill service={rule.sourceService} className="max-w-full" />
-            </div>
-            <ArrowRight size={16} className="hidden text-dim-fg md:block" />
-            <div className="min-w-0">
-              <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-dim-fg">
-                Apply to {activeDestinations.length} destination{activeDestinations.length === 1 ? "" : "s"}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {activeDestinations.map((item) => (
-                  <ServicePill key={`${item.service}-${item.playlistId}`} service={item.service} className="rounded-lg py-0.5" />
-                ))}
-                {!activeDestinations.length ? <span className="pill text-[#fca5a5]">No destinations</span> : null}
-              </div>
+    <div className="py-4 sm:py-5">
+      {/* No frame and no brand stripe down the left edge: this is a row in a
+          divided list now, and the stripe repeated what the service icon
+          immediately to its right already says. */}
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <ServiceIcon service={rule.sourceService} size="sm" />
+          <div className="min-w-0">
+            <h3 className="heading-panel truncate" title={rule.name}>
+              {rule.name}
+            </h3>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-fg">
+              <span className={`pill ${state.className}`}>{state.label}</span>
+              <span>{modeLabel(rule.mode)}</span>
+              {rule.intervalMinutes ? <span>· every {rule.intervalMinutes}m</span> : null}
+              {lastRunRel ? <span>· ran {lastRunRel}</span> : null}
+              {nextRun ? (
+                <span className={nextRun.late ? "text-warning-fg" : undefined}>· {nextRun.label}</span>
+              ) : null}
             </div>
           </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="pill">{modeLabel(rule.mode)}</span>
-            {latestJob ? (
-              <span className={`pill ${latestFailed ? "text-[#fca5a5]" : latestJob.status === "SUCCEEDED" ? "text-emerald-300" : ""}`}>
-                {latestFailed ? <AlertTriangle size={13} /> : latestJob.status === "SUCCEEDED" ? <CheckCircle2 size={13} /> : <Clock3 size={13} />}
-                Last {latestJob.status.toLowerCase().replaceAll("_", " ")}
-              </span>
-            ) : null}
-          </div>
-          {latestFailed && latestJob?.errorMessage ? (
-            <div className="mt-2 truncate rounded-lg border border-rose-500/20 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-200" title={latestJob.errorMessage}>
-              {latestJob.errorMessage}
-            </div>
-          ) : null}
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <Link href={`/settings?rule=${rule.id}`} className="btn btn-ghost text-xs">
-            <Pencil size={16} /> Edit
+        <div className="flex shrink-0 items-center gap-2">
+          <Link href={`/settings?rule=${rule.id}`} className="btn btn-ghost">
+            <Pencil size={15} /> Edit
           </Link>
           {runningJob ? (
             <CancelSyncButton jobId={runningJob.id} startedAt={runningJob.startedAt} />
           ) : (
             <RunSyncButton ruleId={rule.id}>
-              <Play size={16} /> Run now
+              <Play size={15} /> Run now
             </RunSyncButton>
           )}
         </div>
       </div>
 
+      {/* Route, as one sentence rather than two labelled boxes whose captions
+          collided with the chips on narrow screens. */}
+      <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <span className="text-muted-fg">{sourceMeta.label}</span>
+        <ArrowRight size={14} className="text-dim-fg" />
+        {activeDestinations.length ? (
+          activeDestinations.map((item) => (
+            <span key={`${item.service}-${item.playlistId}`} className="text-[var(--text)]">
+              {serviceMeta(item.service).label}
+            </span>
+          ))
+        ) : (
+          <span className="text-danger-fg">No destinations</span>
+        )}
+      </div>
+
+      {failed || partial ? (
+        latestJob?.errorMessage ? (
+          <Callout tone={failed ? "danger" : "warning"} className="mt-3">
+            <span className="line-clamp-2 break-words" title={latestJob.errorMessage}>
+              {latestJob.errorMessage}
+            </span>
+          </Callout>
+        ) : (
+          <Callout tone="warning" className="mt-3" icon={<AlertTriangle size={16} className="mt-0.5 shrink-0" />}>
+            Last run finished as {latestJob?.status.toLowerCase().replaceAll("_", " ")}.
+          </Callout>
+        )
+      ) : null}
+
       {progress && progress.sourceTotal > 0 ? (
-        <div className="relative mt-6 space-y-4">
+        <div className="mt-4 space-y-3">
           {progress.destinations.map((dest) => {
             const pct = Math.min(100, Math.round((dest.synced / progress.sourceTotal) * 100));
-            const remaining = Math.max(0, progress.sourceTotal - dest.synced);
             const complete = pct >= 100;
             const destMeta = serviceMeta(dest.service);
             return (
-              <div key={`${dest.service}::${dest.playlistId}`} className="text-sm">
-                <div className="mb-2 flex items-end justify-between gap-3">
-                  <span className="min-w-0 text-xs font-bold text-slate-300">
-                    <span className="inline-flex max-w-full items-center gap-2">
-                      <ServiceIcon service={dest.service} size="sm" className="h-5 w-5 rounded-md" />
-                      <span className="shrink-0">{destMeta.label}</span>
-                      {dest.playlistName ? <span className="truncate text-slate-500 font-medium">/ {dest.playlistName}</span> : null}
-                      {complete ? <span className="pill pill-success shrink-0">Done</span> : null}
-                    </span>
+              <div key={`${dest.service}::${dest.playlistId}`}>
+                <div className="mb-1.5 flex min-w-0 items-baseline justify-between gap-3 text-xs">
+                  <span className="flex min-w-0 items-baseline gap-1.5">
+                    <span className="shrink-0 text-muted-fg">{destMeta.label}</span>
+                    {dest.playlistName ? (
+                      <span className="truncate text-dim-fg" title={dest.playlistName}>
+                        {dest.playlistName}
+                      </span>
+                    ) : null}
                   </span>
-                  <span className="whitespace-nowrap text-[10px] font-bold uppercase tracking-normal text-slate-500">
-                    <span className="text-white tabular-nums">{dest.synced}</span>
-                    <span className="mx-1">/</span>
+                  <span className="shrink-0 whitespace-nowrap text-muted-fg">
+                    <span className="tabular-nums text-[var(--text)]">{dest.synced}</span> of{" "}
                     <span className="tabular-nums">{progress.sourceTotal}</span>
-                    {remaining > 0 ? <span className="ml-2 text-[var(--accent)]/70">{remaining} left</span> : null}
-                    {dest.pendingReview > 0 ? <span className="ml-2 text-[#fcd34d]">/ {dest.pendingReview} review</span> : null}
+                    {dest.pendingReview > 0 ? (
+                      <span className="text-warning-fg"> · {dest.pendingReview} to review</span>
+                    ) : null}
+                    {complete ? (
+                      <CheckCircle2 size={13} className="ml-1.5 inline align-[-2px] text-success" />
+                    ) : null}
                   </span>
                 </div>
-                <div className="relative h-1.5 overflow-hidden rounded-full border border-white/5 bg-black/40">
+                <div className="h-1 overflow-hidden rounded-full bg-surface-3">
                   <div
-                    className={
-                      complete
-                        ? "h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.4)]"
-                        : `h-full rounded-full ${destMeta.bg} shadow-[0_0_14px_var(--accent-glow)]`
-                    }
-                    style={{ width: `${pct}%`, transition: "width 500ms cubic-bezier(0.4, 0, 0.2, 1)" }}
+                    className={`dist-bar-fill h-full ${complete ? "bg-success" : destMeta.bg}`}
+                    style={{ width: `${pct}%` }}
                   />
-                  {running && !complete ? (
-                    <span className="pointer-events-none absolute inset-y-0 left-0 w-1/3 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-[sheen-pass_1.6s_ease-out_infinite]" />
-                  ) : null}
                 </div>
               </div>
             );
@@ -208,27 +200,7 @@ export function SyncRuleCard({
         </div>
       ) : null}
 
-      {lastRunRel || nextRunRel ? (
-        <div className="relative mt-4 flex flex-wrap items-center gap-2 text-xs">
-          {lastRunRel ? (
-            <span className="pill">
-              Last <span className="ml-1 text-[var(--text)]">{lastRunRel}</span>
-            </span>
-          ) : null}
-          {nextRunRel ? (
-            <span className="pill pill-accent">
-              Next <span className="ml-1 text-[var(--text)]">{nextRunRel}</span>
-            </span>
-          ) : null}
-          {rule.intervalMinutes ? (
-            <span className="pill">every {rule.intervalMinutes}m</span>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="relative">
-        <SyncRuleHistory ruleId={rule.id} />
-      </div>
+      <SyncRuleHistory ruleId={rule.id} />
     </div>
   );
 }

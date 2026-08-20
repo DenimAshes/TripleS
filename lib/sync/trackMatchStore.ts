@@ -1,26 +1,11 @@
-import { Prisma, type ServiceTrack } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import type { NormalizedTrack } from "./syncTypes";
-import { serviceKey } from "@/lib/services/adapterFactory";
-import { parseArtistsJson } from "@/lib/utils/parseArtists";
+import { normalizedFromServiceTrack } from "./serviceTrackToNormalized";
 
 function trackMatchField(service: string) {
   if (service === "SPOTIFY") return "spotifyServiceTrackId";
   if (service === "YOUTUBE") return "youtubeServiceTrackId";
   return "soundcloudServiceTrackId";
-}
-
-function normalizedFromServiceTrack(track: ServiceTrack): NormalizedTrack {
-  return {
-    title: track.title,
-    artists: parseArtistsJson(track.artistsJson),
-    album: track.album || undefined,
-    durationMs: track.durationMs || undefined,
-    isrc: track.isrc || undefined,
-    sourceService: serviceKey(track.service),
-    sourceTrackId: track.serviceTrackId,
-    url: track.url || undefined,
-  };
 }
 
 export function buildTrackMatchData(

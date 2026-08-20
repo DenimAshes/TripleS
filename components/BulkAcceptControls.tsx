@@ -201,15 +201,15 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
         )}
       </div>
       {previewState ? (
-        <div className="basis-full rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] p-3">
+        <div className="basis-full border-t border-[var(--border-soft)] pt-3">
           {previewState.count > 0 ? (
             <>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-accent-fg">
+              <div className="eyebrow mb-2">
                 Previewing {previewState.candidates.length} of {previewState.count}
               </div>
-              <div className="grid gap-2">
+              <div className="rows">
                 {previewState.candidates.map((candidate) => (
-                  <div key={candidate.id} className="grid gap-1 rounded-lg border border-[var(--border-soft)] bg-[var(--surface)] p-2 text-xs sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+                  <div key={candidate.id} className="grid gap-1 py-1.5 text-xs sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
                     <div className="min-w-0">
                       <div className="truncate font-semibold text-[var(--text)]">{candidate.sourceTitle || candidate.sourceServiceTrackId}</div>
                       <div className="truncate text-dim-fg">
@@ -221,7 +221,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
                       <div className="truncate font-semibold text-[var(--text)]">{candidate.candidateTitle || candidate.candidateServiceTrackId}</div>
                       <div className="truncate text-dim-fg">
                         {(candidate.candidateArtists || []).join(", ") || candidate.candidateService || candidate.targetService}
-                        <span className="ml-2 font-black text-[var(--text)]">{Math.round(candidate.confidence * 100)}%</span>
+                        <span className="ml-2 font-semibold text-[var(--text)]">{Math.round(candidate.confidence * 100)}%</span>
                       </div>
                     </div>
                   </div>
@@ -237,7 +237,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
         </div>
       ) : null}
       {outcome ? (
-        <div className={`basis-full text-xs ${outcome.startsWith(config.successVerb) ? "text-emerald-400" : "text-[#fca5a5]"}`}>
+        <div className={`basis-full text-xs ${outcome.startsWith(config.successVerb) ? "text-success" : "text-danger-fg"}`}>
           {outcome}
         </div>
       ) : null}
@@ -252,11 +252,11 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
 export function BulkAcceptControls({ totalPending }: { totalPending: number }) {
   if (totalPending === 0) return null;
   return (
-    <div className="panel mb-4 divide-y divide-[var(--border-soft)] p-4">
-      <div className="pb-4">
+    <div className="rows mb-6 border-y border-[var(--border-soft)]">
+      <div className="py-4">
         <BulkSection config={CONFIGS.accept} totalPending={totalPending} />
       </div>
-      <div className="pt-4">
+      <div className="py-4">
         <BulkSection config={CONFIGS.reject} totalPending={totalPending} />
       </div>
     </div>

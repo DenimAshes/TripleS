@@ -51,12 +51,12 @@ export function HealthIndicator() {
 
   const color =
     health === "ok"
-      ? "bg-emerald-400"
+      ? "bg-success"
       : health === "warn"
-        ? "bg-amber-400"
+        ? "bg-warning"
         : health === "fail"
-          ? "bg-red-400"
-          : "bg-slate-500";
+          ? "bg-danger"
+          : "bg-[var(--text-dim)]";
 
   const label =
     health === "ok"
@@ -69,7 +69,7 @@ export function HealthIndicator() {
 
   return (
     <div
-      className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500"
+      className="eyebrow flex items-center gap-2 text-muted-fg"
       title={`${label} - ${detail}`}
     >
       <span className="relative inline-flex h-2 w-2">

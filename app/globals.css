@@ -1,12 +1,20 @@
 @import "tailwindcss";
 
+/* Design tokens. Everything visual in the app resolves to one of these — a
+   component that reaches for a raw hex is a bug, because the same colour then
+   drifts between pages. Only custom properties live outside a cascade layer:
+   they declare values and never compete with a Tailwind utility. */
 :root {
+  /* Native controls — a select's dropdown list, a checkbox, the default
+     scrollbar — are painted by the OS, and without this they arrive light on a
+     dark page. */
+  color-scheme: dark;
+
   /* Base surfaces — near-black with a faint blue undertone so it doesn't
      read as a flat OLED dump but as a deliberate cool theme. */
   --bg: #0a0b10;
-  --bg-gradient: radial-gradient(1400px 700px at 100% -20%, rgba(79, 141, 255, 0.08), transparent 50%),
-    radial-gradient(1000px 600px at 0% 110%, rgba(79, 141, 255, 0.05), transparent 55%),
-    linear-gradient(180deg, #0f1119 0%, #0a0b10 100%);
+  --bg-gradient: radial-gradient(1200px 620px at 100% -10%, rgba(79, 141, 255, 0.06), transparent 55%),
+    var(--bg);
   --surface: #11131a;
   --surface-2: #171a23;
   --surface-3: #1d2230;
@@ -20,21 +28,67 @@
   --text-muted: #8b8f9c;
   --text-dim: #5b6171;
 
-  /* Electric blue accent — NeuroBank-ish. -soft for tinted backgrounds,
-     -hover slightly lighter for interactive states. */
+  /* Electric blue accent. -soft for tinted backgrounds, -fg for text that sits
+     on those tints, -ring for focus. */
   --accent: #4f8dff;
   --accent-hover: #6ea1ff;
   --accent-active: #3b7bf0;
   --accent-soft: rgba(79, 141, 255, 0.12);
+  --accent-fg: #bfd4ff;
   --accent-ring: rgba(79, 141, 255, 0.35);
-  --accent-glow: rgba(79, 141, 255, 0.2);
+  /* Ink for text and glyphs sitting on a filled accent or brand surface. Dark
+     enough for every fill in this file, so a primary button and a service mark
+     don't each invent their own. */
+  --on-accent: #08101f;
 
+  /* Status tones. Each has a tint for backgrounds and an -fg for text on that
+     tint, so a callout, a pill and an inline warning agree on colour. */
   --success: #34d399;
-  --success-soft: rgba(52, 211, 153, 0.14);
+  --success-soft: rgba(52, 211, 153, 0.12);
+  --success-fg: #6ee7b7;
   --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.14);
+  --warning-soft: rgba(245, 158, 11, 0.12);
+  --warning-fg: #fcd34d;
   --danger: #ef4444;
-  --danger-soft: rgba(239, 68, 68, 0.14);
+  --danger-soft: rgba(239, 68, 68, 0.12);
+  --danger-fg: #fca5a5;
+
+  /* Service brand marks. Real brand colours, so they stay literal — but they
+     live here rather than being retyped in components. */
+  --brand-spotify: #1ed760;
+  --brand-youtube: #ff0033;
+  --brand-soundcloud: #ff7700;
+  /* Ink on top of each brand fill. Spotify's green wants dark; the red and
+     orange want light. */
+  --brand-spotify-ink: #06130a;
+  --brand-youtube-ink: var(--text);
+  --brand-soundcloud-ink: var(--text);
+
+  /* One elevation, for things that float over the page: popovers, dialogs,
+     toasts. Panels sit flat on the background and get no shadow at all. */
+  --shadow-overlay: 0 22px 80px -24px rgba(0, 0, 0, 0.95);
+  /* The dim behind a dialog. One value, so two dialogs never darken the page
+     by different amounts. */
+  --scrim: rgba(0, 0, 0, 0.6);
+
+  /* Two radii, each with a job: --radius wraps a container (panel, dialog,
+     card), --radius-sm wraps a control (button, chip, inset block). Reach for
+     `rounded-[var(--radius)]` / `rounded-[var(--radius-sm)]` rather than
+     Tailwind's rounded-md, which is a third value nothing here wants.
+
+     Note the namespace clash: Tailwind's own theme also defines --radius-sm
+     (0.25rem) and it lands in the same :root, so the two names compete and
+     source order decides. Ours is emitted later and wins, which is why
+     `rounded-sm` is 8px here, not 4px. Don't add more --radius-* names — a
+     :root value on a key Tailwind already owns is dropped from the build. */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
+
+  /* Outside Tailwind's radius namespace on purpose. Only for shapes a few
+     pixels across — a row stripe, an inline highlight — where a control
+     radius would swallow the shape. */
+  --hairline-radius: 4px;
 
   /* Kept under the old names so existing components don't need a sweep. */
   --background: var(--bg);
@@ -48,936 +102,575 @@
   --color-foreground: var(--text);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-line-soft: var(--border-soft);
   --color-border-strong: var(--border);
   --color-text-muted: var(--text-muted);
+  --color-text-dim: var(--text-dim);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-fg: var(--success-fg);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-fg: var(--warning-fg);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-fg: var(--danger-fg);
+  --color-on-accent: var(--on-accent);
+  --color-brand-spotify: var(--brand-spotify);
+  --color-brand-youtube: var(--brand-youtube);
+  --color-brand-soundcloud: var(--brand-soundcloud);
   --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  background: var(--bg);
-}
-
-body {
-  min-height: 100vh;
-  background: var(--bg-gradient);
-  color: var(--text);
-  font-family: "Geist", "Geist Fallback", Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-
-input,
-select,
-textarea {
-  background: linear-gradient(135deg, var(--surface), var(--surface-2));
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.65rem 0.85rem;
-  color: var(--text);
-  transition: all 200ms ease;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--text-dim);
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring), 0 0 12px rgba(79, 141, 255, 0.2);
-  background: linear-gradient(135deg, var(--surface), var(--surface-2));
-}
-
-input:focus,
-select:focus,
-textarea:focus,
-button:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-ring);
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* Layout helpers */
-
-.panel {
-  border: 1px solid var(--border-soft);
-  background: linear-gradient(135deg, rgba(17, 19, 26, 0.7), rgba(23, 26, 35, 0.5));
-  backdrop-filter: blur(12px);
-  border-radius: 16px;
-  box-shadow: 
-    0 1px 0 rgba(255, 255, 255, 0.02) inset,
-    0 8px 24px -16px rgba(0, 0, 0, 0.7),
-    0 0 1px rgba(79, 141, 255, 0.1);
-  transition: all 200ms ease;
-}
-
-.panel:hover {
-  border-color: color-mix(in srgb, var(--accent) 15%, var(--border-soft));
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.02) inset,
-    0 12px 32px -16px rgba(0, 0, 0, 0.8),
-    0 0 20px rgba(79, 141, 255, 0.08);
-}
-
-.surface-lift {
-  transform: translateY(0);
-  transition:
-    transform 220ms ease,
-    border-color 220ms ease,
-    background-color 220ms ease,
-    box-shadow 220ms ease,
-    color 220ms ease;
-}
-
-.surface-lift:hover,
-.surface-lift:focus-visible {
-  transform: translateY(-2px);
-}
-
-.animated-gradient-frame {
-  position: relative;
-}
-
-.animated-gradient-frame::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(120deg, rgba(79, 141, 255, 0), rgba(79, 141, 255, 0.72), rgba(52, 211, 153, 0.55), rgba(245, 158, 11, 0.5), rgba(79, 141, 255, 0));
-  background-size: 260% 260%;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 260ms ease;
-}
-
-.animated-gradient-frame:hover::before,
-.animated-gradient-frame:focus-within::before {
-  animation: gradient-frame-pan 4s linear infinite;
-  opacity: 0.9;
-}
-
-.animated-sheen {
-  position: relative;
-  overflow: hidden;
-}
-
-.animated-sheen::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255, 255, 255, 0.08) 48%, transparent 58%, transparent 100%);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-45%);
-}
-
-.animated-sheen:hover::after,
-.animated-sheen:focus-within::after {
-  animation: sheen-pass 1.35s ease-out;
-  opacity: 1;
-}
-
-.connection-activity-track {
-  position: relative;
-  height: 10px;
-  overflow: hidden;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(30, 215, 96, 0.12), rgba(255, 0, 51, 0.1), rgba(255, 119, 0, 0.12)),
-    var(--surface-2);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-.connection-activity-track::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
-  animation: activity-scan 3.8s ease-in-out infinite;
-}
-
-.connection-activity-segment {
-  position: absolute;
-  top: 2px;
-  left: -22%;
-  height: 4px;
-  width: 22%;
-  border-radius: 999px;
-  opacity: 0.95;
-  filter: saturate(1.15);
-  animation: activity-segment 4.8s ease-in-out infinite;
-}
-
-.connection-card-pulse {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  padding: 4px;
-  border: 1px solid var(--border-soft);
-  border-radius: 14px;
-  background:
-    linear-gradient(90deg, var(--service-wash, rgba(79, 141, 255, 0.055)), transparent),
-    rgba(255, 255, 255, 0.02);
-}
-
-.connection-card-pulse span {
-  position: relative;
-  min-width: 0;
-  overflow: hidden;
-  border-radius: 10px;
-  padding: 8px 6px;
-  background: rgba(255, 255, 255, 0.035);
-  color: var(--dim-fg);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  line-height: 1;
-  text-align: center;
-  text-transform: uppercase;
-  white-space: nowrap;
-  transition:
-    background-color 220ms ease,
-    color 220ms ease,
-    transform 220ms ease;
-}
-
-.connection-card-pulse span::before {
-  content: "";
-  position: absolute;
-  inset: auto 10px 0;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--service-glow, var(--accent));
-  opacity: 0;
-  transform: scaleX(0.35);
-  transition:
-    opacity 220ms ease,
-    transform 220ms ease;
-}
-
-.connection-card-pulse span.is-active {
-  color: var(--text);
-  background: color-mix(in srgb, var(--service-glow, var(--accent)) 18%, rgba(255, 255, 255, 0.035));
-}
-
-.connection-card-pulse span.is-active::before {
-  animation: card-pulse-line 2.4s ease-in-out infinite;
-  opacity: 0.9;
-}
-
-.group:hover .connection-card-pulse span.is-active,
-.group:focus-within .connection-card-pulse span.is-active {
-  transform: translateY(-1px);
-}
-
-.service-glow-spotify,
-.service-glow-youtube,
-.service-glow-soundcloud {
-  --service-glow: rgba(79, 141, 255, 0.12);
-  --service-wash: rgba(79, 141, 255, 0.055);
-}
-
-.service-glow-spotify {
-  --service-glow: rgba(30, 215, 96, 0.2);
-  --service-wash: rgba(30, 215, 96, 0.07);
-}
-
-.service-glow-youtube {
-  --service-glow: rgba(255, 0, 51, 0.2);
-  --service-wash: rgba(255, 0, 51, 0.065);
-}
-
-.service-glow-soundcloud {
-  --service-glow: rgba(255, 119, 0, 0.22);
-  --service-wash: rgba(255, 119, 0, 0.07);
-}
-
-.service-glow-spotify::after,
-.service-glow-youtube::after,
-.service-glow-soundcloud::after {
-  background:
-    linear-gradient(135deg, var(--service-wash), transparent 46%),
-    linear-gradient(110deg, transparent 0%, transparent 38%, rgba(255, 255, 255, 0.08) 48%, transparent 58%, transparent 100%);
-}
-
-.service-glow-spotify:hover,
-.service-glow-youtube:hover,
-.service-glow-soundcloud:hover,
-.service-glow-spotify:focus-within,
-.service-glow-youtube:focus-within,
-.service-glow-soundcloud:focus-within {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.03) inset,
-    0 28px 70px -46px var(--service-glow),
-    0 0 28px -14px var(--service-glow);
-}
-
-.panel-flat {
-  border: 1px solid var(--border-soft);
-  background: var(--surface);
-  border-radius: 16px;
-}
-
-.panel-inset {
-  background: linear-gradient(135deg, rgba(23, 26, 35, 0.8), rgba(29, 34, 48, 0.6));
-  border: 1px solid var(--border-soft);
-  border-radius: 12px;
-}
-
-.panel-accent {
-  background: linear-gradient(135deg, var(--accent-soft), rgba(79, 141, 255, 0.03) 80%), var(--surface);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-radius: 16px;
-  position: relative;
-}
-
-.panel-accent::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 16px;
-  background: radial-gradient(800px at 50% 0%, rgba(79, 141, 255, 0.08), transparent 70%);
-  pointer-events: none;
-}
-
-/* Buttons */
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.1rem;
-  border-radius: 10px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border: 1px solid transparent;
-  transition: all 150ms ease;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-}
-
-.btn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,255,255,0.1), transparent 80%);
-  opacity: 0;
-  transition: opacity 300ms ease;
-  pointer-events: none;
-}
-
-.btn:hover::before {
-  opacity: 1;
-}
-
-.btn:active:not(:disabled) {
-  transform: scale(0.98);
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #5da3ff, #4f8dff);
-  color: #0a0b10;
-  box-shadow: 0 4px 12px rgba(79, 141, 255, 0.3);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #6ea1ff, #5da3ff);
-  box-shadow: 0 6px 20px rgba(79, 141, 255, 0.4);
-  transform: translateY(-1px);
-}
-
-.btn-primary:disabled {
-  background: color-mix(in srgb, var(--accent) 60%, var(--text-dim));
-  color: rgba(10, 11, 16, 0.7);
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-.btn-ghost {
-  background: var(--surface-2);
-  border-color: var(--border);
-  color: var(--text);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(28, 32, 48, 0.8), rgba(29, 34, 48, 0.6));
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  box-shadow: 0 2px 8px rgba(79, 141, 255, 0.1);
-}
-
-.btn-ghost:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.btn-danger {
-  background: var(--danger-soft);
-  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
-  color: #fecaca;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--danger) 18%, var(--surface));
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
-}
-
-/* Status pills */
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem 0.7rem;
-  border-radius: 12px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  border: 1px solid var(--border);
-  background: linear-gradient(135deg, rgba(29, 34, 48, 0.5), rgba(23, 26, 35, 0.3));
-  color: var(--text-muted);
-  backdrop-filter: blur(8px);
-  transition: all 150ms ease;
-}
-
-.pill-success {
-  background: linear-gradient(135deg, rgba(52, 211, 153, 0.15), rgba(52, 211, 153, 0.05));
-  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
-  color: #6ee7b7;
-}
-
-.pill-success:hover {
-  box-shadow: 0 0 12px rgba(52, 211, 153, 0.2);
-}
-
-.pill-warning {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
-  border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
-  color: #fcd34d;
-}
-
-.pill-warning:hover {
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.2);
-}
-
-.pill-danger {
-  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
-  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
-  color: #fca5a5;
-}
-
-.pill-danger:hover {
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.2);
-}
-
-.pill-accent {
-  background: linear-gradient(135deg, rgba(79, 141, 255, 0.15), rgba(79, 141, 255, 0.05));
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  color: #bfd4ff;
-}
-
-.pill-accent:hover {
-  box-shadow: 0 0 12px rgba(79, 141, 255, 0.2);
-}
-
-/* Misc text colors as utilities */
-
-.text-muted-fg {
-  color: var(--text-muted);
-}
-
-.text-dim-fg {
-  color: var(--text-dim);
-}
-
-.text-accent-fg {
-  color: var(--accent);
-}
-
-/* Subtle scrollbar styling so dark panels don't get blasted by a bright bar */
-@media (pointer: fine) {
-  ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+/* Element defaults belong in the base layer. Written unlayered they outrank
+   every Tailwind utility — which is how `pl-9` on a search input silently lost
+   to the padding below, dropping the placeholder underneath the icon. */
+@layer base {
+  * {
+    box-sizing: border-box;
   }
-  ::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 10px;
-    border: 2px solid var(--bg);
+
+  html,
+  body {
+    background: var(--bg);
   }
-  ::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--accent) 50%, var(--border));
+
+  body {
+    min-height: 100vh;
+    background: var(--bg-gradient);
+    color: var(--text);
+    font-family: "Geist", "Geist Fallback", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
-  ::-webkit-scrollbar-track {
-    background: transparent;
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* Text fields only. A checkbox written into this rule inherits a text
+     field's padding and surface, which is why the one form that has
+     checkboxes had to fight back with `!h-4 !w-4`. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.55rem 0.75rem;
+    color: var(--text);
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-dim);
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):focus,
+  select:focus,
+  textarea:focus,
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
+
+  /* A checkbox draws its own box, so it gets the ring and not the border —
+     and only on keyboard focus, or every click would leave one behind. */
+  input[type="checkbox"]:focus-visible,
+  input[type="radio"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-ring);
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 34%, transparent);
+    color: var(--text);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* Subtle scrollbar so dark panels don't get blasted by a bright bar */
+  @media (pointer: fine) {
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: var(--radius-pill);
+      border: 2px solid var(--bg);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: color-mix(in srgb, var(--accent) 50%, var(--border));
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-/* Animations */
-@keyframes pulse-soft {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
+@layer components {
+  /* Typography ---------------------------------------------------------- */
 
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(79, 141, 255, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgba(79, 141, 255, 0);
-  }
-}
+  /* One heading ladder, semibold at every rung. Before this the app had
+     fifteen different heading treatments across twenty-four headings, so the
+     same section title was 24px on /dashboard and 18px on /settings, and a
+     panel title inside a card ("Sync map", bold) outweighed the page's own h1
+     (semibold) sitting above it. Nothing below the page title is heavier than
+     the page title. Layout — margins, `truncate`, an icon row — stays with the
+     caller, because these headings sit in too many shapes to guess. */
 
-@keyframes slide-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+  /* The page's own title, and the title of a dialog, which is a page as far as
+     the reader is concerned. */
+  .heading-page {
+    font-size: 1.5rem;
+    line-height: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--text);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
+  /* A card that stands for one whole thing rather than a slice of one — a
+     service connection, which fills a column on its own. */
+  .heading-card {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
   }
-  to {
-    opacity: 1;
-  }
-}
 
-@keyframes gradient-frame-pan {
-  0% {
-    background-position: 0% 50%;
+  /* Labels a group of panels, sitting on the page background rather than
+     inside a panel. */
+  .heading-section {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+    font-weight: 600;
+    color: var(--text);
   }
-  100% {
-    background-position: 260% 50%;
+
+  /* The title in one panel's header. The most common heading in the app. */
+  .heading-panel {
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 600;
+    color: var(--text);
   }
-}
 
-@keyframes sheen-pass {
-  from {
-    transform: translateX(-55%);
+  /* The name of a row or a list entry. */
+  .heading-row {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+    color: var(--text);
   }
-  to {
-    transform: translateX(55%);
+
+  /* The small label that introduces a block — "Worker", "Choose match",
+     "Sync coverage". Twenty-one of these existed inline across four weights
+     and three tones. Accent is the default because that is what most of them
+     already were; a colour utility overrides it (`eyebrow text-dim-fg`)
+     because the utilities layer outranks this one. */
+  .eyebrow {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 600;
+    color: var(--accent-fg);
   }
-}
 
-@keyframes activity-scan {
-  0%,
-  18% {
-    transform: translateX(-100%);
-    opacity: 0;
+  /* Regions ------------------------------------------------------------- */
+
+  /* A page-level region. It marks itself with a rule under its heading rather
+     than a border around its content, and sits directly on the page
+     background.
+
+     The app had up to sixteen bordered containers on a single screen nested
+     four deep - /dashboard drew the worker summary as a bordered box, inside a
+     bordered box, inside a bordered panel, and the skipped-reason lines inside
+     that got a fourth frame. Everything was framed, so nothing read as a group
+     and each nesting level cost padding twice over.
+
+     After the sweep a frame means one of exactly three things, and `.panel` is
+     down to eight uses across the app: the thing floats free of the page flow
+     (the four overlays, each with --shadow-overlay, plus the login card), it
+     carries a brand (the three service cards, each with a service tint), or it
+     is a `Callout` carrying a status tone. Everything else groups with a rule
+     and whitespace. If you reach for `.panel` and your case is not one of those
+     three, you want `.section` or `.rows`. */
+  .section {
+    margin-top: 2.5rem;
   }
-  42% {
-    opacity: 1;
+
+  .section:first-child {
+    margin-top: 0;
   }
-  100% {
-    transform: translateX(100%);
-    opacity: 0;
+
+  /* Title on the left, a count or one control on the right, hairline under
+     both. Add `items-center` from the caller when the right side is a button -
+     baseline is right for text beside a pill and wrong beside a 36px button. */
+  .section-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.4rem 1rem;
+    border-bottom: 1px solid var(--border-soft);
+    padding-bottom: 0.625rem;
+    margin-bottom: 1.125rem;
   }
-}
 
-@keyframes activity-segment {
-  0% {
-    transform: translateX(0);
-    opacity: 0;
+  /* A divided list: one hairline between rows, no frame and no gap around each
+     one. Four sync rules used to be four bordered cards with four gaps between
+     them, which is why a list of four filled a screen. Rows bring their own
+     vertical padding; they must not bring horizontal padding, or they stop
+     lining up with the section heading above them. */
+  .rows > * + * {
+    border-top: 1px solid var(--border-soft);
   }
-  18% {
-    opacity: 1;
+
+  /* Containers ---------------------------------------------------------- */
+
+  .panel {
+    border: 1px solid var(--border-soft);
+    background: var(--surface);
+    border-radius: var(--radius);
   }
-  72% {
-    opacity: 1;
+
+  /* The divider row at the top of a panel: a title, and usually one control
+     on the right. Eight panels each spelled this out as
+     `border-b border-line-soft px-4 py-3`, and the two that wrote `p-4`
+     instead sat a few pixels off from the rest. Layout stays with the caller —
+     some of these stack on mobile and some don't. */
+  .panel-header {
+    border-bottom: 1px solid var(--border-soft);
+    padding: 0.75rem 1rem;
   }
-  100% {
-    transform: translateX(560%);
-    opacity: 0;
+
+  /* Inner block inside a panel: a level down, never a card of its own. */
+  .panel-inset {
+    background: var(--surface-2);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
   }
-}
 
-@keyframes card-pulse-line {
-  0%,
-  100% {
-    transform: scaleX(0.35);
+  /* The one container allowed to pull attention — use for a single primary
+     call to action per screen, not for every section. */
+  .panel-accent {
+    background: linear-gradient(135deg, var(--accent-soft), transparent 70%), var(--surface);
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+    border-radius: var(--radius);
   }
-  50% {
-    transform: scaleX(1);
+
+  /* Only for containers that are themselves a link or button. */
+  .surface-lift {
+    transition:
+      transform 160ms ease,
+      border-color 160ms ease,
+      background-color 160ms ease,
+      color 160ms ease;
   }
-}
 
-.animate-pulse-soft {
-  animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s infinite;
-}
-
-.animate-slide-in-up {
-  animation: slide-in-up 300ms ease-out;
-}
-
-.animate-fade-in {
-  animation: fade-in 300ms ease-out;
-}
-
-.animate-gradient-pan {
-  animation: gradient-frame-pan 5s linear infinite;
-}
-
-/* Aurora — three soft brand-colored blobs that drift behind hero sections.
-   Each blob uses its own ease-in-out timeline so they cross at unpredictable
-   moments instead of marching together. */
-.aurora-stage {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  border-radius: inherit;
-  z-index: 0;
-}
-
-.aurora-stage > .aurora-blob {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(70px);
-  opacity: 0.55;
-  mix-blend-mode: screen;
-  will-change: transform, opacity;
-}
-
-.aurora-stage > .aurora-blob:nth-child(1) {
-  width: 42%;
-  height: 70%;
-  left: -10%;
-  top: -15%;
-  background: radial-gradient(closest-side, rgba(30, 215, 96, 0.55), transparent 70%);
-  animation: aurora-drift-a 14s ease-in-out infinite alternate;
-}
-
-.aurora-stage > .aurora-blob:nth-child(2) {
-  width: 38%;
-  height: 80%;
-  right: -8%;
-  top: -10%;
-  background: radial-gradient(closest-side, rgba(255, 0, 51, 0.45), transparent 70%);
-  animation: aurora-drift-b 18s ease-in-out infinite alternate;
-  animation-delay: -3s;
-}
-
-.aurora-stage > .aurora-blob:nth-child(3) {
-  width: 56%;
-  height: 60%;
-  left: 30%;
-  bottom: -25%;
-  background: radial-gradient(closest-side, rgba(255, 119, 0, 0.45), transparent 70%);
-  animation: aurora-drift-c 22s ease-in-out infinite alternate;
-  animation-delay: -7s;
-}
-
-.aurora-stage > .aurora-blob:nth-child(4) {
-  width: 36%;
-  height: 50%;
-  left: 18%;
-  top: 25%;
-  background: radial-gradient(closest-side, rgba(79, 141, 255, 0.5), transparent 70%);
-  animation: aurora-drift-d 26s ease-in-out infinite alternate;
-  animation-delay: -11s;
-}
-
-.aurora-stage::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(120% 80% at 50% 0%, transparent 30%, rgba(10, 11, 16, 0.55) 80%),
-    linear-gradient(180deg, rgba(10, 11, 16, 0.35), rgba(10, 11, 16, 0.15));
-  pointer-events: none;
-}
-
-@keyframes aurora-drift-a {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.45;
+  .surface-lift:hover,
+  .surface-lift:focus-visible {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--accent) 22%, var(--border-soft));
   }
-  50% {
-    transform: translate3d(12%, 6%, 0) scale(1.12);
-    opacity: 0.65;
-  }
-  100% {
-    transform: translate3d(-6%, 14%, 0) scale(0.94);
-    opacity: 0.5;
-  }
-}
 
-@keyframes aurora-drift-b {
-  0% {
-    transform: translate3d(0, 0, 0) scale(0.96);
-    opacity: 0.5;
+  /* Service tint. Declares --service-glow (the brand colour) and --service-ink
+     (what reads on top of it) for everything inside, so a card, its artwork
+     fallback and its service mark all take one brand from one place. */
+  .service-glow-spotify {
+    --service-glow: var(--brand-spotify);
+    --service-ink: var(--brand-spotify-ink);
   }
-  50% {
-    transform: translate3d(-14%, 8%, 0) scale(1.18);
-    opacity: 0.7;
+
+  .service-glow-youtube {
+    --service-glow: var(--brand-youtube);
+    --service-ink: var(--brand-youtube-ink);
   }
-  100% {
-    transform: translate3d(6%, -8%, 0) scale(1);
+
+  .service-glow-soundcloud {
+    --service-glow: var(--brand-soundcloud);
+    --service-ink: var(--brand-soundcloud-ink);
+  }
+
+  /* Border tinted by the surrounding service, for cards that carry a brand. */
+  .service-border {
+    border-color: color-mix(in srgb, var(--service-glow, var(--accent)) 26%, var(--border-soft));
+  }
+
+  .service-glow-spotify:hover,
+  .service-glow-youtube:hover,
+  .service-glow-soundcloud:hover,
+  .service-glow-spotify:focus-within,
+  .service-glow-youtube:focus-within,
+  .service-glow-soundcloud:focus-within {
+    border-color: color-mix(in srgb, var(--service-glow) 30%, var(--border-soft));
+  }
+
+  /* The filled tile a service glyph sits on. Colour comes from the tint above,
+     so it is right in a card, a pill or a table row without a prop for it. */
+  .service-mark {
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+    background: var(--service-glow, var(--accent));
+    color: var(--service-ink, var(--on-accent));
+  }
+
+  /* Buttons ------------------------------------------------------------- */
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    border: 1px solid transparent;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      color 150ms ease;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .btn:disabled {
+    cursor: not-allowed;
     opacity: 0.55;
   }
-}
 
-@keyframes aurora-drift-c {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-    opacity: 0.45;
+  /* A button whose whole label is one glyph. Square, so a row of them lines up
+     with the 40px artwork thumbnails they sit beside. Combine with a variant:
+     `btn btn-ghost btn-icon`. */
+  .btn-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
   }
-  50% {
-    transform: translate3d(-8%, -12%, 0) scale(1.2);
-    opacity: 0.65;
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--on-accent);
+    border-color: var(--accent);
   }
-  100% {
-    transform: translate3d(10%, 6%, 0) scale(0.96);
-    opacity: 0.55;
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
   }
-}
 
-@keyframes aurora-drift-d {
-  0% {
-    transform: translate3d(0, 0, 0) scale(0.92);
-    opacity: 0.35;
+  .btn-ghost {
+    background: var(--surface-2);
+    color: var(--text);
+    border-color: var(--border);
   }
-  50% {
-    transform: translate3d(6%, -10%, 0) scale(1.1);
-    opacity: 0.55;
+
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--surface-3);
+    border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
   }
-  100% {
-    transform: translate3d(-12%, 8%, 0) scale(1.02);
-    opacity: 0.4;
+
+  .btn-danger {
+    background: var(--danger-soft);
+    color: var(--danger-fg);
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
   }
-}
 
-/* Playlist artwork fallback — service-tinted gradient with subtle hue-rotate */
-.playlist-art-fallback {
-  position: relative;
-  overflow: hidden;
-  background:
-    radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--service-glow, var(--accent)) 80%, transparent), transparent 60%),
-    radial-gradient(120% 120% at 100% 100%, color-mix(in srgb, var(--service-glow, var(--accent)) 45%, transparent), transparent 65%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.25));
-}
-
-.playlist-art-fallback::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: conic-gradient(from 180deg at 50% 50%, transparent 0deg, rgba(255, 255, 255, 0.08) 90deg, transparent 180deg);
-  animation: art-sweep 9s linear infinite;
-}
-
-@keyframes art-sweep {
-  to {
-    transform: rotate(360deg);
+  .btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 22%, transparent);
+    color: #fff;
   }
-}
 
-/* Service tab — active state shimmer underline */
-.service-tab-indicator {
-  position: absolute;
-  inset-inline: 12%;
-  bottom: 6px;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, transparent, var(--service-glow, var(--accent)), transparent);
-  opacity: 0;
-  transform: scaleX(0.4);
-  transform-origin: center;
-  transition: opacity 260ms ease, transform 260ms ease;
-}
-
-[aria-pressed="true"] > .service-tab-indicator,
-.service-tab-active > .service-tab-indicator {
-  opacity: 1;
-  transform: scaleX(1);
-  animation: tab-indicator-pan 2.6s ease-in-out infinite;
-}
-
-@keyframes tab-indicator-pan {
-  0%,
-  100% {
-    filter: brightness(1);
+  /* The caption above a control. One form used bold accent for two of its
+     labels, bold dim for two more and bold muted for the last — inside a
+     single card. */
+  .field-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1rem;
+    color: var(--text-muted);
   }
-  50% {
-    filter: brightness(1.45);
+
+  /* Pills --------------------------------------------------------------- */
+
+  /* Sentence case by default. Uppercase is loud, and when every label shouts
+     none of them stand out — add `pill-caps` for the rare label that should. */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.1rem;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-muted);
+    white-space: nowrap;
   }
-}
 
-/* Service-distribution bar — moving sheen overlay */
-.dist-bar-fill {
-  position: relative;
-  overflow: hidden;
-}
-
-.dist-bar-fill::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-  transform: translateX(-100%);
-  animation: dist-bar-sheen 2.6s ease-in-out infinite;
-}
-
-@keyframes dist-bar-sheen {
-  0% {
-    transform: translateX(-100%);
+  .pill-caps {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.6875rem;
+    font-weight: 600;
   }
-  60%,
-  100% {
-    transform: translateX(220%);
+
+  .pill-success {
+    background: var(--success-soft);
+    border-color: color-mix(in srgb, var(--success) 32%, var(--border));
+    color: var(--success-fg);
   }
-}
 
-/* Playlist card — soft 3D hover tilt and shimmer */
-.playlist-card {
-  position: relative;
-  transition:
-    transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-color 220ms ease,
-    box-shadow 320ms ease;
-}
-
-.playlist-card:hover {
-  transform: translateY(-3px);
-}
-
-.playlist-card.is-selected {
-  animation: card-selected-pop 360ms ease-out;
-}
-
-.playlist-card.is-source::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(120deg, rgba(79, 141, 255, 0), var(--service-glow, var(--accent)), rgba(52, 211, 153, 0.7), rgba(79, 141, 255, 0));
-  background-size: 260% 260%;
-  background-position: 0% 50%;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  opacity: 0.95;
-  pointer-events: none;
-  animation: gradient-frame-pan 1.2s ease-out 1 both;
-}
-
-.playlist-card.is-source:hover::before,
-.playlist-card.is-source:focus-within::before {
-  animation: gradient-frame-pan 4s linear infinite;
-}
-
-@keyframes card-selected-pop {
-  0% {
-    transform: scale(0.98);
+  .pill-warning {
+    background: var(--warning-soft);
+    border-color: color-mix(in srgb, var(--warning) 32%, var(--border));
+    color: var(--warning-fg);
   }
-  60% {
-    transform: scale(1.015) translateY(-3px);
-  }
-  100% {
-    transform: scale(1) translateY(-3px);
-  }
-}
 
-/* Track row jump-to-here highlight — short attention pulse */
-.track-row[data-pulse] {
-  animation: track-row-pulse 1.4s ease-out 1;
-}
+  .pill-danger {
+    background: var(--danger-soft);
+    border-color: color-mix(in srgb, var(--danger) 32%, var(--border));
+    color: var(--danger-fg);
+  }
 
-@keyframes track-row-pulse {
-  0% {
-    background-color: rgba(245, 158, 11, 0);
+  .pill-accent {
+    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+    color: var(--accent-fg);
   }
-  20% {
-    background-color: rgba(245, 158, 11, 0.18);
+
+  /* Brand-tinted pill. One rule mixes the tone; each service only names its
+     colour. Use for labels that identify a service, not for status. */
+  .pill-spotify,
+  .pill-youtube,
+  .pill-soundcloud {
+    background: color-mix(in srgb, var(--pill-tone) 12%, transparent);
+    border-color: color-mix(in srgb, var(--pill-tone) 30%, var(--border));
+    color: color-mix(in srgb, var(--pill-tone) 60%, var(--text));
   }
-  100% {
-    background-color: rgba(245, 158, 11, 0);
+
+  .pill-spotify {
+    --pill-tone: var(--brand-spotify);
+  }
+
+  .pill-youtube {
+    --pill-tone: var(--brand-youtube);
+  }
+
+  .pill-soundcloud {
+    --pill-tone: var(--brand-soundcloud);
+  }
+
+  /* A keycap. Seven copies of the same border/background/size combination
+     lived inline before this, which is why Ctrl and Esc didn't quite match. */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    background: var(--surface-3);
+    padding: 0.05rem 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  /* Data display -------------------------------------------------------- */
+
+  /* Artwork placeholder, tinted by the owning card's --service-glow. */
+  .playlist-art-fallback {
+    color: color-mix(in srgb, var(--text) 75%, transparent);
+    background:
+      radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--service-glow, var(--accent)) 55%, transparent), transparent 60%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.22));
+  }
+
+  /* Share-of-total bar segment. */
+  .dist-bar-fill {
+    border-radius: var(--radius-pill);
+  }
+
+  /* Deep-link target: a short pulse so the row you jumped to is findable.
+     Kept because it reports something happened, unlike ambient animation. */
+  .track-row[data-pulse] {
+    animation: track-row-pulse 1.4s ease-out 1;
+  }
+
+  @keyframes track-row-pulse {
+    0% {
+      background-color: color-mix(in srgb, var(--accent) 0%, transparent);
+    }
+    20% {
+      background-color: color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+    100% {
+      background-color: color-mix(in srgb, var(--accent) 0%, transparent);
+    }
   }
 }
 
-/* Sync hero title — animated brand-gradient text wash */
-.sync-hero-title {
-  background: linear-gradient(
-    100deg,
-    #ffffff 0%,
-    rgba(255, 255, 255, 0.95) 20%,
-    color-mix(in srgb, var(--accent) 70%, #ffffff) 45%,
-    rgba(255, 255, 255, 0.95) 65%,
-    #ffffff 100%
-  );
-  background-size: 220% 100%;
-  background-position: 0% 50%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: hero-title-wash 2.2s ease-out 1 both;
-}
+@layer utilities {
+  .text-muted-fg {
+    color: var(--text-muted);
+  }
 
-@keyframes hero-title-wash {
-  0% {
-    background-position: 0% 50%;
+  .text-dim-fg {
+    color: var(--text-dim);
   }
-  100% {
-    background-position: 100% 50%;
-  }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-  }
+  /* No .text-accent-fg here. `--color-accent-fg` in the theme block above
+     already generates that class, and a hand-written copy pointing at
+     --accent instead of --accent-fg shadowed it: the class rendered the
+     saturated accent while its own hover variant rendered the light tint, so
+     one name meant two colours. Text on an accent tint wants --accent-fg;
+     `text-accent` is the saturated one. */
 }

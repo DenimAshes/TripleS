@@ -55,43 +55,34 @@ export default async function ManualMatchPage() {
       : [];
 
   return (
-    <AppShell title="Review songs">
+    <AppShell
+      title="Review songs"
+      description="Pick the right version once. The saved match is reused by every sync rule that touches the source song."
+      actions={
+        <span className={`pill ${empty ? "pill-success" : "pill-warning"}`}>
+          {empty ? <CheckCircle2 size={12} /> : <Sparkles size={12} />}
+          {empty ? "Inbox zero" : `${enriched.length} to review`}
+        </span>
+      }
+    >
       <ManualReviewShortcuts reviewId={firstItem?.id} candidateTrackIds={firstItemCandidateIds} />
 
-      <section className="mb-4 rounded-xl border border-[var(--border-soft)] bg-[var(--surface)] px-4 py-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <h2 className="text-lg font-black tracking-tight text-white md:text-xl">
-              {empty ? "Nothing waiting for review" : `${enriched.length} ${enriched.length === 1 ? "song" : "songs"} to review`}
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-5 text-muted-fg">
-              Pick the right version once. The saved match is reused by every sync rule that touches the source song.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="pill pill-success">{highConfidenceCount} likely</span>
-              <span className="pill pill-warning">{lowConfidenceCount} weak</span>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 sm:justify-end">
-            <div className="text-3xl font-black leading-none tabular-nums text-white">{enriched.length}</div>
-            <span className={`pill ${empty ? "pill-success" : "pill-warning"}`}>
-              {empty ? <CheckCircle2 size={12} /> : <Sparkles size={12} />}
-              {empty ? "Inbox zero" : "Action needed"}
-            </span>
-          </div>
+      {empty ? null : (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+          <span className="pill pill-success">{highConfidenceCount} likely</span>
+          <span className="pill pill-warning">{lowConfidenceCount} weak</span>
         </div>
-      </section>
+      )}
 
       <BulkAcceptControls totalPending={enriched.length} />
 
-      <div className="space-y-4">
+      <div className="rows">
         {enriched.map((item) => <ManualMatchDialog key={item.id} item={item} />)}
         {empty ? (
-          <div className="panel group surface-lift animated-gradient-frame animated-sheen relative overflow-hidden p-10 text-center">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_at_50%_0%,rgba(79,141,255,0.1),transparent_55%)]" />
-            <CheckCircle2 size={40} className="mx-auto text-emerald-300" />
-            <div className="relative mt-3 text-lg font-bold text-white">Nothing needs review</div>
-            <p className="relative mt-2 text-sm text-muted-fg">All pending matches are resolved.</p>
+          <div className="py-14 text-center">
+            <CheckCircle2 size={32} className="mx-auto text-success" />
+            <div className="heading-panel mt-3">Nothing needs review</div>
+            <p className="mt-1 text-sm text-muted-fg">All pending matches are resolved.</p>
           </div>
         ) : null}
       </div>

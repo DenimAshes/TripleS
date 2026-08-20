@@ -169,7 +169,12 @@ export function normalizeTitle(title: string) {
   );
 }
 
-const ARTIST_SPLIT_RE = /\s*(?:,|;|\/|\\|&|\bx\b|\bvs\.?\b|\band\b|\bfeat\.?\b|\bft\.?\b|\bwith\b|\bft\b|\bfeaturing\b)\s*/gi;
+// `un` is Latvian for "and": YouTube Music renders the byline in the
+// account's interface language, so a collaboration reaches us as
+// "Клава Кока un NILETTO" and stayed one unsplittable artist, which left
+// artistOverlap at zero against the SoundCloud side. Word-bounded so Sun,
+// Unkle and Untitled survive.
+const ARTIST_SPLIT_RE = /\s*(?:,|;|\/|\\|&|\bx\b|\bvs\.?\b|\band\b|\bun\b|\bfeat\.?\b|\bft\.?\b|\bwith\b|\bft\b|\bfeaturing\b)\s*/gi;
 
 export function splitArtists(value: string | string[]): string[] {
   const raw = Array.isArray(value) ? value : [value];

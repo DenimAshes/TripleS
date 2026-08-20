@@ -5,7 +5,6 @@ import { CancelSyncButton } from "./CancelSyncButton";
 import { RunSyncButton } from "./RunSyncButton";
 import { ServiceIcon, ServicePill } from "./ServiceBrand";
 import { SyncSourceToggleButton } from "./SyncSourceToggleButton";
-import { StatusBadge } from "./StatusBadge";
 
 type RuleWithDestinations = SyncRule & { destinations: SyncDestination[] };
 
@@ -76,30 +75,29 @@ export function SyncRuleGroupCard({
   const groupState = activeRunning
     ? { icon: <Clock3 size={14} />, label: `${activeRunning} running`, className: "text-[var(--accent)]" }
     : pendingReview > 0
-      ? { icon: <AlertTriangle size={14} />, label: `${pendingReview} review`, className: "text-[#fcd34d]" }
+      ? { icon: <AlertTriangle size={14} />, label: `${pendingReview} review`, className: "text-warning-fg" }
       : latestFailed
-        ? { icon: <AlertTriangle size={14} />, label: latestFailed.status === "PARTIAL_SUCCESS" ? "Partial" : "Failed", className: "text-[#fca5a5]" }
+        ? { icon: <AlertTriangle size={14} />, label: latestFailed.status === "PARTIAL_SUCCESS" ? "Partial" : "Failed", className: "text-danger-fg" }
         : enabled
-          ? { icon: <CheckCircle2 size={14} />, label: "Listening", className: "text-emerald-300" }
+          ? { icon: <CheckCircle2 size={14} />, label: "Listening", className: "text-success-fg" }
           : { icon: <AlertTriangle size={14} />, label: "Off", className: "text-muted-fg" };
 
   return (
-    <div className="panel surface-lift animated-sheen relative overflow-hidden p-5">
-      <span className="pointer-events-none absolute inset-y-4 left-0 w-1 rounded-full bg-[var(--accent)] opacity-70" />
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div className="py-4 sm:py-5">
+      <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
-              <GitBranch size={16} />
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[var(--radius-sm)] bg-[var(--accent-soft)] text-accent">
+              <GitBranch size={15} />
             </span>
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">Linked playlist group</span>
-            <h3 className="truncate text-lg font-bold tracking-tight text-white">{groupName}</h3>
-            <StatusBadge status={enabled ? "connected" : "not_connected"} />
-            <span className="pill">{enabled}/{rules.length} source platforms</span>
+            <h3 className="heading-panel truncate" title={groupName}>{groupName}</h3>
             <span className={`pill ${groupState.className}`}>
               {groupState.icon}
               {groupState.label}
             </span>
+          </div>
+          <div className="mt-1 text-xs text-muted-fg">
+            Linked playlist group · {enabled} of {rules.length} platforms listening
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {members.map((member) => (
@@ -111,13 +109,13 @@ export function SyncRuleGroupCard({
           </div>
         </div>
 
-        <Link href="/playlists" className="btn btn-ghost text-xs">
+        <Link href="/playlists" className="btn btn-ghost shrink-0">
           Edit group
         </Link>
       </div>
 
       {progressRows.length || latestFailed ? (
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+        <div className="mt-4 flex flex-wrap gap-x-9 gap-y-4">
           <GroupMetric label="Progress" value={expectedCopies ? `${completion}%` : "-"} detail={`${syncedTotal}/${expectedCopies || 0} copies`} />
           <GroupMetric label="Sources" value={String(enabled)} detail={`${members.length} linked playlists`} />
           <GroupMetric label="Targets" value={String(destinationSlots)} detail="write destinations" />
@@ -130,15 +128,15 @@ export function SyncRuleGroupCard({
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-5 space-y-4">
         {rules.map((rule) => {
           const runningJob = runningByRule?.get(rule.id) ?? null;
           const sourceName = sourceNames.get(`${rule.sourceService}:${rule.sourcePlaylistId}`) || rule.name;
           return (
-            <div key={rule.id} className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)]/55 p-3">
+            <div key={rule.id} className="min-w-0">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+                  <div className="heading-row flex items-center gap-2">
                     <ServiceIcon service={rule.sourceService} size="sm" />
                     <span className="truncate">{sourceName}</span>
                   </div>
@@ -151,7 +149,7 @@ export function SyncRuleGroupCard({
                     ))}
                   </div>
                   {progressByRule?.get(rule.id) ? (
-                    <div className="mt-2 text-[11px] font-medium text-dim-fg">
+                    <div className="mt-2 text-xs font-medium text-dim-fg">
                       {progressByRule
                         .get(rule.id)!
                         .destinations.map((destination) => `${destination.synced}/${progressByRule.get(rule.id)!.sourceTotal} ${destination.service}`)
@@ -189,12 +187,12 @@ function GroupMetric({
   detail: string;
   tone?: "neutral" | "ok" | "warn";
 }) {
-  const valueClass = tone === "ok" ? "text-emerald-300" : tone === "warn" ? "text-[#fcd34d]" : "text-[var(--text)]";
+  const valueClass = tone === "ok" ? "text-success-fg" : tone === "warn" ? "text-warning-fg" : "text-[var(--text)]";
   return (
-    <div className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)]/40 px-3 py-2">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-dim-fg">{label}</div>
-      <div className={`mt-1 truncate text-sm font-black ${valueClass}`}>{value}</div>
-      <div className="mt-0.5 truncate text-[11px] text-muted-fg" title={detail}>
+    <div className="min-w-0 max-w-56">
+      <div className="eyebrow text-muted-fg">{label}</div>
+      <div className={`mt-1 truncate text-base font-semibold ${valueClass}`}>{value}</div>
+      <div className="mt-0.5 truncate text-xs text-muted-fg" title={detail}>
         {detail}
       </div>
     </div>

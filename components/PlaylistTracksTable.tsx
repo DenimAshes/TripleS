@@ -76,7 +76,7 @@ function renderHighlight(text: string, query: string) {
   while (match !== -1) {
     if (match > cursor) parts.push(text.slice(cursor, match));
     parts.push(
-      <mark key={`m-${key++}`} className="rounded-sm bg-[var(--accent-soft)] px-0.5 text-[var(--accent-hover)]">
+      <mark key={`m-${key++}`} className="rounded-[var(--hairline-radius)] bg-[var(--accent-soft)] px-0.5 text-[var(--accent-hover)]">
         {text.slice(match, match + query.length)}
       </mark>,
     );
@@ -350,8 +350,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
 
   return (
     <div className="space-y-4">
-      <section className="panel surface-lift animated-sheen relative overflow-hidden p-4 sm:p-5">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-70" />
+      <section className="relative border-y border-[var(--border-soft)] py-3">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,auto)] lg:items-center">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="pill">
@@ -389,7 +388,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
           </div>
 
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <div className="surface-lift group/search relative min-w-0 flex-1 sm:max-w-xs lg:flex-none">
+            <div className="group/search relative min-w-0 flex-1 sm:max-w-xs lg:flex-none">
               <Search
                 size={15}
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dim-fg transition group-focus-within/search:text-[var(--accent)]"
@@ -401,7 +400,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Filter songs…"
                 aria-label="Filter songs"
-                className="w-full rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] py-1.5 pl-9 pr-12 text-sm text-[var(--text)] placeholder:text-dim-fg focus:border-[var(--accent)]"
+                className="w-full rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] py-1.5 pl-9 pr-12 text-sm text-[var(--text)] placeholder:text-dim-fg focus:border-[var(--accent)]"
               />
               {query ? (
                 <button
@@ -411,13 +410,13 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                     searchRef.current?.focus();
                   }}
                   aria-label="Clear search"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-dim-fg transition hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--radius-sm)] p-1 text-dim-fg transition hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
                 >
                   <X size={13} />
                 </button>
               ) : (
                 <kbd
-                  className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 select-none rounded-md border border-[var(--border-soft)] bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-dim-fg"
+                  className="kbd pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 select-none"
                   aria-hidden="true"
                 >
                   /
@@ -437,15 +436,15 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                 onClick={() => setStatusFilter(filter.key)}
                 aria-pressed={active}
                 disabled={filter.count === 0 && filter.key !== "all"}
-                className={`surface-lift inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                className={`surface-lift inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border px-2.5 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
                   active
-                    ? "border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)] text-[var(--text)] shadow-[0_14px_30px_-28px_var(--accent-glow)]"
+                    ? "border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)] text-[var(--text)]"
                     : "border-[var(--border-soft)] bg-[var(--surface-2)] text-muted-fg hover:border-[var(--border)] hover:text-[var(--text)]"
                 }`}
               >
                 {filter.icon}
                 {filter.label}
-                <span className={`rounded-md px-1.5 py-0.5 text-[10px] tabular-nums ${active ? "bg-[var(--accent)]/20" : "bg-black/25"}`}>{filter.count}</span>
+                <span className={`rounded-[var(--radius-sm)] px-1.5 py-0.5 text-xs tabular-nums ${active ? "bg-[var(--accent-soft)]" : "bg-[var(--surface-3)]"}`}>{filter.count}</span>
               </button>
             );
           })}
@@ -453,7 +452,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
       </section>
 
       {filtered.length === 0 ? (
-        <div className="panel text-muted-fg p-8 text-center text-sm">
+        <div className="py-10 text-center text-sm text-muted-fg">
           {trimmedQuery || statusFilter !== "all" ? (
             <>
               <p>No songs match the current filters.</p>
@@ -475,9 +474,9 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
       ) : (
         // overflow-hidden would create a non-scrolling ancestor and break the
         // sticky thead — sort headers must follow the viewport, not the panel.
-        <div className="panel">
+        <div>
           <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10 text-dim-fg border-b border-[var(--border-soft)] bg-[var(--surface-2)]/95 text-left text-xs font-semibold tracking-widest uppercase backdrop-blur">
+            <thead className="sticky top-0 z-10 border-b border-[var(--border-soft)] bg-[var(--bg)]/95 text-left text-xs font-semibold text-muted-fg backdrop-blur">
               <tr>
                 <th
                   className="w-12 px-4 py-3.5"
@@ -548,10 +547,10 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                   >
                     <td className="relative text-dim-fg px-4 py-3.5 font-medium tabular-nums">
                       {trackMissing ? (
-                        <span className="pointer-events-none absolute inset-y-1.5 left-0 w-0.5 rounded-r bg-amber-400/70" aria-hidden="true" />
+                        <span className="pointer-events-none absolute inset-y-1.5 left-0 w-0.5 rounded-r-[var(--hairline-radius)] bg-warning/70" aria-hidden="true" />
                       ) : null}
                       {excluded ? (
-                        <span className="pointer-events-none absolute inset-y-1.5 left-0 w-0.5 rounded-r bg-[#fcd34d]/80" aria-hidden="true" />
+                        <span className="pointer-events-none absolute inset-y-1.5 left-0 w-0.5 rounded-r-[var(--hairline-radius)] bg-[var(--warning-fg)]/80" aria-hidden="true" />
                       ) : null}
                       {track.position}
                     </td>
@@ -566,11 +565,11 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                             height={40}
                             loading={index < 20 ? "eager" : "lazy"}
                             decoding="async"
-                            className="h-10 w-10 shrink-0 rounded-lg border border-[var(--border-soft)] object-cover transition duration-200 group-hover/row:scale-[1.05]"
+                            className="h-10 w-10 shrink-0 rounded-[var(--radius-sm)] border border-[var(--border-soft)] object-cover transition duration-200 group-hover/row:scale-[1.05]"
                           />
                         ) : (
                           <div
-                            className="playlist-art-fallback grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-[var(--border-soft)] text-white/70"
+                            className="playlist-art-fallback grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-soft)]"
                             aria-hidden="true"
                           >
                             <Music size={14} strokeWidth={1.5} className="relative z-10" />
@@ -585,17 +584,17 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                                 <span
                                   key={`m-${linkedService}`}
                                   title={`Matched on ${SERVICE_LABELS[linkedService] || linkedService}`}
-                                  className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400"
+                                  className="inline-flex h-1.5 w-1.5 rounded-full bg-success"
                                 />
                               ))}
                               {(track.missingServices || []).map((missingService) => (
                                 <span
                                   key={`x-${missingService}`}
                                   title={`Missing on ${SERVICE_LABELS[missingService] || missingService}`}
-                                  className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-400"
+                                  className="inline-flex h-1.5 w-1.5 rounded-full bg-warning"
                                 />
                               ))}
-                              <span className="ml-1 text-[10px] font-semibold uppercase tracking-wider text-dim-fg">
+                              <span className="ml-1 text-xs font-semibold text-dim-fg">
                                 {track.missingServices?.length
                                   ? `missing on ${track.missingServices.length}`
                                   : `matched`}
@@ -603,7 +602,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                             </div>
                           ) : null}
                           {isExcluded(track) ? (
-                            <div className="mt-1 text-xs font-medium text-[#fcd34d]">Only in this playlist</div>
+                            <div className="mt-1 text-xs font-medium text-warning-fg">Only in this playlist</div>
                           ) : null}
                         </div>
                       </div>
@@ -631,7 +630,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                               type="button"
                               onClick={() => openMatchEditor(track)}
                               disabled={Boolean(rowBusy[track.id])}
-                              className="inline-flex items-center gap-1 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-2.5 py-1 text-xs font-medium text-[var(--text)] transition duration-200 hover:border-[var(--border-accent)] hover:bg-gradient-to-r hover:from-[var(--accent-soft)] hover:to-transparent disabled:opacity-60"
+                              className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-2.5 py-1 text-xs font-medium text-[var(--text)] transition duration-200 hover:border-[var(--border-accent)] hover:bg-gradient-to-r hover:from-[var(--accent-soft)] hover:to-transparent disabled:opacity-60"
                             >
                               {rowBusy[track.id] ? "…" : "Change"}
                             </button>
@@ -639,7 +638,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                               type="button"
                               onClick={() => toggleExcluded(track)}
                               disabled={Boolean(rowBusy[track.id])}
-                              className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-2.5 py-1 text-xs font-medium text-[var(--text)] transition duration-200 hover:border-[var(--border-accent)] hover:bg-gradient-to-r hover:from-[var(--accent-soft)] hover:to-transparent disabled:opacity-60"
+                              className="rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-2.5 py-1 text-xs font-medium text-[var(--text)] transition duration-200 hover:border-[var(--border-accent)] hover:bg-gradient-to-r hover:from-[var(--accent-soft)] hover:to-transparent disabled:opacity-60"
                             >
                               {rowBusy[track.id] ? "…" : isExcluded(track) ? "Sync" : "Keep"}
                             </button>
@@ -650,7 +649,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                             type="button"
                             onClick={() => setError(track.id, null)}
                             title="Dismiss"
-                            className="inline-flex items-center gap-1 rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300 hover:bg-rose-500/20"
+                            className="inline-flex items-center gap-1 rounded-[var(--radius-sm)] bg-danger/10 px-1.5 py-0.5 text-xs font-semibold text-danger-fg hover:bg-danger/20"
                           >
                             <AlertTriangle size={10} />
                             {rowError[track.id]}
@@ -681,7 +680,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                     <tr className="bg-[var(--surface-2)]/35">
                       <td colSpan={6} className="px-4 py-3">
                         <form
-                          className="grid gap-2 rounded-lg border border-[var(--border-soft)] bg-black/20 p-3 sm:grid-cols-[minmax(140px,180px)_minmax(0,1fr)_auto]"
+                          className="panel-inset grid gap-2 p-3 sm:grid-cols-[minmax(140px,180px)_minmax(0,1fr)_auto]"
                           onSubmit={(event) => {
                             event.preventDefault();
                             void changeMatch(track);
@@ -695,7 +694,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                               )
                             }
                             aria-label="Target service"
-                            className="h-9 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-2 text-sm"
+                            className="h-9 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-2 text-sm"
                           >
                             {matchServices.map((matchService) => (
                               <option key={matchService} value={matchService}>
@@ -712,7 +711,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                             }
                             placeholder="Paste song link"
                             aria-label="Song link"
-                            className="h-9 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 text-sm"
+                            className="h-9 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 text-sm"
                           />
                           <div className="flex gap-2">
                             <button
@@ -737,7 +736,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
             </tbody>
           </table>
           {remainingCount > 0 ? (
-            <div className="border-t border-[var(--border-soft)] bg-[#0d0e12]/50 p-4 text-center">
+            <div className="border-t border-[var(--border-soft)] bg-[var(--surface-2)] p-4 text-center">
               <button
                 type="button"
                 onClick={() =>
@@ -746,7 +745,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                     count: (current.key === visibleKey ? current.count : INITIAL_VISIBLE_TRACKS) + LOAD_MORE_TRACKS,
                   }))
                 }
-                className="surface-lift rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] transition hover:border-[var(--border-accent)]"
+                className="surface-lift rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] transition hover:border-[var(--border-accent)]"
               >
                 Load {Math.min(LOAD_MORE_TRACKS, remainingCount)} more
                 <span className="ml-2 text-xs font-normal text-muted-fg">{remainingCount} hidden</span>

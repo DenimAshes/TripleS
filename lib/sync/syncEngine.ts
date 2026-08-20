@@ -18,7 +18,8 @@ import {
   lookupStoredMatch,
 } from "./matchContext";
 import { isReadComplete, PartialSourceReadError, writePlaylistSnapshot } from "./snapshot";
-import { parseArtistsJson } from "@/lib/utils/parseArtists";
+import { normalizedFromServiceTrack } from "./serviceTrackToNormalized";
+import { AUTO_MATCH_THRESHOLD, MANUAL_REVIEW_THRESHOLD } from "./matchThresholds";
 import { classifyError, nextRunAfterFailure, serviceFromError } from "./failureClassifier";
 import { createLogger } from "@/lib/utils/logger";
 
@@ -35,8 +36,6 @@ const WRITE_THROTTLE_SPREAD_MS = Number(process.env.WORKER_WRITE_THROTTLE_SPREAD
 const WRITE_BURST_LONG_PAUSE_MIN_MS = Number(process.env.WORKER_WRITE_LONG_PAUSE_MIN_MS ?? 60_000);
 const WRITE_BURST_LONG_PAUSE_SPREAD_MS = Number(process.env.WORKER_WRITE_LONG_PAUSE_SPREAD_MS ?? 120_000);
 const MAX_TRACKS_PER_RUN = Number(process.env.WORKER_MAX_TRACKS_PER_RUN ?? 10);
-const AUTO_MATCH_THRESHOLD = Number(process.env.WORKER_AUTO_MATCH_THRESHOLD ?? 0.82);
-const MANUAL_REVIEW_THRESHOLD = Number(process.env.WORKER_MANUAL_REVIEW_THRESHOLD ?? 0.65);
 const SKIP_PREVIOUSLY_LOGGED = process.env.WORKER_SKIP_PREVIOUSLY_LOGGED !== "false";
 const REFRESH_SOURCE_TRACKS = process.env.WORKER_REFRESH_SOURCE_TRACKS === "true";
 const SOURCE_CACHE_MAX_AGE_MS = sourceCacheMaxAgeMs();
@@ -102,20 +101,6 @@ async function upsertServiceTrack(track: NormalizedTrack): Promise<ServiceTrack>
     throw new Error(`bulkUpsertServiceTracks did not return entry for ${track.sourceService}::${track.sourceTrackId}`);
   }
   return serviceTrack;
-}
-
-function normalizedFromServiceTrack(track: ServiceTrack): NormalizedTrack {
-  return {
-    title: track.title,
-    artists: parseArtistsJson(track.artistsJson),
-    album: track.album || undefined,
-    durationMs: track.durationMs || undefined,
-    isrc: track.isrc || undefined,
-    sourceService: serviceKey(track.service),
-    sourceTrackId: track.serviceTrackId,
-    url: track.url || undefined,
-    imageUrl: track.imageUrl || undefined,
-  };
 }
 
 async function getPlaylistTracksFromDb(playlistId: string): Promise<NormalizedTrack[]> {
@@ -239,7 +224,11 @@ async function upsertManualCandidate({
   const candidate = await prisma.manualMatchCandidate.upsert({
     where: { ManualMatchCandidate_natural_key: naturalKey },
     update: {
-      confidence: existing ? Math.max(existing.confidence, confidence) : confidence,
+      // Store what this run actually scored, not the best score ever seen. The
+      // old Math.max ratcheted a candidate's confidence across every scorer
+      // version it had ever passed through, so /manual-match sorted and offered
+      // bulk-accept on numbers no current code would produce.
+      confidence,
       alternativesJson: JSON.stringify(alternatives),
     },
     create: {

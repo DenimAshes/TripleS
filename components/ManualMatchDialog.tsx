@@ -25,9 +25,9 @@ function formatDuration(ms: number | null | undefined) {
 }
 
 function confidenceTone(score: number): string {
-  if (score >= 0.85) return "text-emerald-300 bg-emerald-500/10 border-emerald-400/20";
-  if (score >= 0.7) return "text-amber-200 bg-amber-500/10 border-amber-400/20";
-  return "text-rose-200 bg-rose-500/10 border-rose-400/20";
+  if (score >= 0.85) return "text-success-fg bg-success/10 border-success/20";
+  if (score >= 0.7) return "text-warning-fg bg-warning/10 border-warning/20";
+  return "text-danger-fg bg-danger/10 border-danger/20";
 }
 
 function Artwork({ track, size = "lg" }: { track?: ServiceTrack | null; size?: "md" | "lg" }) {
@@ -35,11 +35,11 @@ function Artwork({ track, size = "lg" }: { track?: ServiceTrack | null; size?: "
   if (track?.imageUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={track.imageUrl} alt="" className={`${cls} shrink-0 rounded-lg object-cover ring-1 ring-[var(--border-soft)]`} />
+      <img src={track.imageUrl} alt="" className={`${cls} shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]`} />
     );
   }
   return (
-    <div className={`${cls} grid shrink-0 place-items-center rounded-lg bg-[var(--surface-2)] text-dim-fg ring-1 ring-[var(--border-soft)]`}>
+    <div className={`${cls} grid shrink-0 place-items-center rounded-[var(--radius-sm)] bg-[var(--surface-2)] text-dim-fg ring-1 ring-[var(--border-soft)]`}>
       <Disc3 size={size === "lg" ? 24 : 18} strokeWidth={1.6} />
     </div>
   );
@@ -56,7 +56,7 @@ function MatchBreakdown({ breakdown }: { breakdown?: Record<string, number> }) {
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {parts.map((part) => (
-        <span key={part.label} className="rounded-md border border-[var(--border-soft)] bg-[var(--surface)] px-1.5 py-0.5 text-[11px] text-muted-fg">
+        <span key={part.label} className="rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] px-1.5 py-0.5 text-xs text-muted-fg">
           {part.label} <span className="font-semibold text-[var(--text)]">{part.pct}%</span>
         </span>
       ))}
@@ -73,11 +73,11 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
       : [];
 
   return (
-    <article className="panel overflow-hidden p-0">
+    <article className="overflow-hidden">
       <div className="grid gap-0 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
         <div className="border-b border-[var(--border-soft)] bg-[var(--surface-2)]/65 p-4 lg:border-b-0 lg:border-r">
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-accent-fg">
-            <ServiceIcon service={item.source?.service || ""} size="sm" className="h-5 w-5 rounded-md" />
+          <div className="eyebrow flex items-center gap-2">
+            <ServiceIcon service={item.source?.service || ""} size="sm" className="h-5 w-5 rounded-[var(--radius-sm)]" />
             Source
             <ArrowRight size={13} />
             <ServicePill service={item.targetService} className="py-0.5 normal-case tracking-normal" />
@@ -85,7 +85,7 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
           <div className="mt-4 flex gap-3">
             <Artwork track={item.source} />
             <div className="min-w-0 flex-1">
-              <h3 className="line-clamp-2 text-base font-bold leading-snug text-white">{item.source?.title || item.sourceServiceTrackId}</h3>
+              <h3 className="heading-panel line-clamp-2 leading-snug">{item.source?.title || item.sourceServiceTrackId}</h3>
               <p className="mt-1 line-clamp-2 text-sm text-muted-fg">{artists(item.source) || "Unknown artist"}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {sourceDuration ? <span className="pill">{sourceDuration}</span> : null}
@@ -95,8 +95,8 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
               </div>
             </div>
           </div>
-          <div className="mt-4 rounded-lg border border-[var(--border-soft)] bg-[var(--surface)] p-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-white">
+          <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] p-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
               <ListMusic size={15} />
               Resolve once, reuse everywhere
             </div>
@@ -111,20 +111,23 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
 
         <div className="p-3 sm:p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-fg">Choose match</div>
+            <div className="eyebrow">Choose match</div>
             <div className="text-xs text-muted-fg">{candidates.length} candidates</div>
           </div>
-          <div className="grid gap-2">
+          {/* Divided rows, not five framed cards. Each candidate already ends
+              in its own Use/Skip pair, so the frame was not the affordance -
+              and five of them inside one review row was the last place in the
+              app drawing a box inside a box. The top pick keeps a tint, which
+              is the one thing the frame was actually carrying. */}
+          <div className="rows">
             {candidates.map((candidate, index) => {
               const duration = formatDuration(candidate.track.durationMs);
               const best = index === 0;
               return (
                 <div
                   key={candidate.track.id}
-                  className={`group rounded-xl border p-3 transition ${
-                    best
-                      ? "border-[color-mix(in_srgb,var(--accent)_40%,var(--border))] bg-[var(--accent-soft)]/35"
-                      : "border-[var(--border-soft)] bg-[var(--surface-2)] hover:border-[var(--border)]"
+                  className={`group rounded-[var(--radius-sm)] px-2 py-3 transition ${
+                    best ? "bg-[var(--accent-soft)]/35" : "hover:bg-[var(--surface-2)]/60"
                   }`}
                 >
                   <div className="flex gap-3">
@@ -134,17 +137,17 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-2">
                             <span
-                              className="grid h-5 w-5 shrink-0 place-items-center rounded-md border border-[var(--border-soft)] bg-[var(--surface)] text-[11px] font-black text-muted-fg"
+                              className="grid h-5 w-5 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] text-xs font-semibold text-muted-fg"
                               title={`Pick ${index + 1}`}
                             >
                               {index + 1}
                             </span>
-                            {best ? <CheckCircle2 size={15} className="shrink-0 text-emerald-300" /> : null}
-                            <h4 className="truncate text-sm font-bold text-white">{candidate.track.title}</h4>
+                            {best ? <CheckCircle2 size={15} className="shrink-0 text-success-fg" /> : null}
+                            <h4 className="heading-row truncate">{candidate.track.title}</h4>
                           </div>
                           <p className="mt-0.5 truncate text-xs text-muted-fg">{artists(candidate.track) || "Unknown artist"}</p>
                         </div>
-                        <span className={`shrink-0 rounded-lg border px-2 py-1 text-xs font-black tabular-nums ${confidenceTone(candidate.confidence)}`}>
+                        <span className={`shrink-0 rounded-[var(--radius-sm)] border px-2 py-1 text-xs font-semibold tabular-nums ${confidenceTone(candidate.confidence)}`}>
                           {Math.round(candidate.confidence * 100)}%
                         </span>
                       </div>
@@ -166,7 +169,7 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
               );
             })}
             {!candidates.length ? (
-              <div className="rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] p-5 text-sm text-muted-fg">
+              <div className="rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--surface-2)] p-5 text-sm text-muted-fg">
                 No candidates were stored for this song. Paste a direct link or skip it.
               </div>
             ) : null}

@@ -40,10 +40,10 @@ function staleLevel(exists: boolean, iso: string | null, nowMs: number): StaleLe
 }
 
 const STALE_BADGE: Record<StaleLevel, { label: string; classes: string }> = {
-  fresh: { label: "fresh", classes: "pill-success" },
-  warn: { label: "ageing", classes: "pill-warning" },
-  stale: { label: "stale", classes: "pill-danger" },
-  missing: { label: "missing", classes: "" },
+  fresh: { label: "Fresh", classes: "pill-success" },
+  warn: { label: "Ageing", classes: "pill-warning" },
+  stale: { label: "Stale", classes: "pill-danger" },
+  missing: { label: "Missing", classes: "" },
 };
 
 function browserRoute(service: string): string | null {
@@ -67,8 +67,6 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   const level = staleLevel(info.exists, info.updatedAt, nowMs);
   const badge = STALE_BADGE[level];
   const browseHref = browserRoute(info.service);
-  const glowClass =
-    meta.key === "YOUTUBE" ? "service-glow-youtube" : meta.key === "SOUNDCLOUD" ? "service-glow-soundcloud" : "service-glow-spotify";
 
   async function uploadText(text: string, sourceLabel: string) {
     setBusy(true);
@@ -139,8 +137,8 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   return (
     <section
       id={cardId}
-      className={`panel group surface-lift animated-gradient-frame animated-sheen ${glowClass} relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 md:scroll-mt-8 xl:min-h-[420px] ${meta.border} hover:shadow-[0_28px_70px_-46px_var(--accent-glow)] ${
-        dragOver ? "scale-[1.01] border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring),0_28px_70px_-46px_var(--accent-glow)]" : ""
+      className={`panel ${meta.tint} ${meta.border} relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 md:scroll-mt-8 xl:min-h-[420px] ${
+        dragOver ? "border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring)]" : ""
       }`}
       onDragOver={(e) => {
         e.preventDefault();
@@ -154,14 +152,12 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
         if (file) upload(file);
       }}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-80" />
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.045),transparent_48%)] opacity-0 transition duration-500 group-hover:opacity-100" />
       <header className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <ServiceIcon service={info.service} size="lg" className="transition duration-300 group-hover:scale-105" />
+          <ServiceIcon service={info.service} size="lg" />
           <div className="min-w-0">
-            <h3 className="truncate text-xl font-black tracking-tight text-white">{meta.label}</h3>
-            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.16em] text-dim-fg">
+            <h3 className="heading-card truncate">{meta.label}</h3>
+            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-dim-fg">
               <UploadCloud size={16} />
               Session JSON
             </p>
@@ -173,17 +169,6 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
         </span>
       </header>
 
-      <div className="connection-card-pulse mt-5" aria-hidden="true">
-        {["JSON", "Session", "Playlists"].map((label, index) => (
-          <span
-            key={label}
-            className={index === 0 || (info.exists && index < 3) ? "is-active" : ""}
-            style={{ animationDelay: `${index * 160}ms` }}
-          >
-            {label}
-          </span>
-        ))}
-      </div>
 
       <p className="mt-5 text-sm leading-6 text-muted-fg">
         Upload the browser storage state from the logged-in account. Drag a JSON file here or paste the exported JSON.
@@ -191,21 +176,21 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
 
       <dl className="mt-5 grid gap-3 border-y border-[var(--border-soft)] py-4 text-sm sm:grid-cols-3 sm:gap-4">
         <div className="min-w-0">
-          <dt className="text-xs uppercase tracking-[0.14em] text-dim-fg">Updated</dt>
+          <dt className="text-xs text-dim-fg">Updated</dt>
           <dd className="mt-1 truncate text-[var(--text)]">{formatRelative(info.updatedAt, nowMs)}</dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-xs uppercase tracking-[0.14em] text-dim-fg">Size</dt>
+          <dt className="text-xs text-dim-fg">Size</dt>
           <dd className="mt-1 truncate text-[var(--text)] tabular-nums">{formatBytes(info.bytes)}</dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-xs uppercase tracking-[0.14em] text-dim-fg">By</dt>
+          <dt className="text-xs text-dim-fg">By</dt>
           <dd className="mt-1 truncate text-[var(--text)]">{info.updatedBy ?? "-"}</dd>
         </div>
       </dl>
 
       <label
-        className={`surface-lift animated-sheen relative mt-5 flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)] ${
+        className={`surface-lift group relative mt-5 flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-[var(--radius)] border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)] ${
           dragOver ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]" : ""
         }`}
       >
@@ -222,7 +207,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
           }}
         />
         {notice ? (
-          <CheckCircle2 size={22} className="text-emerald-300 transition duration-200 group-hover:-translate-y-0.5" />
+          <CheckCircle2 size={22} className="text-success-fg transition duration-200 group-hover:-translate-y-0.5" />
         ) : (
           <UploadCloud size={22} className="transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-110" />
         )}
@@ -234,7 +219,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       </label>
 
       <details className="mt-3 text-xs text-muted-fg">
-        <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-lg px-1 py-1 transition duration-200 hover:translate-x-0.5 hover:text-[var(--text)]">
+        <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-[var(--radius-sm)] px-1 py-1 transition duration-200 hover:translate-x-0.5 hover:text-[var(--text)]">
           <Clipboard size={13} />
           Paste JSON instead
         </summary>
@@ -277,13 +262,13 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
       </details>
 
       {notice ? (
-        <p className="mt-3 inline-flex items-start gap-1.5 text-xs text-emerald-200">
+        <p className="mt-3 inline-flex items-start gap-1.5 text-xs text-success-fg">
           <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
           <span>{notice}</span>
         </p>
       ) : null}
 
-      {error ? <p className="mt-3 text-xs text-[#fca5a5]">{error}</p> : null}
+      {error ? <p className="mt-3 text-xs text-danger-fg">{error}</p> : null}
 
       <div className="mt-auto grid gap-2 pt-4">
         {info.exists && browseHref ? (
@@ -295,8 +280,8 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
 
         {info.exists ? (
           deleteConfirm ? (
-            <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-2">
-              <div className="text-xs font-medium text-[#fca5a5]">Delete saved {meta.shortLabel} session?</div>
+            <div className="rounded-[var(--radius-sm)] border border-danger/20 bg-danger/10 p-2">
+              <div className="text-xs font-medium text-danger-fg">Delete saved {meta.shortLabel} session?</div>
               <div className="mt-2 flex gap-2">
                 <button type="button" onClick={clear} disabled={busy} className="btn btn-danger text-xs">
                   <Trash2 size={13} />
@@ -312,7 +297,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
               type="button"
               onClick={() => setDeleteConfirm(true)}
               disabled={busy}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs text-muted-fg transition hover:bg-red-500/10 hover:text-[#fca5a5] disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] py-1.5 text-xs text-muted-fg transition hover:bg-danger/10 hover:text-danger-fg disabled:opacity-50"
             >
               <Trash2 size={13} />
               Delete saved session

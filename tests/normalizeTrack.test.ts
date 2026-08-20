@@ -6,6 +6,7 @@ import {
   normalizeArtist,
   normalizedArtistSet,
   normalizeTitle,
+  splitArtists,
   stripLeadingArtist,
 } from "../lib/utils/normalizeTrack";
 
@@ -58,5 +59,18 @@ describe("track normalization", () => {
     const set = normalizedArtistSet(["Каспийский Груз"], "Сосед (piedalās Гера Джио)");
     expect(set.has("каспийский груз")).toBe(true);
     expect(set.has("гера джио")).toBe(true);
+  });
+
+  it("splits collaborations joined by the Latvian \"un\"", () => {
+    expect(splitArtists("Клава Кока un NILETTO")).toEqual(["Клава Кока", "NILETTO"]);
+    const set = normalizedArtistSet(["Пошлая Молли un Элджей"]);
+    expect(set.has("пошлая молли")).toBe(true);
+    expect(set.has("элджей")).toBe(true);
+  });
+
+  it("keeps names that merely start with un intact", () => {
+    expect(splitArtists("Sun Kil Moon")).toEqual(["Sun Kil Moon"]);
+    expect(splitArtists("UNKLE")).toEqual(["UNKLE"]);
+    expect(splitArtists("Untitled Group")).toEqual(["Untitled Group"]);
   });
 });

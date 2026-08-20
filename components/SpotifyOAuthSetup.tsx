@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, ExternalLink, Link2, ListMusic } from "lucide-react";
+import { Callout } from "./Callout";
+import { SpotifyCookieLogin } from "./SpotifyCookieLogin";
 
 type Props = {
   hasCredentials: boolean;
@@ -9,6 +11,7 @@ type Props = {
   isConnected: boolean;
   serviceUsername?: string | null;
   lastError?: string | null;
+  hasCookie: boolean;
 };
 
 export function SpotifyOAuthSetup({
@@ -19,6 +22,7 @@ export function SpotifyOAuthSetup({
   isConnected,
   serviceUsername,
   lastError,
+  hasCookie,
 }: Props) {
   if (hasCredentials) {
     return (
@@ -28,26 +32,21 @@ export function SpotifyOAuthSetup({
         </p>
 
         {isConnected ? (
-          <div className="mt-5 flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100">
-            <CheckCircle2 size={16} className="shrink-0 text-emerald-300" />
-            <span>
-              Connected{serviceUsername ? <> as <strong className="font-semibold text-white">{serviceUsername}</strong></> : null}
-            </span>
-          </div>
+          <Callout tone="success" className="mt-4" icon={<CheckCircle2 size={16} className="mt-0.5 shrink-0" />}>
+            Connected{serviceUsername ? <> as <strong className="font-semibold">{serviceUsername}</strong></> : null}
+          </Callout>
         ) : null}
 
         {lastError ? (
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-[#fca5a5]">
-            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-            <span>{lastError}</span>
-          </div>
+          <Callout tone="danger" className="mt-3">
+            {lastError}
+          </Callout>
         ) : null}
 
         {!redirectUriValid ? (
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-sm text-[#fcd34d]">
-            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-            <span>{redirectUriError}</span>
-          </div>
+          <Callout tone="warning" className="mt-3">
+            {redirectUriError}
+          </Callout>
         ) : null}
 
         <div className="mt-auto grid gap-2 pt-6">
@@ -63,6 +62,7 @@ export function SpotifyOAuthSetup({
               View Spotify playlists
             </Link>
           ) : null}
+          <SpotifyCookieLogin hasCookie={hasCookie} />
         </div>
       </div>
     );
@@ -70,9 +70,9 @@ export function SpotifyOAuthSetup({
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-sm text-[#fcd34d]">
+      <Callout tone="warning" icon={<AlertTriangle size={16} className="mt-0.5 shrink-0" />}>
         Spotify OAuth is not configured yet.
-      </div>
+      </Callout>
       <p className="mt-4 text-sm leading-6 text-muted-fg">
         Add Spotify app credentials once, redeploy, then this card becomes a simple login button.
       </p>
@@ -85,10 +85,11 @@ export function SpotifyOAuthSetup({
         >
           Spotify Developer Dashboard <ExternalLink size={12} />
         </a>
-        <code className="block break-all rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2 text-[11px] text-[var(--text)]">
+        <code className="block break-all rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text)]">
           {redirectUri}
         </code>
       </div>
+      <SpotifyCookieLogin hasCookie={hasCookie} />
       <Link href="/settings" className="btn btn-ghost mt-auto w-full">
         Open settings
       </Link>

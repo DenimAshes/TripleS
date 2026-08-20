@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { Callout } from "./Callout";
 import { StatusBadge } from "./StatusBadge";
 import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
@@ -20,6 +21,9 @@ function statusFor({
   return "not_connected";
 }
 
+// The dashboard's read-only summary of one connection. It is deliberately the
+// same panel + brand tint as the editable card on /connections, so moving
+// between the two pages doesn't feel like moving between two apps.
 export function ServiceCard({
   name,
   username,
@@ -45,31 +49,32 @@ export function ServiceCard({
           : null;
 
   return (
-    <div className={`group relative min-w-0 overflow-hidden rounded-2xl border bg-[#0d0e12]/70 p-6 backdrop-blur-xl transition-all hover:bg-[#0d0e12]/90 ${meta.border}`}>
-      <div className={`pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full ${meta.bg} opacity-10 blur-[70px] transition-opacity group-hover:opacity-20`} />
-
-      <div className="relative flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-4">
+    <div className={`panel ${meta.tint} ${meta.border} min-w-0 p-5`}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
           <ServiceIcon service={name} size="lg" />
           <div className="min-w-0">
-            <div className="text-lg font-bold tracking-tight text-white">{meta.label}</div>
-            <div className="mt-0.5 truncate text-xs font-medium text-slate-500">{username || "Not linked"}</div>
-            {statusMessage ? (
-              <div className="mt-1.5 text-xs text-[#fcd34d]" title={lastError || undefined}>
-                {statusMessage}
-              </div>
-            ) : null}
+            <div className="text-base font-semibold text-[var(--text)]">{meta.label}</div>
+            <div className="mt-0.5 truncate text-xs text-muted-fg">{username || "Not linked"}</div>
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
           <StatusBadge status={status} />
           {status !== "connected" ? (
-            <Link href="/connections" className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--accent)] hover:underline">
+            <Link
+              href="/connections"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--accent)] hover:underline"
+            >
               Connect <ArrowRight size={13} />
             </Link>
           ) : null}
         </div>
       </div>
+      {statusMessage ? (
+        <Callout tone={status === "error" ? "danger" : "warning"} className="mt-4">
+          <span title={lastError || undefined}>{statusMessage}</span>
+        </Callout>
+      ) : null}
     </div>
   );
 }

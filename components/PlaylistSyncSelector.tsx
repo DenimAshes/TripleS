@@ -61,13 +61,13 @@ function Artwork({ playlist, compact = false }: { playlist: PlaylistOption; comp
   if (images.length === 1) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={images[0]} alt="" className={`${size} shrink-0 rounded-lg object-cover ring-1 ring-[var(--border-soft)]`} />
+      <img src={images[0]} alt="" className={`${size} shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]`} />
     );
   }
 
   if (images.length > 1) {
     return (
-      <div className={`${size} grid shrink-0 grid-cols-2 overflow-hidden rounded-lg ring-1 ring-[var(--border-soft)]`}>
+      <div className={`${size} grid shrink-0 grid-cols-2 overflow-hidden rounded-[var(--radius-sm)] ring-1 ring-[var(--border-soft)]`}>
         {images.map((src, index) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img key={`${src}-${index}`} src={src} alt="" loading="lazy" className="h-full w-full object-cover" />
@@ -77,7 +77,7 @@ function Artwork({ playlist, compact = false }: { playlist: PlaylistOption; comp
   }
 
   return (
-    <div className={`${size} playlist-art-fallback grid shrink-0 place-items-center rounded-lg text-white/75 ring-1 ring-[var(--border-soft)]`}>
+    <div className={`${size} playlist-art-fallback grid shrink-0 place-items-center rounded-[var(--radius-sm)] ring-1 ring-[var(--border-soft)]`}>
       <ListMusic size={compact ? 17 : 20} strokeWidth={1.6} className="relative z-10" />
     </div>
   );
@@ -264,22 +264,22 @@ export function PlaylistSyncSelector({
   }
 
   return (
-    <div className="space-y-4">
-      <section className="panel p-3">
+    <div className="space-y-5">
+      <section className="border-y border-[var(--border-soft)] py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-accent-fg">
+              <span className="eyebrow inline-flex items-center gap-2">
               <Layers3 size={14} />
               Playlist group
               </span>
-              <span className="text-sm font-semibold text-white">{selectedPlaylists.length || 0}/3 selected</span>
+              <span className="text-sm font-semibold text-[var(--text)]">{selectedPlaylists.length || 0}/3 selected</span>
               {!selectedPlaylists.length ? <span className="text-xs text-muted-fg">Pick matching playlists across services.</span> : null}
               {selectedPlaylists.length > 0 && nextMissingService && nextMissingService !== activeService ? (
                 <button
                   type="button"
                   onClick={() => setActiveService(nextMissingService)}
-                  className="rounded-md border border-[var(--border-soft)] bg-[var(--surface-2)] px-2 py-1 text-xs font-semibold text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
+                  className="rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-2 py-1 text-xs font-semibold text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
                 >
                   Next: {SERVICE_NAMES[nextMissingService]}
                 </button>
@@ -298,7 +298,7 @@ export function PlaylistSyncSelector({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {saveOutcome ? (
-              <span className={`text-xs font-semibold ${saveOutcome.ok ? "text-emerald-300" : "text-rose-300"}`} role="status">
+              <span className={`text-xs font-semibold ${saveOutcome.ok ? "text-success-fg" : "text-danger-fg"}`} role="status">
                 {saveOutcome.message}
               </span>
             ) : null}
@@ -315,7 +315,7 @@ export function PlaylistSyncSelector({
       <div
         role="tablist"
         aria-label="Service"
-        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:grid md:grid-cols-3 md:gap-3 md:overflow-visible md:px-0 md:pb-0"
+        className="-mx-1 flex gap-1 overflow-x-auto border-b border-[var(--border-soft)] px-1 md:grid md:grid-cols-3 md:gap-2 md:overflow-visible md:px-0"
       >
         {SERVICES.map((service) => {
           const meta = serviceMeta(service);
@@ -329,26 +329,27 @@ export function PlaylistSyncSelector({
               role="tab"
               aria-selected={active}
               onClick={() => setActiveService(service)}
-              className={`group relative flex min-w-[10.5rem] items-center justify-between gap-3 overflow-hidden rounded-xl border px-3 py-2.5 text-left transition md:min-w-0 ${
-                active ? `${meta.border} bg-[var(--surface-2)] text-white` : "border-[var(--border-soft)] bg-[var(--surface)] text-muted-fg"
+              className={`${meta.tint} group relative -mb-px flex min-w-[10.5rem] items-center justify-between gap-3 border-b-2 px-2 py-2.5 text-left transition md:min-w-0 ${
+                active
+                  ? "border-[var(--service-glow)] text-[var(--text)]"
+                  : "border-transparent text-muted-fg hover:text-[var(--text)]"
               }`}
             >
-              <span className={`absolute inset-y-2 left-0 w-1 rounded-r ${meta.bg}`} />
-              <span className="flex min-w-0 items-center gap-2 pl-1">
+              <span className="flex min-w-0 items-center gap-2">
                 <ServiceIcon service={service} size="sm" />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{SERVICE_NAMES[service]}</span>
-                  <span className="block truncate text-[11px] text-dim-fg">{selected ? selected.name : `${count} playlists`}</span>
+                  <span className="block truncate text-xs text-dim-fg">{selected ? selected.name : `${count} playlists`}</span>
                 </span>
               </span>
-              {selected ? <Check size={16} className="shrink-0 text-emerald-300" /> : <span className="text-xs tabular-nums text-dim-fg">{count}</span>}
+              {selected ? <Check size={16} className="shrink-0 text-success-fg" /> : <span className="text-xs tabular-nums text-dim-fg">{count}</span>}
             </button>
           );
         })}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="surface-lift group/search relative min-w-0 flex-1 sm:max-w-md">
+        <div className="group/search relative min-w-0 flex-1 sm:max-w-md">
           <Search
             size={15}
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dim-fg transition group-focus-within/search:text-[var(--accent)]"
@@ -360,14 +361,14 @@ export function PlaylistSyncSelector({
             onChange={(event) => setQuery(event.target.value)}
             placeholder={`Find ${SERVICE_NAMES[activeService]} playlist`}
             aria-label={`Find ${SERVICE_NAMES[activeService]} playlist`}
-            className="w-full rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] py-1.5 pl-9 pr-9 text-sm text-[var(--text)] placeholder:text-dim-fg focus:border-[var(--accent)]"
+            className="w-full rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] py-1.5 pl-9 pr-9 text-sm text-[var(--text)] placeholder:text-dim-fg focus:border-[var(--accent)]"
           />
           {query ? (
             <button
               type="button"
               onClick={() => setQuery("")}
               aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-dim-fg transition hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--radius-sm)] p-1 text-dim-fg transition hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
             >
               <X size={13} />
             </button>
@@ -377,7 +378,7 @@ export function PlaylistSyncSelector({
           <button
             type="button"
             onClick={() => setShowHidden((value) => !value)}
-            className="surface-lift inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
+            className="surface-lift inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
           >
             {showHidden ? <EyeOff size={14} /> : <Eye size={14} />}
             {showHidden ? "Hide hidden" : `Show ${hiddenCount} hidden`}
@@ -395,23 +396,22 @@ export function PlaylistSyncSelector({
           return (
             <article
               key={playlist.id}
-              className={`group relative overflow-hidden rounded-xl border bg-[var(--surface)] p-3 shadow-[0_10px_28px_-24px_rgba(0,0,0,0.85)] transition ${
-                selected ? `${meta.border} bg-[var(--surface-2)]` : "border-[var(--border-soft)] hover:border-[var(--border)]"
+              className={`${meta.tint} group relative border-b border-[var(--border-soft)] px-1 py-3 transition ${
+                selected ? "bg-[color-mix(in_srgb,var(--service-glow,var(--accent))_10%,transparent)]" : ""
               }`}
             >
-              <span className={`absolute inset-y-2 left-0 w-1 rounded-r ${meta.bg} ${selected ? "opacity-100" : "opacity-70"}`} />
-              <div className="flex items-center gap-3 pl-1">
+              <div className="flex items-center gap-3">
                 <Artwork playlist={playlist} compact />
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-2">
-                    <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--text)] sm:text-base">{playlist.name}</h3>
+                    <h3 className="heading-row min-w-0 flex-1 truncate sm:text-base">{playlist.name}</h3>
                     {pinned ? <Star size={14} className="shrink-0 fill-[var(--accent)] text-[var(--accent)]" /> : null}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-fg">
                     <span className="tabular-nums text-[var(--text)]">{playlist.trackCount} tracks</span>
-                    {playlist.isWritable ? null : <span className="rounded-md bg-amber-500/12 px-1.5 py-0.5 text-amber-200">read-only</span>}
+                    {playlist.isWritable ? null : <span className="rounded-[var(--radius-sm)] bg-warning/12 px-1.5 py-0.5 text-warning-fg">read-only</span>}
                     {linkedElsewhere ? (
-                      <span className="rounded-md bg-emerald-500/12 px-1.5 py-0.5 text-emerald-200" title={playlist.groupName || "Linked group"}>
+                      <span className="rounded-[var(--radius-sm)] bg-success/12 px-1.5 py-0.5 text-success-fg" title={playlist.groupName || "Linked group"}>
                         linked
                       </span>
                     ) : null}
@@ -421,11 +421,11 @@ export function PlaylistSyncSelector({
                   type="button"
                   onClick={() => toggleSelected(playlist)}
                   disabled={disabledByService}
-                  className={`inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition ${
+                  className={`inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-sm font-semibold transition ${
                     selected
-                      ? "border-emerald-500/40 bg-emerald-600 text-white hover:bg-emerald-500"
+                      ? "border-success/40 bg-success text-[var(--text)] hover:bg-success"
                       : linkedElsewhere
-                        ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15"
+                        ? "border-success/25 bg-success/10 text-success-fg hover:bg-success/15"
                         : "border-[var(--border-soft)] bg-[var(--surface-2)] text-[var(--text)] hover:border-[var(--border)]"
                   } disabled:cursor-not-allowed disabled:opacity-45`}
                   title={disabledByService ? `Only one ${SERVICE_NAMES[playlist.service]} playlist can be in a group` : undefined}
@@ -435,7 +435,7 @@ export function PlaylistSyncSelector({
                 </button>
               </div>
 
-              <div className="mt-3 flex items-center gap-2 pl-1">
+              <div className="mt-2.5 flex items-center gap-2">
                 <Link href={`/playlists/${playlist.id}`} className="btn btn-ghost surface-lift px-3" title="Open songs" aria-label={`Open ${playlist.name} songs`}>
                   <ListMusic size={15} />
                   <span>Songs</span>
@@ -444,14 +444,14 @@ export function PlaylistSyncSelector({
                   <button
                     type="button"
                     onClick={() => setOpenMenuId((current) => (current === playlist.id ? null : playlist.id))}
-                    className="rounded-lg border border-[var(--border-soft)] bg-[var(--surface-2)] p-2 text-dim-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
+                    className="rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] p-2 text-dim-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
                     aria-expanded={openMenuId === playlist.id}
                     title="Playlist actions"
                   >
                     <MoreHorizontal size={15} />
                   </button>
                   {openMenuId === playlist.id ? (
-                    <div className="absolute bottom-11 right-0 z-20 w-36 overflow-hidden rounded-xl border border-[var(--border-soft)] bg-[var(--surface-2)] shadow-[0_18px_60px_-28px_rgba(0,0,0,0.95)]">
+                    <div className="absolute bottom-11 right-0 z-20 w-36 overflow-hidden rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] shadow-[var(--shadow-overlay)]">
                       <button
                         type="button"
                         onClick={() => togglePinned(playlist)}
@@ -479,7 +479,7 @@ export function PlaylistSyncSelector({
       </div>
 
       {!activePlaylists.length ? (
-        <div className="panel p-6 text-center text-sm text-muted-fg">
+        <div className="py-8 text-center text-sm text-muted-fg">
           {query ? "No playlists match this search." : `No ${SERVICE_NAMES[activeService]} playlists to show.`}
         </div>
       ) : null}
@@ -490,9 +490,9 @@ export function PlaylistSyncSelector({
         }`}
         aria-hidden={!selectedPlaylists.length}
       >
-        <div className="pointer-events-auto panel flex w-full max-w-3xl flex-col gap-3 p-3 shadow-[0_18px_70px_-24px_rgba(0,0,0,0.9)] sm:flex-row sm:items-center">
+        <div className="pointer-events-auto panel flex w-full max-w-3xl flex-col gap-3 p-3 shadow-[var(--shadow-overlay)] sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-accent-fg">
+            <div className="eyebrow flex items-center gap-1.5">
               {canSave ? <Link2 size={12} /> : <Sparkles size={12} />}
               {canSave ? "Ready to link" : "Choose another service"}
             </div>

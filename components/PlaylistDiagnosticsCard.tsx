@@ -29,29 +29,29 @@ export function PlaylistDiagnosticsCard({ playlist, activeStates }: { playlist: 
 
   return (
     <section
-      className="panel group surface-lift animated-sheen relative mb-6 overflow-hidden p-5 sm:p-6"
+      className="relative mb-7 border-b border-[var(--border-soft)] pb-6"
       aria-label="Playlist cache diagnostics"
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-70" />
       <div
         className={`pointer-events-none absolute -left-20 -top-20 h-44 w-44 rounded-full blur-[70px] transition duration-500 ${
-          partial ? "bg-amber-500/15" : "bg-[var(--accent)]/12"
-        } group-hover:scale-110`}
+          partial ? "bg-warning/15" : "bg-[var(--accent)]/12"
+        }`}
       />
 
       <div className="relative flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-accent-fg">
+          <div className="eyebrow flex items-center gap-2">
             <Database size={12} />
             Playlist cache
           </div>
-          <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-white">
+          <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
             {partial ? (
-              <Loader2 size={14} className="animate-spin text-amber-300" />
+              <Loader2 size={14} className="animate-spin text-warning-fg" />
             ) : expected === 0 ? (
               <RefreshCw size={14} className="text-dim-fg" />
             ) : (
-              <CheckCircle2 size={14} className="text-emerald-300" />
+              <CheckCircle2 size={14} className="text-success-fg" />
             )}
             {status}
           </div>
@@ -60,22 +60,22 @@ export function PlaylistDiagnosticsCard({ playlist, activeStates }: { playlist: 
             <span className="font-mono text-[var(--text)]">{formatRelative(playlist.lastFetchedAt)}</span>
             {remaining > 0 ? (
               <span className="ml-3 text-dim-fg">
-                / <span className="tabular-nums text-amber-200">{remaining}</span> still to load
+                / <span className="tabular-nums text-warning-fg">{remaining}</span> still to load
               </span>
             ) : null}
           </div>
         </div>
         <div className="text-right">
           <div
-            className={`text-3xl font-black tabular-nums tracking-tighter ${
-              partial ? "text-amber-300" : "text-[var(--accent)]"
-            } drop-shadow-[0_0_10px_var(--accent-glow)] md:text-4xl`}
+            className={`text-3xl font-semibold tabular-nums md:text-4xl ${
+              partial ? "text-warning-fg" : "text-[var(--accent)]"
+            }`}
           >
             {activeStates}
-            <span className="ml-1 text-lg font-bold text-dim-fg">/ {expected || "-"}</span>
+            <span className="ml-1 text-lg font-semibold text-muted-fg">/ {expected || "-"}</span>
           </div>
           {expected > 0 ? (
-            <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-dim-fg tabular-nums">
+            <div className="eyebrow mt-1 text-muted-fg tabular-nums">
               {percent}% cached
             </div>
           ) : null}
@@ -83,12 +83,12 @@ export function PlaylistDiagnosticsCard({ playlist, activeStates }: { playlist: 
       </div>
       {expected > 0 ? (
         <div className="relative mt-5">
-          <div className="h-2 w-full overflow-hidden rounded-full border border-white/5 bg-black/40">
+          <div className="h-2 w-full overflow-hidden rounded-full border border-[var(--border-soft)] bg-[var(--surface-2)]">
             <div
               className={`dist-bar-fill h-full rounded-full transition-[width] duration-700 ${
                 partial
-                  ? "bg-gradient-to-r from-amber-500 to-orange-400 shadow-[0_0_14px_rgba(245,158,11,0.45)]"
-                  : "bg-gradient-to-r from-[var(--accent)] via-[var(--accent-hover)] to-emerald-300 shadow-[0_0_18px_var(--accent-glow)]"
+                  ? "bg-warning"
+                  : "bg-gradient-to-r from-[var(--accent)] via-[var(--accent-hover)] to-success"
               }`}
               style={{ width: `${percent}%` }}
             />

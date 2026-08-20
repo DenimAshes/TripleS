@@ -43,7 +43,7 @@ export function CancelSyncButton({ jobId, startedAt }: { jobId: string; startedA
   return (
     <div className="flex flex-col items-end gap-1.5">
       <div className="flex items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-lg border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)] px-2.5 py-1.5 text-xs font-semibold text-[var(--accent)]">
+        <span className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)] px-2.5 py-1.5 text-xs font-semibold text-[var(--accent)]">
           <Loader2 size={12} className="animate-spin" />
           {display ? `Running - ${display}` : "Running"}
         </span>
@@ -65,7 +65,7 @@ export function CancelSyncButton({ jobId, startedAt }: { jobId: string; startedA
         )}
       </div>
       {confirming ? <p className="max-w-80 text-right text-xs text-muted-fg">Stops on the next engine checkpoint, usually within 30s.</p> : null}
-      {error ? <p className="max-w-80 text-right text-xs text-[#fca5a5]">{error}</p> : null}
+      {error ? <p className="max-w-80 text-right text-xs text-danger-fg">{error}</p> : null}
     </div>
   );
 }

@@ -107,7 +107,10 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
   const enabledRules = rules.filter((rule) => rule.isEnabled).length;
 
   return (
-    <AppShell title="Playlists">
+    <AppShell
+      title="Playlists"
+      description="Every playlist TripleS can read, grouped by service. Add one to a sync group or open its songs."
+    >
       <PlaylistsAutoRefresh hasPlaylists={playlistOptions.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
 
       <div className="space-y-4 md:space-y-5">
@@ -126,7 +129,7 @@ export default async function PlaylistsPage({ searchParams }: { searchParams: Pr
                 <a
                   key={service}
                   href={`#playlists-${service.toLowerCase()}`}
-                  className={`pill ${status.connected ? meta.soft : "pill-warning"}`}
+                  className={`pill ${status.connected ? meta.pill : "pill-warning"}`}
                   title={status.lastError || `${status.playlistCount} playlists`}
                 >
                   <ServiceIcon service={service} size="sm" className="h-4 w-4" />

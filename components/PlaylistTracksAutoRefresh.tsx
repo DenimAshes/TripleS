@@ -128,24 +128,24 @@ function PlaylistTracksLiveProgress({
   if (!running && !needsRefresh && !error) return null;
 
   return (
-    <section className="mb-6 overflow-hidden rounded-2xl border border-blue-500/20 bg-[#0d0e12]/80 p-5 shadow-[0_0_40px_rgba(59,130,246,0.08)]">
+    <section className="mb-7 border-b border-[var(--border-soft)] pb-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-blue-400">Live cache stream</div>
-          <div className="mt-2 text-sm font-semibold text-white">
+        <div className="min-w-0">
+          <div className="pill pill-accent">Caching tracks</div>
+          <div className="mt-2 text-sm font-medium text-[var(--text)]">
             {running ? jobStep || "Preparing playlist tracks" : "Playlist cache needs refresh"}
           </div>
-          {error ? <div className="mt-2 text-sm text-[#fca5a5]">{error}</div> : null}
+          {error ? <div className="mt-2 text-sm text-danger-fg">{error}</div> : null}
         </div>
-        <div className="text-right font-mono">
-          <div className="text-2xl font-black text-blue-300">{active}</div>
-          <div className="text-xs text-slate-500">/{expectedTracks || "?"} tracks</div>
+        <div className="text-right">
+          <div className="text-2xl font-semibold tabular-nums text-[var(--accent)]">{active}</div>
+          <div className="text-xs text-dim-fg tabular-nums">/{expectedTracks || "?"} tracks</div>
         </div>
       </div>
 
-      <div className="mt-4 h-2 overflow-hidden rounded-full border border-white/5 bg-black/50">
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-[var(--surface-3)]">
         <div
-          className="h-full rounded-full bg-gradient-to-r from-blue-600 via-cyan-300 to-emerald-300 transition-all duration-500"
+          className="dist-bar-fill h-full bg-gradient-to-r from-[var(--accent)] to-success transition-[width] duration-500"
           style={{ width: `${percent}%` }}
         />
       </div>
@@ -153,16 +153,16 @@ function PlaylistTracksLiveProgress({
       {recent.length ? (
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {recent.map((item) => (
-            <div key={`${item.position}-${item.track.title}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-white/5 bg-black/20 p-2">
+            <div key={`${item.position}-${item.track.title}`} className="panel-inset flex min-w-0 items-center gap-2 p-2">
               {item.track.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.track.imageUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
+                <img src={item.track.imageUrl} alt="" className="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] object-cover" />
               ) : (
-                <div className="h-9 w-9 shrink-0 rounded-lg bg-[var(--surface-2)]" />
+                <div className="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] bg-[var(--surface-3)]" />
               )}
               <div className="min-w-0">
-                <div className="truncate text-xs font-semibold text-white">{item.track.title}</div>
-                <div className="truncate text-[11px] text-slate-500">{item.track.artists.join(", ")}</div>
+                <div className="truncate text-xs font-medium text-[var(--text)]">{item.track.title}</div>
+                <div className="truncate text-xs text-dim-fg">{item.track.artists.join(", ")}</div>
               </div>
             </div>
           ))}
@@ -170,7 +170,7 @@ function PlaylistTracksLiveProgress({
       ) : (
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, index) => (
-            <div key={index} className="h-13 animate-pulse rounded-xl border border-white/5 bg-white/[0.03]" />
+            <div key={index} className="panel-inset h-13 animate-pulse" />
           ))}
         </div>
       )}

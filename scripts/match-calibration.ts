@@ -1,25 +1,10 @@
 import { prisma } from "@/lib/db/prisma";
-import { serviceKey } from "@/lib/services/adapterFactory";
-import type { NormalizedTrack } from "@/lib/sync/syncTypes";
+import { normalizedFromServiceTrack } from "@/lib/sync/serviceTrackToNormalized";
+import { AUTO_MATCH_THRESHOLD } from "@/lib/sync/matchThresholds";
 import { calculateSimilarityWithBreakdown } from "@/lib/utils/similarity";
 import { parseArtistsJson } from "@/lib/utils/parseArtists";
-import type { ServiceTrack } from "@prisma/client";
 
 const thresholds = [0.65, 0.7, 0.72, 0.75, 0.78, 0.8, 0.82, 0.85, 0.88, 0.9, 0.93, 0.95];
-
-function toTrack(track: ServiceTrack): NormalizedTrack {
-  return {
-    title: track.title,
-    artists: parseArtistsJson(track.artistsJson),
-    album: track.album || undefined,
-    durationMs: track.durationMs || undefined,
-    isrc: track.isrc || undefined,
-    sourceService: serviceKey(track.service),
-    sourceTrackId: track.serviceTrackId,
-    url: track.url || undefined,
-    imageUrl: track.imageUrl || undefined,
-  };
-}
 
 function pct(value: number) {
   return `${(value * 100).toFixed(1)}%`;
@@ -41,7 +26,10 @@ async function main() {
     const source = trackById.get(row.sourceServiceTrackId);
     const candidate = trackById.get(row.candidateServiceTrackId);
     if (!source || !candidate) return [];
-    const breakdown = calculateSimilarityWithBreakdown(toTrack(source), toTrack(candidate));
+    const breakdown = calculateSimilarityWithBreakdown(
+      normalizedFromServiceTrack(source),
+      normalizedFromServiceTrack(candidate),
+    );
     return [{
       id: row.id,
       label: row.status === "ACCEPTED",
@@ -82,7 +70,7 @@ async function main() {
     );
   }
 
-  const defaultThreshold = Number(process.env.WORKER_AUTO_MATCH_THRESHOLD ?? 0.82);
+  const defaultThreshold = AUTO_MATCH_THRESHOLD;
   const falsePositives = examples
     .filter((item) => !item.label && item.score >= defaultThreshold)
     .sort((a, b) => b.score - a.score)

@@ -137,8 +137,8 @@ export function ManualMatchActions({
           </button>
         </form>
       ) : null}
-      {notice ? <div className="text-xs font-medium text-emerald-300">{notice}</div> : null}
-      {error ? <div className="text-xs font-medium text-rose-300">{error}</div> : null}
+      {notice ? <div className="text-xs font-medium text-success-fg">{notice}</div> : null}
+      {error ? <div className="text-xs font-medium text-danger-fg">{error}</div> : null}
     </div>
   );
 }

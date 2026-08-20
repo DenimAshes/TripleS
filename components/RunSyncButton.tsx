@@ -42,7 +42,7 @@ export function RunSyncButton({ ruleId, children }: { ruleId: string; children: 
         {running ? "Running..." : children}
       </button>
       {status ? <p className="max-w-80 text-right text-xs text-muted-fg">{status}</p> : null}
-      {error ? <p className="max-w-80 text-right text-xs text-[#fca5a5]">{error}</p> : null}
+      {error ? <p className="max-w-80 text-right text-xs text-danger-fg">{error}</p> : null}
     </div>
   );
 }

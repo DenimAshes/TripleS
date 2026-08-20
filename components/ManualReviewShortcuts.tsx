@@ -115,10 +115,10 @@ export function ManualReviewShortcuts({
 
   return (
     <div
-      className={`fixed bottom-4 right-4 z-50 max-w-sm rounded-xl border px-4 py-3 text-sm font-semibold shadow-[0_22px_80px_-24px_rgba(0,0,0,0.95)] ${
+      className={`fixed bottom-4 right-4 z-50 max-w-sm rounded-[var(--radius)] border px-4 py-3 text-sm font-semibold shadow-[var(--shadow-overlay)] ${
         notice?.tone === "error"
-          ? "border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[var(--danger-soft)] text-[#fecaca]"
-          : "border-[color-mix(in_srgb,var(--success)_35%,var(--border))] bg-[var(--success-soft)] text-emerald-200"
+          ? "border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[var(--danger-soft)] text-danger-fg"
+          : "border-[color-mix(in_srgb,var(--success)_35%,var(--border))] bg-[var(--success-soft)] text-success-fg"
       }`}
       role="status"
       aria-live="polite"
@@ -128,7 +128,7 @@ export function ManualReviewShortcuts({
         <button
           type="button"
           onClick={undo}
-          className="ml-3 rounded-lg border border-[var(--border-soft)] bg-[var(--surface)] px-2 py-1 text-xs font-black text-[var(--text)] transition hover:border-[var(--border)]"
+          className="ml-3 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] px-2 py-1 text-xs font-semibold text-[var(--text)] transition hover:border-[var(--border)]"
         >
           Undo
         </button>

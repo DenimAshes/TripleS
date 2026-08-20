@@ -60,7 +60,7 @@ export function RefreshPlaylistsButton() {
       {outcome ? (
         <span
           className={`inline-flex items-center gap-1 text-xs font-semibold ${
-            outcome.ok ? "text-emerald-300" : "text-rose-300"
+            outcome.ok ? "text-success-fg" : "text-danger-fg"
           }`}
           role="status"
           aria-live="polite"

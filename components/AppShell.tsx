@@ -1,20 +1,39 @@
+import type { ReactNode } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { BottomNav } from "./BottomNav";
 import { CommandPalette } from "./CommandPalette";
 import { HealthIndicator } from "./HealthIndicator";
 
-export function AppShell({ children, title }: { children: React.ReactNode; title: string }) {
+// The only page header in the app. Pages used to print the title here and then
+// repeat it inside a decorated hero panel below ("History" → "Sync history"),
+// which cost ~250px of vertical space per page and gave every screen a
+// different rhythm. `description` and `actions` exist so a page can put its
+// controls in the header instead of building another hero.
+export function AppShell({
+  children,
+  title,
+  description,
+  actions,
+}: {
+  children: ReactNode;
+  title: string;
+  description?: ReactNode;
+  actions?: ReactNode;
+}) {
   return (
     <div className="min-h-screen md:flex">
       <AppSidebar />
-      <main className="relative w-full pb-20 md:pb-0 bg-[#050608] overflow-hidden">
-        <div className="mx-auto max-w-6xl px-4 py-8 md:px-10">
-          <header className="relative z-10 mb-10 flex items-center justify-between gap-4">
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.28em] font-bold text-blue-500/70">TripleS workspace</div>
-              <h1 className="mt-2 text-3xl font-black tracking-tight text-white md:text-4xl">{title}</h1>
+      <main className="relative w-full pb-24 md:pb-0">
+        <div className="mx-auto max-w-6xl px-4 py-7 md:px-8">
+          <header className="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+            <div className="min-w-0">
+              <h1 className="heading-page">{title}</h1>
+              {description ? (
+                <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-fg">{description}</p>
+              ) : null}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2">
+              {actions}
               <CommandPalette />
               <HealthIndicator />
               <form action="/api/auth/logout" method="post">

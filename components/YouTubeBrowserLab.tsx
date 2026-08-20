@@ -1,7 +1,9 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, CirclePlay, ExternalLink, Loader2, Music2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { CheckCircle2, ExternalLink, Loader2, Music2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Callout } from "./Callout";
 
 type Playlist = {
   id: string;
@@ -24,6 +26,11 @@ type PlaylistsSnapshot = {
   lastSyncedAt: string | null;
   fromCache: boolean;
   isStale: boolean;
+};
+
+type SessionStatus = {
+  hasState: boolean;
+  isBrowserAutomationEnabled: boolean;
 };
 
 type AddResponse = {
@@ -92,6 +99,9 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [nowMs] = useState(() => Date.now());
+  // Without this the page just showed empty panels when browser automation was
+  // off or no session had been uploaded — the API knew why, nothing asked it.
+  const [session, setSession] = useState<SessionStatus | null>(null);
   const selectedIdRef = useRef(selectedId);
   const backgroundRefreshRef = useRef(new Set<string>());
 
@@ -272,6 +282,10 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
   }
 
   useEffect(() => {
+     
+    void readJson<SessionStatus>("/api/youtube-browser/status")
+      .then(setSession)
+      .catch(() => setSession(null));
     if (initialPlaylists.playlists.length > 0) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadPlaylists();
@@ -280,58 +294,64 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
 
   return (
     <div className="space-y-5">
-      <section className="panel overflow-hidden">
-        <div className="flex flex-col gap-4 border-b border-[#deded8] p-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-md bg-[#121212] text-white">
-              <CirclePlay size={22} />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold">YouTube Music</h2>
-              <p className="mt-1 text-sm text-[#666a73]">Manage your YouTube Music playlists.</p>
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <button
-              onClick={() => loadPlaylists(true)}
-              disabled={busy !== null}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm font-medium hover:bg-[#f0f0ec] disabled:opacity-60"
-            >
-              <RefreshCw size={16} className={busy === "playlists" ? "animate-spin" : ""} />
-              Refresh
-            </button>
-            {playlistsMeta.lastSyncedAt ? <span className="text-xs text-[#666a73]">Updated {formatRelative(playlistsMeta.lastSyncedAt, nowMs)}</span> : null}
-          </div>
-        </div>
+      {session && !session.isBrowserAutomationEnabled ? (
+        <Callout
+          tone="warning"
+          title="Browser automation is off"
+          action={
+            <Link href="/connections" className="btn btn-ghost">
+              Connections
+            </Link>
+          }
+        >
+          This page reads YouTube Music through a real browser session. Set{" "}
+          <code className="text-[var(--text)]">YOUTUBE_BROWSER_AUTOMATION=true</code> to use it; until then the app
+          serves mock data.
+        </Callout>
+      ) : null}
 
-        {error ? (
-          <div className="m-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        ) : null}
+      {session?.isBrowserAutomationEnabled && !session.hasState ? (
+        <Callout
+          tone="warning"
+          title="No saved session"
+          action={
+            <Link href="/connections" className="btn btn-ghost">
+              Upload session
+            </Link>
+          }
+        >
+          Log in once with <code className="text-[var(--text)]">npm run login -- youtube cdp</code>, or upload the
+          exported browser state on the Connections page.
+        </Callout>
+      ) : null}
 
-        {notice ? (
-          <div className="m-4 flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-            <CheckCircle2 size={16} />
-            <span>{notice}</span>
-          </div>
-        ) : null}
-
-        {busyLabel ? (
-          <div className="m-4 flex items-center gap-2 rounded-md border border-[#deded8] bg-[#f7f7f4] p-3 text-sm text-[#444852]">
-            <Loader2 size={16} className="animate-spin" />
-            <span>{busyLabel}</span>
-          </div>
-        ) : null}
-      </section>
+      {error ? <Callout tone="danger">{error}</Callout> : null}
+      {notice ? (
+        <Callout tone="success" icon={<CheckCircle2 size={16} className="mt-0.5 shrink-0" />}>
+          {notice}
+        </Callout>
+      ) : null}
+      {busyLabel ? (
+        <Callout tone="info" icon={<Loader2 size={16} className="mt-0.5 shrink-0 animate-spin" />}>
+          {busyLabel}
+        </Callout>
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-        <section className="panel overflow-hidden">
-          <div className="border-b border-[#deded8] px-4 py-3">
-            <h2 className="font-semibold">Playlists</h2>
+        <section className="min-w-0 lg:border-r lg:border-[var(--border-soft)] lg:pr-5">
+          <div className="section-head items-center">
+            <div className="min-w-0">
+              <h2 className="heading-panel">Playlists</h2>
+              {playlistsMeta.lastSyncedAt ? (
+                <div className="text-xs text-muted-fg">Updated {formatRelative(playlistsMeta.lastSyncedAt, nowMs)}</div>
+              ) : null}
+            </div>
+            <button onClick={() => loadPlaylists(true)} disabled={busy !== null} className="btn btn-ghost">
+              <RefreshCw size={15} className={busy === "playlists" ? "animate-spin" : ""} />
+              Refresh
+            </button>
           </div>
-          <div className="max-h-[560px] overflow-y-auto p-2">
+          <div className="-mx-2 max-h-[560px] overflow-y-auto">
             {busy === "playlists" && playlists.length === 0 ? <LoadingRow label="Loading playlists" /> : null}
             {!busy && playlists.length === 0 ? <EmptyRow label="No playlists loaded yet" /> : null}
             {playlists.map((playlist) => (
@@ -348,17 +368,17 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
                   });
                   loadTracks(playlist.id);
                 }}
-                className={`mb-1 flex w-full items-center gap-3 rounded-md p-2 text-left hover:bg-[#f0f0ec] ${selectedId === playlist.id ? "bg-[#ecece6]" : ""}`}
+                className={`mb-1 flex w-full items-center gap-3 rounded-[var(--radius-sm)] p-2 text-left hover:bg-surface-3 ${selectedId === playlist.id ? "bg-[var(--accent-soft)]" : ""}`}
               >
                 <div
-                  className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-md bg-[#e5e5df] bg-cover bg-center text-xs font-semibold text-[#666a73]"
+                  className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-[var(--radius-sm)] bg-surface-3 bg-cover bg-center text-xs font-semibold text-muted-fg"
                   style={playlist.imageUrl ? { backgroundImage: `url(${playlist.imageUrl})` } : undefined}
                 >
                   {playlist.imageUrl ? null : playlist.name.slice(0, 2).toUpperCase()}
                 </div>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{playlist.name}</div>
-                  <div className="text-xs text-[#666a73]">{playlist.trackCount} tracks</div>
+                  <div className="text-xs text-muted-fg">{playlist.trackCount} tracks</div>
                 </div>
               </button>
             ))}
@@ -366,11 +386,11 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
         </section>
 
         <section className="space-y-5">
-          <div className="panel overflow-hidden">
-            <div className="flex flex-col gap-3 border-b border-[#deded8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="section-head flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="font-semibold">{selectedPlaylist?.name || "Select playlist"}</h2>
-                <div className="text-sm text-[#666a73]">
+                <h2 className="heading-panel">{selectedPlaylist?.name || "Select playlist"}</h2>
+                <div className="text-sm text-muted-fg">
                   {tracks.length} tracks
                   {selectedId && tracksMeta.lastFetchedAt ? ` · updated ${formatRelative(tracksMeta.lastFetchedAt, nowMs)}` : ""}
                 </div>
@@ -378,28 +398,29 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
               <button
                 onClick={() => loadTracks(selectedId, true)}
                 disabled={!selectedId || busy !== null}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#deded8] bg-white px-3 py-2 text-sm hover:bg-[#f0f0ec] disabled:opacity-60"
+                className="btn btn-ghost"
               >
                 <RefreshCw size={16} className={busy === "tracks" ? "animate-spin" : ""} />
                 Refresh
               </button>
             </div>
-            <div className="divide-y divide-[#eeeeea]">
+            <div className="divide-y divide-[var(--border-soft)]">
               {busy === "tracks" && tracks.length === 0 ? <LoadingRow label="Loading tracks" /> : null}
+              {!busy && !selectedId ? <EmptyRow label="Pick a playlist on the left to see its tracks." /> : null}
               {!busy && selectedId && tracks.length === 0 ? <EmptyRow label="No tracks to show yet. Press Refresh to load this playlist." /> : null}
               {tracks.map((track) => {
                 const ytUrl = track.url || `https://music.youtube.com/watch?v=${track.sourceTrackId}`;
                 return (
-                  <div key={track.sourceTrackId} className="grid grid-cols-[40px_1fr_auto] items-center gap-3 px-4 py-3">
+                  <div key={track.sourceTrackId} className="grid grid-cols-[40px_1fr_auto] items-center gap-3 py-3">
                     <div
-                      className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-md bg-[#e5e5df] bg-cover bg-center text-[#666a73]"
+                      className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-[var(--radius-sm)] bg-surface-3 bg-cover bg-center text-muted-fg"
                       style={track.imageUrl ? { backgroundImage: `url(${track.imageUrl})` } : undefined}
                     >
                       {track.imageUrl ? null : <Music2 size={16} />}
                     </div>
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium">{track.title}</div>
-                      <div className="truncate text-xs text-[#666a73]">
+                      <div className="truncate text-xs text-muted-fg">
                         {track.artists.join(", ")} {formatDuration(track.durationMs) ? `· ${formatDuration(track.durationMs)}` : ""}
                       </div>
                     </div>
@@ -409,7 +430,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
                         target="_blank"
                         rel="noreferrer"
                         title="Open in YouTube Music"
-                        className="grid size-9 place-items-center rounded-md border border-[#deded8] bg-white text-[#666a73] hover:bg-[#f0f0ec] hover:text-[#171717]"
+                        className="btn btn-ghost btn-icon text-muted-fg hover:text-[var(--text)]"
                       >
                         <ExternalLink size={16} />
                       </a>
@@ -417,7 +438,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
                         onClick={() => removeTrack(track)}
                         disabled={busy !== null}
                         title="Remove"
-                        className="grid size-9 place-items-center rounded-md border border-[#deded8] bg-white text-[#666a73] hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+                        className="btn btn-ghost btn-icon text-muted-fg hover:border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] hover:bg-danger-soft hover:text-danger-fg"
                       >
                         {busy === `remove:${track.sourceTrackId}` ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                       </button>
@@ -428,41 +449,45 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
             </div>
           </div>
 
-          <div className="panel overflow-hidden">
-            <form onSubmit={search} className="flex flex-col gap-3 border-b border-[#deded8] p-4 sm:flex-row">
+          <div>
+            <form onSubmit={search} className="section-head flex-col gap-3 sm:flex-row">
               <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#666a73]" size={16} />
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-fg" size={16} />
                 <input
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Artist - Track"
-                  className="h-10 w-full rounded-md border border-[#deded8] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#171717]"
+                  className="h-10 w-full pl-9 text-sm"
                 />
               </div>
               <button
                 disabled={busy !== null || !searchQuery.trim()}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#171717] px-4 text-sm font-medium text-white disabled:opacity-60"
+                className="btn btn-primary h-10 px-4"
               >
                 {busy === "search" ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                 Search
               </button>
             </form>
-            <div className="divide-y divide-[#eeeeea]">
-              {!busy && searchQuery && searchResults.length === 0 ? <EmptyRow label="No search results loaded" /> : null}
+            <div className="divide-y divide-[var(--border-soft)]">
+              {!busy && !searchQuery && searchResults.length === 0 ? (
+                <EmptyRow label="Search YouTube Music for a song, then add it to the selected playlist." />
+              ) : null}
+              {busy === "search" && searchResults.length === 0 ? <LoadingRow label="Searching" /> : null}
+              {!busy && searchQuery && searchResults.length === 0 ? <EmptyRow label="Nothing matched that search." /> : null}
               {searchResults.map((track) => {
                 const query = `${track.artists[0] || ""} ${track.title}`.trim();
                 const ytUrl = track.url || `https://music.youtube.com/watch?v=${track.sourceTrackId}`;
                 return (
-                  <div key={track.sourceTrackId} className="grid grid-cols-[40px_1fr_auto] items-center gap-3 px-4 py-3">
+                  <div key={track.sourceTrackId} className="grid grid-cols-[40px_1fr_auto] items-center gap-3 py-3">
                     <div
-                      className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-md bg-[#e5e5df] bg-cover bg-center text-[#666a73]"
+                      className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-[var(--radius-sm)] bg-surface-3 bg-cover bg-center text-muted-fg"
                       style={track.imageUrl ? { backgroundImage: `url(${track.imageUrl})` } : undefined}
                     >
                       {track.imageUrl ? null : <Music2 size={16} />}
                     </div>
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium">{track.title}</div>
-                      <div className="truncate text-xs text-[#666a73]">{track.artists.join(", ")}</div>
+                      <div className="truncate text-xs text-muted-fg">{track.artists.join(", ")}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <a
@@ -470,7 +495,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
                         target="_blank"
                         rel="noreferrer"
                         title="Open in YouTube Music"
-                        className="grid size-9 place-items-center rounded-md border border-[#deded8] bg-white text-[#666a73] hover:bg-[#f0f0ec] hover:text-[#171717]"
+                        className="btn btn-ghost btn-icon text-muted-fg hover:text-[var(--text)]"
                       >
                         <ExternalLink size={16} />
                       </a>
@@ -478,7 +503,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
                         onClick={() => addTrack(query)}
                         disabled={!selectedId || busy !== null}
                         title="Add"
-                        className="grid size-9 place-items-center rounded-md border border-[#deded8] bg-white text-[#666a73] hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-60"
+                        className="btn btn-ghost btn-icon text-muted-fg hover:border-[color-mix(in_srgb,var(--success)_35%,var(--border))] hover:bg-success-soft hover:text-success-fg"
                       >
                         {busy === `add:${query}` ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                       </button>
@@ -496,7 +521,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
 
 function LoadingRow({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-2 p-4 text-sm text-[#666a73]">
+    <div className="flex items-center gap-2 p-4 text-sm text-muted-fg">
       <Loader2 size={16} className="animate-spin" />
       {label}
     </div>
@@ -504,5 +529,5 @@ function LoadingRow({ label }: { label: string }) {
 }
 
 function EmptyRow({ label }: { label: string }) {
-  return <div className="p-4 text-sm text-[#666a73]">{label}</div>;
+  return <div className="p-4 text-sm text-muted-fg">{label}</div>;
 }

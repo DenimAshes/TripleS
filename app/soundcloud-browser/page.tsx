@@ -10,7 +10,7 @@ export default async function SoundCloudBrowserPage() {
     : { playlists: [], lastSyncedAt: null, fromCache: true, isStale: true };
 
   return (
-    <AppShell title="SoundCloud">
+    <AppShell title="SoundCloud" description="Read, search and edit sets through the saved browser session.">
       <SoundCloudBrowserLab
         initialPlaylists={{
           playlists: playlists.playlists,
