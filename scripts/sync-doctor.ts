@@ -4,6 +4,7 @@ import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFacto
 import { getServicesInCooldown } from "@/lib/sync/serviceCooldown";
 import { shouldRefreshSourceCache } from "@/lib/sync/sourceCachePolicy";
 import type { ServiceKey } from "@/lib/sync/syncTypes";
+import { decodeStorageState, isSessionService, sessionCookiesPresent } from "@/lib/services/workerSessionState";
 import { stateFilePath } from "@/worker/config";
 
 const PARTIAL_TOLERANCE = Math.max(
@@ -107,13 +108,32 @@ async function diagnoseRule(syncRuleId: string, liveMode: boolean): Promise<Chec
     detail: cooledServices.length ? cooledServices.join(", ") : "none",
   });
 
+  const stateServices = Array.from(new Set(ruleServices.map((service) => service.toLowerCase()).filter(isSessionService)));
+  const storedStates = stateServices.length
+    ? await prisma.workerSessionState.findMany({ where: { service: { in: stateServices } } })
+    : [];
+  const storedStateByService = new Map(storedStates.map((state) => [state.service, state]));
   for (const service of ruleServices) {
     if (!serviceNeedsState(service)) continue;
-    const path = stateFilePath(service.toLowerCase() as ServiceKey);
+    const serviceKey = service.toLowerCase() as ServiceKey;
+    const path = stateFilePath(serviceKey);
+    const localExists = fs.existsSync(path);
+    const sessionService = isSessionService(serviceKey) ? serviceKey : null;
+    const stored = sessionService ? storedStateByService.get(sessionService) : undefined;
+    let storedCookies: string[] = [];
+    if (stored && sessionService) {
+      try {
+        storedCookies = sessionCookiesPresent(sessionService, decodeStorageState(stored.stateGzipBase64));
+      } catch {}
+    }
     checks.push({
-      status: fs.existsSync(path) ? "OK" : "FAIL",
+      status: localExists || storedCookies.length ? "OK" : "FAIL",
       name: `${service} browser state`,
-      detail: path,
+      detail: localExists
+        ? path
+        : storedCookies.length
+          ? `DB state updated ${stored!.updatedAt.toISOString()} (${storedCookies.join(", ")})`
+          : `${path}; no usable DB fallback`,
     });
   }
 
