@@ -267,7 +267,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
             </button>
           </div>
           <div className="-mx-2 max-h-[560px] overflow-y-auto">
-            {busy === "playlists" && playlists.length === 0 ? <LoadingRow label="Loading playlists" /> : null}
+            {busy === "playlists" && playlists.length === 0 ? <LoadingRow label="Loading playlists…" /> : null}
             {!busy && playlists.length === 0 ? <EmptyRow label="No playlists loaded yet" /> : null}
             {playlists.map((playlist) => (
               <button
@@ -328,7 +328,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
 
           {workspaceView === "tracks" ? (
             <div id="soundcloud-workspace-panel" role="tabpanel" aria-labelledby="soundcloud-tracks-tab" className="divide-y divide-[var(--border-soft)]">
-              {busy === "tracks" && tracks.length === 0 ? <LoadingRow label="Loading tracks" /> : null}
+              {busy === "tracks" && tracks.length === 0 ? <LoadingRow label="Loading tracks…" /> : null}
               {!busy && !selectedId ? <EmptyRow label="Pick a playlist on the left to see its tracks." /> : null}
               {!busy && selectedId && tracks.length === 0 ? <EmptyRow label="No tracks to show yet. Press Refresh to load this playlist." /> : null}
               {tracks.map((track) => (
@@ -348,7 +348,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
               </form>
               <div className="divide-y divide-[var(--border-soft)]">
                 {!busy && !searchQuery && searchResults.length === 0 ? <EmptyRow label="Search SoundCloud, then add a result to the selected playlist." /> : null}
-                {busy === "search" && searchResults.length === 0 ? <LoadingRow label="Searching" /> : null}
+                {busy === "search" && searchResults.length === 0 ? <LoadingRow label="Searching…" /> : null}
                 {!busy && searchQuery && searchResults.length === 0 ? <EmptyRow label="Nothing matched that search." /> : null}
                 {searchResults.map((track) => (
                   <TrackRow key={track.sourceTrackId} track={track} busy={busy} canWrite={selectedPlaylist?.isWritable === true} onAdd={addTrack} />

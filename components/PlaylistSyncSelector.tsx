@@ -329,7 +329,7 @@ export function PlaylistSyncSelector({
               </button>
               <button type="button" onClick={saveGroup} disabled={!canSave || saving} className="btn btn-primary">
                 {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
-                {saving ? "Saving" : "Save group"}
+                {saving ? "Saving…" : "Save group"}
               </button>
             </div>
           </div>
@@ -555,7 +555,7 @@ export function PlaylistSyncSelector({
           </div>
           <button type="button" onClick={saveGroup} disabled={!canSave || saving} className="btn btn-primary surface-lift">
             {saving ? <RefreshCw size={16} className="animate-spin" /> : <Link2 size={16} />}
-            {saving ? "Saving" : "Link playlists"}
+            {saving ? "Saving…" : "Link playlists"}
           </button>
         </div>
       </div>

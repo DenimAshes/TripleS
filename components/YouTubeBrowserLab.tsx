@@ -354,7 +354,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
             </button>
           </div>
           <div className="-mx-2 max-h-[560px] overflow-y-auto">
-            {busy === "playlists" && playlists.length === 0 ? <LoadingRow label="Loading playlists" /> : null}
+            {busy === "playlists" && playlists.length === 0 ? <LoadingRow label="Loading playlists…" /> : null}
             {!busy && playlists.length === 0 ? <EmptyRow label="No playlists loaded yet" /> : null}
             {playlists.map((playlist) => (
               <button
@@ -413,7 +413,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
 
           {workspaceView === "tracks" ? (
             <div id="youtube-workspace-panel" role="tabpanel" aria-labelledby="youtube-tracks-tab" className="divide-y divide-[var(--border-soft)]">
-              {busy === "tracks" && tracks.length === 0 ? <LoadingRow label="Loading tracks" /> : null}
+              {busy === "tracks" && tracks.length === 0 ? <LoadingRow label="Loading tracks…" /> : null}
               {!busy && !selectedId ? <EmptyRow label="Pick a playlist on the left to see its tracks." /> : null}
               {!busy && selectedId && tracks.length === 0 ? <EmptyRow label="No tracks to show yet. Press Refresh to load this playlist." /> : null}
               {tracks.map((track) => {
@@ -438,7 +438,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
               </form>
               <div className="divide-y divide-[var(--border-soft)]">
                 {!busy && !searchQuery && searchResults.length === 0 ? <EmptyRow label="Search YouTube Music, then add a result to the selected playlist." /> : null}
-                {busy === "search" && searchResults.length === 0 ? <LoadingRow label="Searching" /> : null}
+                {busy === "search" && searchResults.length === 0 ? <LoadingRow label="Searching…" /> : null}
                 {!busy && searchQuery && searchResults.length === 0 ? <EmptyRow label="Nothing matched that search." /> : null}
                 {searchResults.map((track) => {
                   const query = `${track.artists[0] || ""} ${track.title}`.trim();
