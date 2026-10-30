@@ -37,7 +37,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   });
   const match = await prisma.manualMatchCandidate.update({
     where: { id },
-    data: { status: "REJECTED" },
+    data: { status: "EXCLUDED" },
   });
   const followup = await scheduleManualMatchFollowupSync({
     userId: session.userId,

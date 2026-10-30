@@ -26,7 +26,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   });
   if (!sourceTrack) return NextResponse.json({ error: "Source song not found" }, { status: 409 });
 
-  const group = existing.status === "REJECTED"
+  const group = existing.status === "REJECTED" || existing.status === "EXCLUDED"
     ? await findCandidateGroup({
         userId: session.userId,
         sourceServiceTrackId: existing.sourceServiceTrackId,
@@ -65,17 +65,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       });
       deletedNegativeCaches = deletedCache.count;
 
-      if (group) {
-        const deletedExclusion = await tx.syncTrackExclusion.deleteMany({
-          where: {
-            groupId: group.id,
-            sourceTrackId: existing.sourceServiceTrackId,
-            targetService: existing.targetService,
-            reason: "USER_CHOICE",
-          },
-        });
-        deletedExclusions = deletedExclusion.count;
-      }
+    }
+
+    if ((existing.status === "REJECTED" || existing.status === "EXCLUDED") && group) {
+      const deletedExclusion = await tx.syncTrackExclusion.deleteMany({
+        where: {
+          groupId: group.id,
+          sourceTrackId: existing.sourceServiceTrackId,
+          targetService: existing.targetService,
+          reason: "USER_CHOICE",
+        },
+      });
+      deletedExclusions = deletedExclusion.count;
     }
   });
 

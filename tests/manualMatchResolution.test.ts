@@ -35,7 +35,7 @@ describe("manual match resolution", () => {
     mocks.syncRuleUpdateMany.mockResolvedValue({ count: 1 });
   });
 
-  test("rejects other pending candidates for the same source and target service", async () => {
+  test("supersedes other pending candidates for the same source and target service", async () => {
     const result = await closeCompetingManualCandidates({
       userId: "user-1",
       sourceServiceTrackId: "source-track",
@@ -52,7 +52,7 @@ describe("manual match resolution", () => {
         id: { not: "candidate-1" },
         status: "PENDING",
       },
-      data: { status: "REJECTED" },
+      data: { status: "SUPERSEDED" },
     });
   });
 

@@ -19,7 +19,7 @@ export async function closeCompetingManualCandidates({
       id: { not: keepId },
       status: "PENDING",
     },
-    data: { status: "REJECTED" },
+    data: { status: "SUPERSEDED" },
   });
 }
 

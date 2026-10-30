@@ -230,6 +230,7 @@ async function upsertManualCandidate({
       // bulk-accept on numbers no current code would produce.
       confidence,
       alternativesJson: JSON.stringify(alternatives),
+      status: existing?.status === "SUPERSEDED" ? "PENDING" : undefined,
     },
     create: {
       ...naturalKey,

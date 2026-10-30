@@ -149,6 +149,34 @@ describe("manual match undo route", () => {
     expect(payload.deletedExclusions).toBe(1);
   });
 
+  test("restores an excluded candidate without deleting a negative cache", async () => {
+    mocks.manualMatchCandidateFindFirst.mockResolvedValue({
+      id: "candidate-1",
+      userId: "user-1",
+      status: "EXCLUDED",
+      sourceServiceTrackId: "source-track",
+      candidateServiceTrackId: "target-track",
+      targetService: "SOUNDCLOUD",
+    });
+    mocks.findCandidateGroup.mockResolvedValue({ id: "group-1" });
+
+    const response = await POST(request(), { params: Promise.resolve({ id: "candidate-1" }) });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mocks.txTrackMatchNegativeCacheDeleteMany).not.toHaveBeenCalled();
+    expect(mocks.txSyncTrackExclusionDeleteMany).toHaveBeenCalledWith({
+      where: {
+        groupId: "group-1",
+        sourceTrackId: "source-track",
+        targetService: "SOUNDCLOUD",
+        reason: "USER_CHOICE",
+      },
+    });
+    expect(payload.deletedNegativeCaches).toBe(0);
+    expect(payload.deletedExclusions).toBe(1);
+  });
+
   test("does not undo a candidate that is already pending", async () => {
     mocks.manualMatchCandidateFindFirst.mockResolvedValue({
       id: "candidate-1",
