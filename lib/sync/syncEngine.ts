@@ -9,7 +9,11 @@ import {
 import { syncPlaylistTracksToDb } from "@/lib/services/playlistTracksStore";
 import type { NormalizedTrack, ServiceKey } from "./syncTypes";
 import { findMatch, prewarmLocalCatalog, type LocalCatalogPool } from "./matchEngine";
-import { upsertAutoTrackMatch } from "./trackMatchStore";
+import {
+  deleteStoredTrackMatch,
+  shouldInvalidateStoredTrackMatch,
+  upsertAutoTrackMatch,
+} from "./trackMatchStore";
 import {
   buildMatchContext,
   bulkUpsertServiceTracks,
@@ -777,7 +781,30 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
             throwIfActiveJobAborted();
             await writeThrottle(destination.service);
             throwIfActiveJobAborted();
-            await targetAdapter.addTrackToPlaylist(destination.playlistId, match.track);
+            try {
+              await targetAdapter.addTrackToPlaylist(destination.playlistId, match.track);
+            } catch (error) {
+              if (!shouldInvalidateStoredTrackMatch(match.source, error)) throw error;
+              const deleted = await deleteStoredTrackMatch(
+                sourceServiceTrack.internalTrackId,
+                destination.service,
+                targetServiceTrack.id,
+              );
+              if (!deleted.count) throw error;
+              matchContext.storedMatchByInternalId.delete(sourceServiceTrack.internalTrackId);
+              recordOutcome(destination, "notFound");
+              pendingLogs.push({
+                syncJobId: job.id,
+                level: "WARNING",
+                action: "not_found",
+                service: destination.service,
+                playlistId: destination.playlistId,
+                trackTitle: sourceTrack.title,
+                message: "Stored destination match no longer exists; it will be searched again on the next run.",
+                metadataJson: JSON.stringify({ matchSource: "stored", staleTargetTrackId: targetServiceTrack.id }),
+              });
+              continue;
+            }
             destinationTracks.push(match.track);
           }
           if (destinationPlaylist) {

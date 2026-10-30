@@ -8,6 +8,25 @@ function trackMatchField(service: string) {
   return "soundcloudServiceTrackId";
 }
 
+export function shouldInvalidateStoredTrackMatch(source: string | undefined, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return source === "stored" && /\btrack not found\b/i.test(message);
+}
+
+export function deleteStoredTrackMatch(
+  internalTrackId: string,
+  destinationService: string,
+  targetServiceTrackId: string,
+) {
+  return prisma.trackMatch.deleteMany({
+    where: {
+      internalTrackId,
+      [trackMatchField(destinationService)]: targetServiceTrackId,
+      status: { in: ["CONFIRMED", "AUTO_MATCHED"] },
+    },
+  });
+}
+
 export function buildTrackMatchData(
   sourceService: string,
   destinationService: string,
