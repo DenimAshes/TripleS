@@ -79,7 +79,7 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-fg transition hover:text-[var(--text)]"
+        className="inline-flex min-h-8 items-center gap-1.5 text-xs font-medium text-muted-fg transition hover:text-[var(--text)]"
       >
         <Clock3 size={12} />
         Run history
@@ -87,8 +87,8 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
       </button>
       {open ? (
         <div className="rows mt-2">
-          {loading ? <div className="text-xs text-dim-fg">Loading...</div> : null}
-          {error ? <div className="text-xs text-danger-fg">{error}</div> : null}
+          {loading ? <div role="status" aria-live="polite" className="text-xs text-dim-fg">Loading…</div> : null}
+          {error ? <div role="alert" className="text-xs text-danger-fg">{error}</div> : null}
           {jobs && jobs.length === 0 ? (
             <div className="text-xs text-dim-fg">No runs yet.</div>
           ) : null}

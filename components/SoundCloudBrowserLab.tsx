@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ExternalLink, Loader2, Music2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { CheckCircle2, ExternalLink, ListMusic, Loader2, Music2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Callout } from "./Callout";
@@ -76,6 +76,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Track[]>([]);
+  const [workspaceView, setWorkspaceView] = useState<"tracks" | "search">("tracks");
   const [busy, setBusy] = useState<string | null>(null);
   const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState("");
@@ -87,7 +88,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
 
   async function loadPlaylists(force = false) {
     setBusy("playlists");
-    setBusyLabel(force ? "Updating playlists..." : "Loading playlists...");
+    setBusyLabel(force ? "Updating playlists…" : "Loading playlists…");
     setError("");
     setNotice("");
     try {
@@ -113,7 +114,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
     }
 
     setBusy("tracks");
-    setBusyLabel(force ? "Updating tracks..." : "Loading tracks...");
+    setBusyLabel(force ? "Updating tracks…" : "Loading tracks…");
     setError("");
     try {
       const data = await readJson<TracksResponse>(`/api/soundcloud-browser/tracks?playlistId=${encodeURIComponent(playlistId)}${force ? "&refresh=1" : ""}`);
@@ -132,7 +133,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
     event.preventDefault();
     if (!searchQuery.trim()) return;
     setBusy("search");
-    setBusyLabel("Searching...");
+    setBusyLabel("Searching…");
     setError("");
     setNotice("");
     try {
@@ -150,7 +151,7 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
     if (!selectedId) return;
     const trackId = track.url || track.sourceTrackId;
     setBusy(`add:${track.sourceTrackId}`);
-    setBusyLabel("Adding track...");
+    setBusyLabel("Adding track…");
     setError("");
     setNotice("");
     try {
@@ -171,8 +172,9 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
 
   async function removeTrack(track: Track) {
     if (!selectedId) return;
+    if (!window.confirm(`Remove “${track.title}” from this playlist?`)) return;
     setBusy(`remove:${track.sourceTrackId}`);
-    setBusyLabel("Removing track...");
+    setBusyLabel("Removing track…");
     setError("");
     setNotice("");
     try {
@@ -238,14 +240,14 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
         </Callout>
       ) : null}
 
-      {error ? <Callout tone="danger">{error}</Callout> : null}
+      {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
       {notice ? (
-        <Callout tone="success" icon={<CheckCircle2 size={16} className="mt-0.5 shrink-0" />}>
+        <Callout tone="success" role="status" icon={<CheckCircle2 size={16} className="mt-0.5 shrink-0" />}>
           {notice}
         </Callout>
       ) : null}
       {busyLabel ? (
-        <Callout tone="info" icon={<Loader2 size={16} className="mt-0.5 shrink-0 animate-spin" />}>
+        <Callout tone="info" role="status" icon={<Loader2 size={16} className="mt-0.5 shrink-0 animate-spin" />}>
           {busyLabel}
         </Callout>
       ) : null}
@@ -270,8 +272,10 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
             {playlists.map((playlist) => (
               <button
                 key={playlist.id}
+                aria-pressed={selectedId === playlist.id}
                 onClick={() => {
                   setSelectedId(playlist.id);
+                  setWorkspaceView("tracks");
                   const snapshot = tracksByPlaylist[playlist.id];
                   setTracks(snapshot?.tracks || []);
                   setTracksMeta({
@@ -300,77 +304,58 @@ export function SoundCloudBrowserLab({ initialPlaylists }: { initialPlaylists: P
           </div>
         </section>
 
-        <section className="space-y-5">
-          <div>
-            <div className="section-head flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="heading-panel">{selectedPlaylist?.name || "Select playlist"}</h2>
-                <div className="text-sm text-muted-fg">
-                  {tracks.length} tracks
-                  {selectedId && tracksMeta.lastFetchedAt ? ` · updated ${formatRelative(tracksMeta.lastFetchedAt, nowMs)}` : ""}
-                </div>
+        <section className="min-w-0">
+          <div className="section-head flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="heading-panel">{selectedPlaylist?.name || "Select playlist"}</h2>
+              <div className="text-sm text-muted-fg">
+                {tracks.length} tracks{selectedId && tracksMeta.lastFetchedAt ? ` · updated ${formatRelative(tracksMeta.lastFetchedAt, nowMs)}` : ""}
               </div>
-              <button
-                onClick={() => loadTracks(selectedId, true)}
-                disabled={!selectedId || busy !== null}
-                className="btn btn-ghost"
-              >
-                <RefreshCw size={16} className={busy === "tracks" ? "animate-spin" : ""} />
-                Refresh
-              </button>
             </div>
-            <div className="divide-y divide-[var(--border-soft)]">
+            <button onClick={() => loadTracks(selectedId, true)} disabled={!selectedId || busy !== null} className="btn btn-ghost">
+              <RefreshCw size={16} className={busy === "tracks" ? "animate-spin" : ""} /> Refresh
+            </button>
+          </div>
+
+          <div className="mb-4 inline-flex rounded-[var(--radius-sm)] bg-surface-2 p-1" role="tablist" aria-label="Playlist workspace">
+            <button id="soundcloud-tracks-tab" aria-controls="soundcloud-workspace-panel" type="button" role="tab" aria-selected={workspaceView === "tracks"} onClick={() => setWorkspaceView("tracks")} className={`inline-flex items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium ${workspaceView === "tracks" ? "bg-surface-3 text-[var(--text)]" : "text-muted-fg"}`}>
+              <ListMusic size={15} /> Playlist songs
+            </button>
+            <button id="soundcloud-search-tab" aria-controls="soundcloud-workspace-panel" type="button" role="tab" aria-selected={workspaceView === "search"} onClick={() => setWorkspaceView("search")} className={`inline-flex items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium ${workspaceView === "search" ? "bg-surface-3 text-[var(--text)]" : "text-muted-fg"}`}>
+              <Plus size={15} /> Add songs
+            </button>
+          </div>
+
+          {workspaceView === "tracks" ? (
+            <div id="soundcloud-workspace-panel" role="tabpanel" aria-labelledby="soundcloud-tracks-tab" className="divide-y divide-[var(--border-soft)]">
               {busy === "tracks" && tracks.length === 0 ? <LoadingRow label="Loading tracks" /> : null}
               {!busy && !selectedId ? <EmptyRow label="Pick a playlist on the left to see its tracks." /> : null}
               {!busy && selectedId && tracks.length === 0 ? <EmptyRow label="No tracks to show yet. Press Refresh to load this playlist." /> : null}
               {tracks.map((track) => (
-                <TrackRow
-                  key={track.sourceTrackId}
-                  track={track}
-                  busy={busy}
-                  canWrite={selectedPlaylist?.isWritable === true}
-                  onRemove={removeTrack}
-                />
+                <TrackRow key={track.sourceTrackId} track={track} busy={busy} canWrite={selectedPlaylist?.isWritable === true} onRemove={removeTrack} />
               ))}
             </div>
-          </div>
-
-          <div>
-            <form onSubmit={search} className="section-head flex-col gap-3 sm:flex-row">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-fg" size={16} />
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Artist - Track"
-                  className="h-10 w-full pl-9 text-sm"
-                />
+          ) : (
+            <div id="soundcloud-workspace-panel" role="tabpanel" aria-labelledby="soundcloud-search-tab">
+              <form onSubmit={search} className="flex flex-col gap-3 border-b border-line-soft pb-4 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-fg" size={16} />
+                  <input name="soundcloudSearch" type="search" autoComplete="off" spellCheck={false} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Artist – track…" aria-label="Search SoundCloud" className="h-10 w-full pl-9 text-sm" />
+                </div>
+                <button disabled={busy !== null || !searchQuery.trim()} className="btn btn-primary h-10 px-4">
+                  {busy === "search" ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Search
+                </button>
+              </form>
+              <div className="divide-y divide-[var(--border-soft)]">
+                {!busy && !searchQuery && searchResults.length === 0 ? <EmptyRow label="Search SoundCloud, then add a result to the selected playlist." /> : null}
+                {busy === "search" && searchResults.length === 0 ? <LoadingRow label="Searching" /> : null}
+                {!busy && searchQuery && searchResults.length === 0 ? <EmptyRow label="Nothing matched that search." /> : null}
+                {searchResults.map((track) => (
+                  <TrackRow key={track.sourceTrackId} track={track} busy={busy} canWrite={selectedPlaylist?.isWritable === true} onAdd={addTrack} />
+                ))}
               </div>
-              <button
-                disabled={busy !== null || !searchQuery.trim()}
-                className="btn btn-primary h-10 px-4"
-              >
-                {busy === "search" ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                Search
-              </button>
-            </form>
-            <div className="divide-y divide-[var(--border-soft)]">
-              {!busy && !searchQuery && searchResults.length === 0 ? (
-                <EmptyRow label="Search SoundCloud for a song, then add it to the selected playlist." />
-              ) : null}
-              {busy === "search" && searchResults.length === 0 ? <LoadingRow label="Searching" /> : null}
-              {!busy && searchQuery && searchResults.length === 0 ? <EmptyRow label="Nothing matched that search." /> : null}
-              {searchResults.map((track) => (
-                <TrackRow
-                  key={track.sourceTrackId}
-                  track={track}
-                  busy={busy}
-                  canWrite={selectedPlaylist?.isWritable === true}
-                  onAdd={addTrack}
-                />
-              ))}
             </div>
-          </div>
+          )}
         </section>
       </div>
     </div>
@@ -408,20 +393,23 @@ function TrackRow({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <a
+         <a
           href={href}
           target="_blank"
           rel="noreferrer"
-          title="Open in SoundCloud"
+           title="Open in SoundCloud"
+           aria-label={`Open ${track.title} in SoundCloud`}
           className="btn btn-ghost btn-icon text-muted-fg hover:text-[var(--text)]"
         >
           <ExternalLink size={16} />
         </a>
         {onAdd ? (
           <button
+            type="button"
             onClick={() => onAdd(track)}
             disabled={!canWrite || busy !== null}
-            title="Add"
+           title="Add"
+            aria-label={`Add ${track.title}`}
             className="btn btn-ghost btn-icon text-muted-fg hover:border-[color-mix(in_srgb,var(--success)_35%,var(--border))] hover:bg-success-soft hover:text-success-fg"
           >
             {busy === busyKey ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
@@ -429,9 +417,11 @@ function TrackRow({
         ) : null}
         {onRemove ? (
           <button
+            type="button"
             onClick={() => onRemove(track)}
             disabled={!canWrite || busy !== null}
-            title="Remove"
+           title="Remove"
+            aria-label={`Remove ${track.title}`}
             className="btn btn-ghost btn-icon text-muted-fg hover:border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] hover:bg-danger-soft hover:text-danger-fg"
           >
             {busy === busyKey ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}

@@ -87,7 +87,7 @@ export function SpotifyCookieLogin({ hasCookie }: { hasCookie: boolean }) {
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="mt-3 text-left text-xs text-muted-fg underline-offset-2 hover:text-accent hover:underline">
+      <button type="button" onClick={() => setOpen(true)} className="mt-3 min-h-8 text-left text-xs text-muted-fg underline-offset-2 hover:text-accent hover:underline">
         {stored ? "Manage the saved sp_dc cookie" : "Can't use OAuth? Sign in with an sp_dc cookie"}
       </button>
     );
@@ -116,7 +116,7 @@ export function SpotifyCookieLogin({ hasCookie }: { hasCookie: boolean }) {
         onChange={(event) => setCookie(event.target.value)}
         rows={3}
         spellCheck={false}
-        placeholder="sp_dc=... or the exported JSON"
+        placeholder="sp_dc=… or exported JSON"
         className="w-full font-mono text-xs"
       />
 

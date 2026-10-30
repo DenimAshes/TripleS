@@ -135,7 +135,7 @@ function PlaylistTracksLiveProgress({
           <div className="mt-2 text-sm font-medium text-[var(--text)]">
             {running ? jobStep || "Preparing playlist tracks" : "Playlist cache needs refresh"}
           </div>
-          {error ? <div className="mt-2 text-sm text-danger-fg">{error}</div> : null}
+          {error ? <div role="alert" className="mt-2 text-sm text-danger-fg">{error}</div> : null}
         </div>
         <div className="text-right">
           <div className="text-2xl font-semibold tabular-nums text-[var(--accent)]">{active}</div>
@@ -156,7 +156,7 @@ function PlaylistTracksLiveProgress({
             <div key={`${item.position}-${item.track.title}`} className="panel-inset flex min-w-0 items-center gap-2 p-2">
               {item.track.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.track.imageUrl} alt="" className="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] object-cover" />
+                <img src={item.track.imageUrl} alt="" width={36} height={36} loading="lazy" className="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] object-cover" />
               ) : (
                 <div className="h-9 w-9 shrink-0 rounded-[var(--radius-sm)] bg-[var(--surface-3)]" />
               )}

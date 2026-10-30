@@ -38,8 +38,8 @@ const SERVICE_LABELS: Record<string, string> = {
   YOUTUBE: "YouTube Music",
   SOUNDCLOUD: "SoundCloud",
 };
-const INITIAL_VISIBLE_TRACKS = 100;
-const LOAD_MORE_TRACKS = 100;
+const INITIAL_VISIBLE_TRACKS = 50;
+const LOAD_MORE_TRACKS = 50;
 
 type SortKey = "position" | "title" | "artists" | "album" | "duration";
 type SortDir = "asc" | "desc";
@@ -396,6 +396,9 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
               <input
                 ref={searchRef}
                 type="search"
+                name="trackFilter"
+                autoComplete="off"
+                spellCheck={false}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Filter songs…"
@@ -475,11 +478,11 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
         // overflow-hidden would create a non-scrolling ancestor and break the
         // sticky thead — sort headers must follow the viewport, not the panel.
         <div>
-          <table className="w-full text-sm">
+          <table className="w-full table-fixed text-sm sm:table-auto">
             <thead className="sticky top-0 z-10 border-b border-[var(--border-soft)] bg-[var(--bg)]/95 text-left text-xs font-semibold text-muted-fg backdrop-blur">
               <tr>
                 <th
-                  className="w-12 px-4 py-3.5"
+                  className="w-9 px-2 py-3.5 sm:w-12 sm:px-4"
                   aria-sort={sortKey === "position" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                 >
                   <button
@@ -491,7 +494,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                   </button>
                 </th>
                 <th
-                  className="px-4 py-3.5"
+                  className="px-2 py-3.5 sm:px-4"
                   aria-sort={sortKey === "title" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                 >
                   <button
@@ -516,7 +519,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                   </button>
                 </th>
                 <th
-                  className="w-16 px-4 py-3.5"
+                  className="hidden w-16 px-4 py-3.5 sm:table-cell"
                   aria-sort={sortKey === "duration" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                 >
                   <button
@@ -527,7 +530,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                     Time {renderSortIcon("duration", sortKey, sortDir)}
                   </button>
                 </th>
-                <th className="w-10 px-4 py-3.5"></th>
+                <th className="hidden w-10 px-4 py-3.5 sm:table-cell"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-soft)]">
@@ -545,7 +548,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                       excluded ? "opacity-70" : ""
                     }`}
                   >
-                    <td className="relative text-dim-fg px-4 py-3.5 font-medium tabular-nums">
+                    <td className="relative px-2 py-3.5 font-medium tabular-nums text-dim-fg sm:px-4">
                       {trackMissing ? (
                         <span className="pointer-events-none absolute inset-y-1.5 left-0 w-0.5 rounded-r-[var(--hairline-radius)] bg-warning/70" aria-hidden="true" />
                       ) : null}
@@ -554,7 +557,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                       ) : null}
                       {track.position}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-2 py-3.5 sm:px-4">
                       <div className="flex min-w-0 items-center gap-3">
                         {track.imageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -575,8 +578,21 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                             <Music size={14} strokeWidth={1.5} className="relative z-10" />
                           </div>
                         )}
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-[var(--text)]">{renderHighlight(track.title, trimmedQuery)}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <div className="min-w-0 flex-1 truncate font-medium text-[var(--text)]">{renderHighlight(track.title, trimmedQuery)}</div>
+                            {track.url ? (
+                              <a
+                                href={track.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="shrink-0 text-dim-fg hover:text-[var(--accent)] sm:hidden"
+                                aria-label={`Open on ${service}`}
+                              >
+                                <ExternalLink size={15} />
+                              </a>
+                            ) : null}
+                          </div>
                           <div className="text-muted-fg truncate text-xs">{renderHighlight(track.artists, trimmedQuery)}</div>
                           {(track.linkedServices?.length || track.missingServices?.length) ? (
                             <div className="mt-1 flex items-center gap-1 lg:hidden" aria-label="Match status">
@@ -661,8 +677,8 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                     <td className="text-muted-fg hidden truncate px-4 py-3.5 md:table-cell">
                       {track.album ? renderHighlight(track.album, trimmedQuery) : "-"}
                     </td>
-                    <td className="text-muted-fg px-4 py-3.5 tabular-nums">{formatDuration(track.durationMs)}</td>
-                    <td className="px-4 py-3.5">
+                    <td className="hidden px-4 py-3.5 tabular-nums text-muted-fg sm:table-cell">{formatDuration(track.durationMs)}</td>
+                    <td className="hidden px-4 py-3.5 sm:table-cell">
                       {track.url ? (
                         <a
                           href={track.url}
@@ -687,6 +703,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                           }}
                         >
                           <select
+                            name="targetService"
                             value={editor.targetService}
                             onChange={(event) =>
                               setMatchEditor((current) =>
@@ -703,13 +720,17 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                             ))}
                           </select>
                           <input
+                            name="songUrl"
+                            type="url"
+                            autoComplete="off"
+                            spellCheck={false}
                             value={editor.url}
                             onChange={(event) =>
                               setMatchEditor((current) =>
                                 current && current.trackId === track.id ? { ...current, url: event.target.value } : current,
                               )
                             }
-                            placeholder="Paste song link"
+                            placeholder="Paste song link…"
                             aria-label="Song link"
                             className="h-9 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 text-sm"
                           />
@@ -722,7 +743,12 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                               <CheckCircle2 size={14} />
                               Save
                             </button>
-                            <button type="button" onClick={() => setMatchEditor(null)} className="btn btn-ghost h-9 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setMatchEditor(null)}
+                              aria-label="Cancel editing"
+                              className="btn btn-ghost h-9 text-xs"
+                            >
                               <X size={14} />
                             </button>
                           </div>

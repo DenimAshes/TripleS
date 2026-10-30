@@ -30,11 +30,11 @@ type CommandItem = {
 };
 
 const NAV_ITEMS: CommandItem[] = [
-  { id: "nav-dashboard", group: "Navigate", icon: <Gauge size={15} />, label: "Dashboard", href: "/dashboard", hint: "Overview & last run" },
+  { id: "nav-dashboard", group: "Navigate", icon: <Gauge size={15} />, label: "Overview", href: "/dashboard", hint: "Attention & sync status" },
   { id: "nav-connections", group: "Navigate", icon: <PlugZap size={15} />, label: "Connections", href: "/connections", hint: "Spotify, YouTube, SoundCloud" },
   { id: "nav-playlists", group: "Navigate", icon: <ListMusic size={15} />, label: "Playlists", href: "/playlists", hint: "Pick a source & mirrors" },
-  { id: "nav-review", group: "Navigate", icon: <Shuffle size={15} />, label: "Review songs", href: "/manual-match", hint: "Resolve uncertain matches" },
-  { id: "nav-history", group: "Navigate", icon: <Clock3 size={15} />, label: "History", href: "/history", hint: "Logs & failures" },
+  { id: "nav-review", group: "Navigate", icon: <Shuffle size={15} />, label: "Review queue", href: "/manual-match", hint: "Resolve uncertain matches" },
+  { id: "nav-history", group: "Navigate", icon: <Clock3 size={15} />, label: "Activity", href: "/history", hint: "Changes & failures" },
   { id: "nav-rules", group: "Navigate", icon: <Settings size={15} />, label: "Sync groups", href: "/settings", hint: "Linked playlists & source controls" },
   { id: "nav-yt-tools", group: "Navigate", icon: <YouTubeGlyph size={15} />, label: "YouTube Music tools", href: "/youtube-browser", hint: "Browser session: read, search, add", keywords: "browser lab ytm automation" },
   { id: "nav-sc-tools", group: "Navigate", icon: <SoundCloudGlyph size={15} />, label: "SoundCloud tools", href: "/soundcloud-browser", hint: "Browser session: read, search, add", keywords: "browser lab sc automation" },
@@ -47,7 +47,7 @@ const SERVICE_ITEMS: CommandItem[] = [
     group: "Playlists",
     icon: <ServiceIcon service="SPOTIFY" size="sm" className="h-4 w-4" />,
     label: "Spotify playlists",
-    href: "/playlists#playlists-spotify",
+    href: "/playlists?service=SPOTIFY",
     keywords: "spotify green source",
   },
   {
@@ -55,7 +55,7 @@ const SERVICE_ITEMS: CommandItem[] = [
     group: "Playlists",
     icon: <ServiceIcon service="YOUTUBE" size="sm" className="h-4 w-4" />,
     label: "YouTube Music playlists",
-    href: "/playlists#playlists-youtube",
+    href: "/playlists?service=YOUTUBE",
     keywords: "youtube ytm red",
   },
   {
@@ -63,7 +63,7 @@ const SERVICE_ITEMS: CommandItem[] = [
     group: "Playlists",
     icon: <ServiceIcon service="SOUNDCLOUD" size="sm" className="h-4 w-4" />,
     label: "SoundCloud playlists",
-    href: "/playlists#playlists-soundcloud",
+    href: "/playlists?service=SOUNDCLOUD",
     keywords: "soundcloud sc orange",
   },
 ];
@@ -209,10 +209,10 @@ export function CommandPalette() {
         type="button"
         onClick={openPalette}
         className="surface-lift group hidden items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)] sm:inline-flex"
-        aria-label="Open command palette"
+        title="Open command palette"
       >
         <Search size={13} className="text-dim-fg group-hover:text-[var(--accent)]" />
-        <span>Jump...</span>
+        <span>Jump…</span>
         <span className="ml-2 inline-flex items-center gap-0.5">
           <kbd className="kbd">Ctrl</kbd>
           <kbd className="kbd">K</kbd>
@@ -236,20 +236,24 @@ export function CommandPalette() {
           />
           <div
             ref={dialogRef}
-            className="panel relative w-full max-w-xl overflow-hidden border-[var(--border)] shadow-[var(--shadow-overlay)]"
+            className="panel relative w-full max-w-xl overflow-hidden overscroll-contain border-[var(--border)] shadow-[var(--shadow-overlay)]"
           >
-            <div className="flex items-center gap-2 border-b border-[var(--border-soft)] px-4">
+            <div className="flex items-center gap-2 border-b border-[var(--border-soft)] px-4 transition-[box-shadow] focus-within:shadow-[inset_0_-2px_0_var(--accent)]">
               <Search size={16} className="text-dim-fg" />
               <input
                 ref={inputRef}
                 type="search"
+                name="commandSearch"
+                aria-label="Search commands"
+                autoComplete="off"
+                spellCheck={false}
                 value={query}
                 onChange={(event) => {
                   setQuery(event.target.value);
                   setActiveIndex(0);
                 }}
                 onKeyDown={onKeyDown}
-                placeholder="Jump to a page, service, or action..."
+                placeholder="Jump to a page, service, or action…"
                 className="w-full border-0! bg-transparent! py-3 text-sm! text-[var(--text)]! shadow-none! outline-none placeholder:text-dim-fg"
               />
               <kbd className="kbd select-none">Esc</kbd>

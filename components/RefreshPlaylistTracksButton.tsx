@@ -37,11 +37,10 @@ export function RefreshPlaylistTracksButton({ playlistId }: { playlistId: string
     <div className="flex flex-col items-end gap-1.5">
       <button type="button" onClick={refresh} disabled={loading} className="btn btn-ghost">
         <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-        {loading ? "Updating..." : "Update"}
+        {loading ? "Updating…" : "Update"}
       </button>
-      {status ? <p className="max-w-80 text-right text-xs text-muted-fg">{status}</p> : null}
-      {error ? <p className="max-w-80 text-right text-xs text-danger-fg">{error}</p> : null}
+      {status ? <p role="status" aria-live="polite" className="max-w-80 text-right text-xs text-muted-fg">{status}</p> : null}
+      {error ? <p role="alert" className="max-w-80 text-right text-xs text-danger-fg">{error}</p> : null}
     </div>
   );
 }
-

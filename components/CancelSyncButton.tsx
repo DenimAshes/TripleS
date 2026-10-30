@@ -35,6 +35,8 @@ export function CancelSyncButton({ jobId, startedAt }: { jobId: string; startedA
       }
       setConfirming(false);
       router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not cancel this run.");
     } finally {
       setBusy(false);
     }
@@ -51,7 +53,7 @@ export function CancelSyncButton({ jobId, startedAt }: { jobId: string; startedA
           <span className="inline-flex items-center gap-1.5">
             <button type="button" onClick={cancel} disabled={busy} className="btn btn-danger">
               <X size={16} />
-              {busy ? "Cancelling..." : "Confirm"}
+              {busy ? "Cancelling…" : "Confirm"}
             </button>
             <button type="button" onClick={() => setConfirming(false)} disabled={busy} className="btn btn-ghost">
               Keep
@@ -65,7 +67,7 @@ export function CancelSyncButton({ jobId, startedAt }: { jobId: string; startedA
         )}
       </div>
       {confirming ? <p className="max-w-80 text-right text-xs text-muted-fg">Stops on the next engine checkpoint, usually within 30s.</p> : null}
-      {error ? <p className="max-w-80 text-right text-xs text-danger-fg">{error}</p> : null}
+      {error ? <p role="alert" className="max-w-80 text-right text-xs text-danger-fg">{error}</p> : null}
     </div>
   );
 }

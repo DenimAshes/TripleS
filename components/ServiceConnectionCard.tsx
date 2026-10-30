@@ -27,25 +27,27 @@ export function ServiceConnectionCard({
   return (
     <section
       id={id}
-      className={`panel ${meta.tint} ${meta.border} relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 md:scroll-mt-8 xl:min-h-[420px]`}
+      className={`panel ${meta.tint} ${meta.border} relative scroll-mt-24 overflow-hidden p-5 md:scroll-mt-8 sm:p-6`}
     >
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <ServiceIcon service={service} size="lg" />
-          <div className="min-w-0">
-            <h3 className="heading-card truncate">{meta.label}</h3>
-            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-dim-fg">
-              {icon}
-              {mode}
-            </p>
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8">
+        <header className="flex items-start justify-between gap-4 lg:block">
+          <div className="flex min-w-0 items-center gap-3">
+            <ServiceIcon service={service} size="lg" />
+            <div className="min-w-0">
+              <h3 className="heading-card truncate">{meta.label}</h3>
+              <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-dim-fg">
+                {icon}
+                {mode}
+              </p>
+            </div>
           </div>
-        </div>
-        <span className={`pill shrink-0 ${connected ? "pill-success" : "pill-warning"}`}>
-          {connected ? <CheckCircle2 size={13} /> : null}
-          {status}
-        </span>
-      </header>
-      <div className="mt-5 flex flex-1 flex-col">{children}</div>
+          <span className={`pill shrink-0 lg:mt-4 lg:inline-flex ${connected ? "pill-success" : "pill-warning"}`}>
+            {connected ? <CheckCircle2 size={13} /> : null}
+            {status}
+          </span>
+        </header>
+        <div className="flex min-w-0 flex-col border-t border-line-soft pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">{children}</div>
+      </div>
     </section>
   );
 }

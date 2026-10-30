@@ -8,6 +8,7 @@ import {
   Gauge,
   KeyRound,
   ListMusic,
+  LogOut,
   MoreHorizontal,
   PlugZap,
   Settings,
@@ -18,17 +19,17 @@ import { isActivePath } from "./AppSidebar";
 import { SoundCloudGlyph, YouTubeGlyph } from "./ServiceBrand";
 
 const PRIMARY = [
-  { href: "/dashboard", label: "Home", icon: Gauge },
-  { href: "/connections", label: "Connect", icon: PlugZap },
-  { href: "/playlists", label: "Lists", icon: ListMusic },
+  { href: "/dashboard", label: "Overview", icon: Gauge },
+  { href: "/playlists", label: "Playlists", icon: ListMusic },
   { href: "/manual-match", label: "Review", icon: Shuffle },
-  { href: "/settings", label: "Sync", icon: Settings },
+  { href: "/settings", label: "Groups", icon: Settings },
 ];
 
 // Five slots can't hold nine pages, so everything that didn't fit used to be
 // unreachable on a phone. It lives here instead of nowhere.
 const MORE = [
-  { href: "/history", label: "History", icon: Clock3 },
+  { href: "/connections", label: "Connections", icon: PlugZap },
+  { href: "/history", label: "Activity", icon: Clock3 },
   { href: "/youtube-browser", label: "YouTube Music tools", icon: YouTubeGlyph },
   { href: "/soundcloud-browser", label: "SoundCloud tools", icon: SoundCloudGlyph },
   { href: "/admin/sessions", label: "Admin sessions", icon: KeyRound },
@@ -63,10 +64,14 @@ export function BottomNav() {
             onClick={() => setOpen(false)}
             className="absolute inset-0 bg-[var(--scrim)]"
           />
-          <div className="absolute inset-x-0 bottom-16 mx-3 overflow-hidden rounded-[var(--radius)] border border-line-soft bg-[var(--surface)]">
+          <nav
+            id="mobile-more-menu"
+            aria-labelledby="mobile-more-title"
+            className="absolute inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] mx-3 overflow-hidden overscroll-contain rounded-[var(--radius)] border border-line-soft bg-[var(--surface)]"
+          >
             <div className="panel-header flex items-center justify-between">
-              <h2 className="heading-row">More</h2>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close menu" className="text-muted-fg">
+              <h2 id="mobile-more-title" className="heading-row">More</h2>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close menu" className="btn btn-ghost btn-icon text-muted-fg">
                 <X size={16} />
               </button>
             </div>
@@ -77,7 +82,7 @@ export function BottomNav() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className={`flex items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm ${
+                      className={`flex min-h-11 items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm ${
                         active ? "bg-surface-2 font-medium text-[var(--text)]" : "text-muted-fg"
                       }`}
                     >
@@ -90,11 +95,17 @@ export function BottomNav() {
                 );
               })}
             </ul>
-          </div>
+            <form action="/api/auth/logout" method="post" className="border-t border-line-soft p-2">
+              <button type="submit" className="flex min-h-11 w-full items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm text-muted-fg">
+                <LogOut size={16} className="text-dim-fg" />
+                Sign out
+              </button>
+            </form>
+          </nav>
         </div>
       ) : null}
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-line-soft bg-[var(--surface)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line-soft bg-[var(--sidebar)] pb-[env(safe-area-inset-bottom)] md:hidden">
         {PRIMARY.map((item) => {
           const active = isActivePath(pathname, item.href);
           return (
@@ -115,6 +126,7 @@ export function BottomNav() {
           type="button"
           onClick={() => setOpen(!open)}
           aria-expanded={open}
+          aria-controls="mobile-more-menu"
           className={`flex h-16 flex-col items-center justify-center gap-1 text-xs ${
             open || moreActive ? "text-accent" : "text-muted-fg"
           }`}

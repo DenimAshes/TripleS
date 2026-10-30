@@ -137,7 +137,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   return (
     <section
       id={cardId}
-      className={`panel ${meta.tint} ${meta.border} relative flex min-h-[360px] scroll-mt-24 flex-col overflow-hidden p-5 md:scroll-mt-8 xl:min-h-[420px] ${
+      className={`panel ${meta.tint} ${meta.border} relative scroll-mt-24 overflow-hidden p-5 md:scroll-mt-8 sm:p-6 ${
         dragOver ? "border-[var(--accent)] shadow-[0_0_0_3px_var(--accent-ring)]" : ""
       }`}
       onDragOver={(e) => {
@@ -152,158 +152,133 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
         if (file) upload(file);
       }}
     >
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <ServiceIcon service={info.service} size="lg" />
-          <div className="min-w-0">
-            <h3 className="heading-card truncate">{meta.label}</h3>
-            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-dim-fg">
-              <UploadCloud size={16} />
-              Session JSON
-            </p>
-          </div>
-        </div>
-        <span className={`pill ${badge.classes}`}>
-          {level === "fresh" ? <CheckCircle2 size={13} /> : null}
-          {badge.label}
-        </span>
-      </header>
-
-
-      <p className="mt-5 text-sm leading-6 text-muted-fg">
-        Upload the browser storage state from the logged-in account. Drag a JSON file here or paste the exported JSON.
-      </p>
-
-      <dl className="mt-5 grid gap-3 border-y border-[var(--border-soft)] py-4 text-sm sm:grid-cols-3 sm:gap-4">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-8">
         <div className="min-w-0">
-          <dt className="text-xs text-dim-fg">Updated</dt>
-          <dd className="mt-1 truncate text-[var(--text)]">{formatRelative(info.updatedAt, nowMs)}</dd>
-        </div>
-        <div className="min-w-0">
-          <dt className="text-xs text-dim-fg">Size</dt>
-          <dd className="mt-1 truncate text-[var(--text)] tabular-nums">{formatBytes(info.bytes)}</dd>
-        </div>
-        <div className="min-w-0">
-          <dt className="text-xs text-dim-fg">By</dt>
-          <dd className="mt-1 truncate text-[var(--text)]">{info.updatedBy ?? "-"}</dd>
-        </div>
-      </dl>
-
-      <label
-        className={`surface-lift group relative mt-5 flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-[var(--radius)] border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)] ${
-          dragOver ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]" : ""
-        }`}
-      >
-        <span className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-70" />
-        <input
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          disabled={busy}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) upload(file);
-            e.target.value = "";
-          }}
-        />
-        {notice ? (
-          <CheckCircle2 size={22} className="text-success-fg transition duration-200 group-hover:-translate-y-0.5" />
-        ) : (
-          <UploadCloud size={22} className="transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-110" />
-        )}
-        <span className="font-medium">{busy ? "Uploading..." : dragOver ? "Drop to upload" : "Drop JSON or click to choose"}</span>
-        <span className="inline-flex max-w-full items-center gap-1.5 truncate text-xs text-dim-fg">
-          <FileJson size={13} className="shrink-0" />
-          Playwright storageState or cookie export
-        </span>
-      </label>
-
-      <details className="mt-3 text-xs text-muted-fg">
-        <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-[var(--radius-sm)] px-1 py-1 transition duration-200 hover:translate-x-0.5 hover:text-[var(--text)]">
-          <Clipboard size={13} />
-          Paste JSON instead
-        </summary>
-        <textarea
-          value={pasted}
-          onChange={(e) => setPasted(e.target.value)}
-          onPaste={(e) => {
-            const text = e.clipboardData.getData("text");
-            if (text) {
-              e.preventDefault();
-              setPasted(text);
-            }
-          }}
-          placeholder='{ "cookies": [...], "origins": [...] }'
-          spellCheck={false}
-          rows={4}
-          disabled={busy}
-          className="mt-2 w-full font-mono text-xs"
-        />
-        <div className="mt-2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={submitPasted}
-            disabled={busy || pasted.trim().length === 0}
-            className="btn btn-primary text-xs"
-          >
-            {busy ? "Uploading..." : "Upload pasted JSON"}
-          </button>
-          {pasted ? (
-            <button
-              type="button"
-              onClick={() => setPasted("")}
-              disabled={busy}
-              className="text-xs text-muted-fg hover:text-[var(--text)] disabled:opacity-50"
-            >
-              Clear
-            </button>
-          ) : null}
-        </div>
-      </details>
-
-      {notice ? (
-        <p className="mt-3 inline-flex items-start gap-1.5 text-xs text-success-fg">
-          <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
-          <span>{notice}</span>
-        </p>
-      ) : null}
-
-      {error ? <p className="mt-3 text-xs text-danger-fg">{error}</p> : null}
-
-      <div className="mt-auto grid gap-2 pt-4">
-        {info.exists && browseHref ? (
-          <Link href={browseHref} className="btn btn-ghost surface-lift group w-full">
-            <ListMusic size={16} />
-            Browse {meta.shortLabel} playlists
-          </Link>
-        ) : null}
-
-        {info.exists ? (
-          deleteConfirm ? (
-            <div className="rounded-[var(--radius-sm)] border border-danger/20 bg-danger/10 p-2">
-              <div className="text-xs font-medium text-danger-fg">Delete saved {meta.shortLabel} session?</div>
-              <div className="mt-2 flex gap-2">
-                <button type="button" onClick={clear} disabled={busy} className="btn btn-danger text-xs">
-                  <Trash2 size={13} />
-                  {busy ? "Deleting..." : "Delete"}
-                </button>
-                <button type="button" onClick={() => setDeleteConfirm(false)} disabled={busy} className="btn btn-ghost text-xs">
-                  Keep
-                </button>
+          <header className="flex items-start justify-between gap-4 lg:block">
+            <div className="flex min-w-0 items-center gap-3">
+              <ServiceIcon service={info.service} size="lg" />
+              <div className="min-w-0">
+                <h3 className="heading-card truncate">{meta.label}</h3>
+                <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-dim-fg">
+                  <UploadCloud size={16} />
+                  Session JSON
+                </p>
               </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setDeleteConfirm(true)}
+            <span className={`pill shrink-0 lg:mt-4 ${badge.classes}`}>
+              {level === "fresh" ? <CheckCircle2 size={13} /> : null}
+              {badge.label}
+            </span>
+          </header>
+
+          <p className="mt-5 text-sm leading-6 text-muted-fg">
+            Upload the browser storage state from the logged-in account. Drag a JSON file here or paste the exported JSON.
+          </p>
+
+          <dl className="mt-5 grid grid-cols-3 gap-3 border-y border-[var(--border-soft)] py-4 text-sm lg:grid-cols-1">
+            <div className="min-w-0">
+              <dt className="text-xs text-dim-fg">Updated</dt>
+              <dd className="mt-1 truncate text-[var(--text)]">{formatRelative(info.updatedAt, nowMs)}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs text-dim-fg">Size</dt>
+              <dd className="mt-1 truncate text-[var(--text)] tabular-nums">{formatBytes(info.bytes)}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs text-dim-fg">By</dt>
+              <dd className="mt-1 truncate text-[var(--text)]">{info.updatedBy ?? "-"}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div className="flex min-w-0 flex-col border-t border-line-soft pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
+          <label
+            className={`surface-lift group relative flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-[var(--radius)] border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)] ${
+              dragOver ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]" : ""
+            }`}
+          >
+            <span className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-70" />
+            <input
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
               disabled={busy}
-              className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] py-1.5 text-xs text-muted-fg transition hover:bg-danger/10 hover:text-danger-fg disabled:opacity-50"
-            >
-              <Trash2 size={13} />
-              Delete saved session
-            </button>
-          )
-        ) : null}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) upload(file);
+                e.target.value = "";
+              }}
+            />
+            {notice ? (
+              <CheckCircle2 size={22} className="text-success-fg transition duration-200 group-hover:-translate-y-0.5" />
+            ) : (
+              <UploadCloud size={22} className="transition duration-300 group-hover:-translate-y-0.5 group-hover:scale-110" />
+            )}
+            <span className="font-medium">{busy ? "Uploading…" : dragOver ? "Drop to upload" : "Drop JSON or click to choose"}</span>
+            <span className="inline-flex max-w-full items-center gap-1.5 truncate text-xs text-dim-fg">
+              <FileJson size={13} className="shrink-0" />
+              Playwright storageState or cookie export
+            </span>
+          </label>
+
+          <details className="mt-3 text-xs text-muted-fg">
+            <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-[var(--radius-sm)] px-1 py-1 transition duration-200 hover:translate-x-0.5 hover:text-[var(--text)]">
+              <Clipboard size={13} />
+              Paste JSON instead
+            </summary>
+            <textarea
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+              name="sessionJson"
+              aria-label={`Pasted ${meta.label} session JSON`}
+              autoComplete="off"
+              placeholder='{ "cookies": […], "origins": […] }'
+              spellCheck={false}
+              rows={4}
+              disabled={busy}
+              className="mt-2 w-full font-mono text-xs"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <button type="button" onClick={submitPasted} disabled={busy || pasted.trim().length === 0} className="btn btn-primary text-xs">
+                {busy ? "Uploading…" : "Upload pasted JSON"}
+              </button>
+              {pasted ? <button type="button" onClick={() => setPasted("")} disabled={busy} className="text-xs text-muted-fg hover:text-[var(--text)] disabled:opacity-50">Clear</button> : null}
+            </div>
+          </details>
+
+          {notice ? (
+            <p role="status" aria-live="polite" className="mt-3 inline-flex items-start gap-1.5 text-xs text-success-fg">
+              <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
+              <span>{notice}</span>
+            </p>
+          ) : null}
+          {error ? <p role="alert" className="mt-3 text-xs text-danger-fg">{error}</p> : null}
+
+          <div className="mt-4 grid gap-2">
+            {info.exists && browseHref ? (
+              <Link href={browseHref} className="btn btn-ghost surface-lift group w-full">
+                <ListMusic size={16} />
+                Browse {meta.shortLabel} playlists
+              </Link>
+            ) : null}
+
+            {info.exists ? (
+              deleteConfirm ? (
+                <div className="rounded-[var(--radius-sm)] border border-danger/20 bg-danger/10 p-2">
+                  <div className="text-xs font-medium text-danger-fg">Delete saved {meta.shortLabel} session?</div>
+                  <div className="mt-2 flex gap-2">
+                    <button type="button" onClick={clear} disabled={busy} className="btn btn-danger text-xs"><Trash2 size={13} />{busy ? "Deleting…" : "Delete"}</button>
+                    <button type="button" onClick={() => setDeleteConfirm(false)} disabled={busy} className="btn btn-ghost text-xs">Keep</button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setDeleteConfirm(true)} disabled={busy} className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] py-1.5 text-xs text-muted-fg transition hover:bg-danger/10 hover:text-danger-fg disabled:opacity-50">
+                  <Trash2 size={13} /> Delete saved session
+                </button>
+              )
+            ) : null}
+          </div>
+        </div>
       </div>
     </section>
   );

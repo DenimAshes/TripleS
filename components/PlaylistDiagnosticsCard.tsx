@@ -1,9 +1,11 @@
 import { CheckCircle2, Database, Loader2, RefreshCw } from "lucide-react";
 import type { Playlist } from "@prisma/client";
 
+const DATE_TIME = new Intl.DateTimeFormat("en-GB", { dateStyle: "short", timeStyle: "short" });
+
 function formatRelative(date: Date | null | undefined): string {
   if (!date) return "never";
-  return date.toLocaleString();
+  return DATE_TIME.format(date);
 }
 
 export function PlaylistDiagnosticsCard({ playlist, activeStates }: { playlist: Playlist; activeStates: number }) {
@@ -19,7 +21,7 @@ export function PlaylistDiagnosticsCard({ playlist, activeStates }: { playlist: 
   if (!partial && expected > 0) {
     return (
       <div className="mb-6 flex flex-wrap items-center gap-2 text-xs text-muted-fg">
-        <span className="pill pill-success">
+        <span className="pill pill-success max-w-full whitespace-normal">
           <CheckCircle2 size={12} />
           Cache complete · {activeStates} tracks · scanned {formatRelative(playlist.lastFetchedAt)}
         </span>

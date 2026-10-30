@@ -34,6 +34,7 @@ export function Callout({
   action,
   icon,
   className,
+  role,
 }: {
   tone?: CalloutTone;
   title?: ReactNode;
@@ -42,10 +43,13 @@ export function Callout({
   /** Pass `false` for a text-only note. */
   icon?: ReactNode | false;
   className?: string;
+  role?: "status" | "alert";
 }) {
   const tokens = TONES[tone];
   return (
     <div
+      role={role}
+      aria-live={role === "status" ? "polite" : undefined}
       className={cn(
         "flex items-start gap-2.5 rounded-[var(--radius-sm)] border px-3 py-2.5 text-sm",
         tokens.box,
@@ -57,7 +61,7 @@ export function Callout({
         {title ? <div className="font-semibold text-[var(--text)]">{title}</div> : null}
         {children ? <div className={cn("min-w-0", title && "mt-1")}>{children}</div> : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {action ? <div className="w-full pl-6 pt-2 sm:w-auto sm:shrink-0 sm:pl-0 sm:pt-0">{action}</div> : null}
     </div>
   );
 }

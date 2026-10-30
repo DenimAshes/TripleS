@@ -32,6 +32,8 @@ export function SyncSourceToggleButton({
         return;
       }
       router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Could not update ${serviceLabel}`);
     } finally {
       setBusy(false);
     }
@@ -43,7 +45,7 @@ export function SyncSourceToggleButton({
         type="button"
         onClick={toggle}
         disabled={busy}
-        className={`inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-sm)] border px-2.5 text-xs font-semibold transition disabled:opacity-60 ${
+        className={`inline-flex min-h-11 items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-xs font-semibold transition disabled:opacity-60 ${
           enabled
             ? "border-success/35 bg-success/12 text-success-fg hover:bg-success/18"
             : "border-[var(--border-soft)] bg-[var(--surface)] text-dim-fg hover:text-[var(--text)]"
@@ -51,9 +53,9 @@ export function SyncSourceToggleButton({
         title={enabled ? `${serviceLabel} changes are monitored` : `${serviceLabel} changes are ignored`}
       >
         {busy ? <Loader2 size={13} className="animate-spin" /> : <Power size={13} />}
-        {enabled ? "Listening" : "Off"}
+        {enabled ? "Source on" : "Source off"}
       </button>
-      {error ? <span className="max-w-44 text-right text-xs font-medium text-danger-fg">{error}</span> : null}
+      {error ? <span role="alert" className="max-w-44 text-right text-xs font-medium text-danger-fg">{error}</span> : null}
     </div>
   );
 }

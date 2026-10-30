@@ -102,7 +102,10 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
   return (
     <form onSubmit={submit} className="section">
       <div className="section-head">
-        <h2 className="heading-section">{rule ? "Edit source route" : "New source route"}</h2>
+        <div>
+          <div className="eyebrow text-muted-fg">{rule ? "Selected source" : "New automation"}</div>
+          <h2 className="heading-section mt-1">{rule ? "Edit listening source" : "Create a listening source"}</h2>
+        </div>
       </div>
       <p className="max-w-2xl text-sm leading-6 text-muted-fg">
         Choose where changes are listened for, then choose which playlists should receive those changes.
@@ -113,6 +116,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
           <span className="field-label">Route name</span>
           <input
             name="name"
+            autoComplete="off"
             defaultValue={rule?.name || "Music Bridge"}
             placeholder="e.g. Daily Mix bridge"
             className="w-full"
@@ -121,29 +125,21 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
 
         <label className="block space-y-2">
           <span className="field-label">Listen for changes in</span>
-          <select name="sourcePlaylistId" value={sourceId} onChange={(event) => changeSource(event.target.value)} className="w-full">
-            {sourceGroups.map(([service, rows]) => (
-              <optgroup key={service} label={serviceMeta(service).label}>
-                {rows.map((playlist) => (
-                  <option key={playlist.id} value={playlist.servicePlaylistId}>
-                    {playlist.name}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          <span className="flex items-center gap-3">
+            {selectedSource ? <ServiceIcon service={selectedSource.service} size="sm" className="h-9 w-9" /> : null}
+            <select name="sourcePlaylistId" value={sourceId} onChange={(event) => changeSource(event.target.value)} className="min-w-0 flex-1">
+              {sourceGroups.map(([service, rows]) => (
+                <optgroup key={service} label={serviceMeta(service).label}>
+                  {rows.map((playlist) => (
+                    <option key={playlist.id} value={playlist.servicePlaylistId}>
+                      {playlist.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </span>
         </label>
-        {selectedSource ? (
-          <div className={`flex items-center gap-3 rounded-[var(--radius)] border ${serviceMeta(selectedSource.service).border} bg-[var(--surface-2)]/35 px-3 py-2.5`}>
-            <ServiceIcon service={selectedSource.service} size="sm" className="h-7 w-7 rounded-[var(--radius-sm)]" />
-            <div className="min-w-0">
-              <div className="field-label">Current source</div>
-              <div className="truncate text-sm font-semibold text-[var(--text)]">
-                {serviceMeta(selectedSource.service).label} / {selectedSource.name}
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className="mt-8">
@@ -153,29 +149,26 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
             <div className="pill">{selectedDestinationCount}/{writableDestinations.length} selected</div>
           ) : null}
         </div>
-        <div className="space-y-6">
-          {destinationGroups.map(([service, rows]) => {
+        <div className="space-y-2">
+          {destinationGroups.map(([service, rows], index) => {
             const meta = serviceMeta(service);
             const selected = rows.filter((playlist) => selectedDestinationIds.has(playlist.servicePlaylistId)).length;
             return (
-              // Thirty-five framed checkboxes inside three framed sections was
-              // the deepest nesting left in the app. The group keeps its brand
-              // as a rule under its own header, and a destination is a plain
-              // row: the checkbox is already the affordance, and the brand tint
-              // is enough to show it is picked.
-              <section key={service} className={`${meta.tint} min-w-0`}>
-                <div className="service-border mb-1 flex items-center justify-between gap-3 border-b pb-2">
+              <details key={service} open={selected > 0 || (!rule && index === 0)} className={`${meta.tint} group rounded-[var(--radius-sm)] border border-line-soft bg-surface-2/35`}>
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 marker:content-none">
                   <div className="flex min-w-0 items-center gap-2">
                     <ServiceIcon service={service} size="sm" className="h-6 w-6 rounded-[var(--radius-sm)]" />
                     <div className="min-w-0">
                       <div className="heading-row">{meta.label}</div>
                       <div className="text-xs text-muted-fg">
-                        {selected}/{rows.length} destination{rows.length === 1 ? "" : "s"}
+                        {selected ? `${selected} selected` : `${rows.length} available`}
                       </div>
                     </div>
                   </div>
-                </div>
-                <div className="grid sm:grid-cols-2">
+                  <span className="text-xs font-semibold text-[var(--accent)] group-open:hidden">Choose</span>
+                  <span className="hidden text-xs text-muted-fg group-open:inline">Close</span>
+                </summary>
+                <div className="grid border-t border-line-soft p-2 sm:grid-cols-2">
                   {rows.map((playlist) => {
                     const checked = selectedDestinationIds.has(playlist.servicePlaylistId);
                     return (
@@ -199,7 +192,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
                     );
                   })}
                 </div>
-              </section>
+              </details>
             );
           })}
           {!writableDestinations.length ? (
@@ -210,42 +203,54 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
         </div>
       </div>
 
-      <div className="mt-8 grid gap-6 sm:grid-cols-3">
-        <label className="block space-y-2">
-          <span className="field-label">How strict</span>
-          <select name="mode" defaultValue={rule?.mode || "ADD_ONLY"} className="w-full">
-            <option value="ADD_ONLY">Add new songs only</option>
-            <option value="ADD_AND_REMOVE">Add and remove songs</option>
-          </select>
-        </label>
-        <label className="block space-y-2">
-          <span className="field-label">Frequency</span>
-          <select name="intervalMinutes" defaultValue={rule?.intervalMinutes || 60} className="w-full">
-            <option value="5">5 minutes</option>
-            <option value="15">15 minutes</option>
-            <option value="30">30 minutes</option>
-            <option value="60">60 minutes</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-3 self-end pb-1 text-xs font-medium text-muted-fg">
-          <span className="relative inline-block h-5 w-9 cursor-pointer">
-            <input name="isEnabled" type="checkbox" defaultChecked={rule?.isEnabled ?? true} className="peer sr-only" />
-            <span className="absolute inset-0 rounded-full bg-[var(--surface-3)] transition-colors peer-checked:bg-accent" />
-            <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-[var(--text-dim)] transition-transform peer-checked:translate-x-4 peer-checked:bg-[var(--text)]" />
+      <details className="group mt-8 rounded-[var(--radius-sm)] border border-line-soft bg-surface-2/35">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-3 py-3 marker:content-none">
+          <span>
+            <span className="heading-row block">Schedule and behavior</span>
+            <span className="mt-0.5 block text-xs text-muted-fg">{rule?.mode === "ADD_AND_REMOVE" ? "Add and remove" : "Add only"} · every {rule?.intervalMinutes || 60} minutes</span>
           </span>
-          <span className="">Listen from this source</span>
-        </label>
-      </div>
+          <span className="text-xs font-semibold text-[var(--accent)] group-open:hidden">Edit</span>
+          <span className="hidden text-xs text-muted-fg group-open:inline">Close</span>
+        </summary>
+        <div className="grid gap-5 border-t border-line-soft p-3 sm:grid-cols-2">
+          <label className="block space-y-2">
+            <span className="field-label">When a song disappears</span>
+            <select name="mode" defaultValue={rule?.mode || "ADD_ONLY"} className="w-full">
+              <option value="ADD_ONLY">Leave destination songs alone</option>
+              <option value="ADD_AND_REMOVE">Remove songs TripleS added</option>
+            </select>
+          </label>
+          <label className="block space-y-2">
+            <span className="field-label">Check for changes</span>
+            <select name="intervalMinutes" defaultValue={rule?.intervalMinutes || 60} className="w-full">
+              <option value="5">Every 5 minutes</option>
+              <option value="15">Every 15 minutes</option>
+              <option value="30">Every 30 minutes</option>
+              <option value="60">Every hour</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-3 text-sm font-medium text-muted-fg sm:col-span-2">
+            <span className="relative inline-block h-5 w-9 cursor-pointer">
+              <input name="isEnabled" type="checkbox" defaultChecked={rule?.isEnabled ?? true} className="peer sr-only" />
+              <span className="absolute inset-0 rounded-full bg-[var(--surface-3)] transition-colors peer-checked:bg-accent" />
+              <span className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-[var(--text-dim)] transition-transform peer-checked:translate-x-4 peer-checked:bg-[var(--text)]" />
+            </span>
+            Keep listening to this source
+          </label>
+        </div>
+      </details>
 
       {error ? (
-        <div className="mt-6 rounded-[var(--radius-sm)] border border-danger/25 bg-danger/10 px-3 py-2 text-sm font-medium text-danger-fg">
+        <div role="alert" className="mt-6 rounded-[var(--radius-sm)] border border-danger/25 bg-danger/10 px-3 py-2 text-sm font-medium text-danger-fg">
           {error}
         </div>
       ) : null}
 
-      <button type="submit" disabled={saving} className="btn btn-primary mt-8 w-full">
-        {saving ? "Saving..." : rule ? "Save source route" : "Create source route"}
-      </button>
+      <div className="mt-8 flex justify-end border-t border-line-soft pt-5">
+        <button type="submit" disabled={saving} className="btn btn-primary w-full sm:w-auto sm:min-w-48">
+          {saving ? "Saving…" : rule ? "Save changes" : "Create source"}
+        </button>
+      </div>
     </form>
   );
 }

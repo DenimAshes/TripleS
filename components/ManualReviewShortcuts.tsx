@@ -68,19 +68,19 @@ export function ManualReviewShortcuts({
         const serviceTrackId = candidateTrackIds[numericPick];
         if (!serviceTrackId) return;
         event.preventDefault();
-        void post(`/api/manual-match/${reviewId}/use`, "Match saved. Loading the next song...", { serviceTrackId });
+        void post(`/api/manual-match/${reviewId}/use`, "Match saved. Loading the next song…", { serviceTrackId });
         return;
       }
 
       if (key === "enter" && candidateTrackIds[0]) {
         event.preventDefault();
-        void post(`/api/manual-match/${reviewId}/use`, "Best match saved. Loading the next song...", { serviceTrackId: candidateTrackIds[0] });
+        void post(`/api/manual-match/${reviewId}/use`, "Best match saved. Loading the next song…", { serviceTrackId: candidateTrackIds[0] });
       } else if (key === "s") {
         event.preventDefault();
-        void post(`/api/manual-match/${reviewId}/reject`, "Song skipped. Loading the next song...");
+        void post(`/api/manual-match/${reviewId}/reject`, "Song skipped. Loading the next song…");
       } else if (key === "x") {
         event.preventDefault();
-        void post(`/api/manual-match/${reviewId}/exclude`, "Song excluded from this destination. Loading the next song...");
+        void post(`/api/manual-match/${reviewId}/exclude`, "Song excluded from this destination. Loading the next song…");
       }
     }
 
@@ -115,7 +115,7 @@ export function ManualReviewShortcuts({
 
   return (
     <div
-      className={`fixed bottom-4 right-4 z-50 max-w-sm rounded-[var(--radius)] border px-4 py-3 text-sm font-semibold shadow-[var(--shadow-overlay)] ${
+      className={`fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 z-50 max-w-sm rounded-[var(--radius)] border px-4 py-3 text-sm font-semibold shadow-[var(--shadow-overlay)] md:bottom-4 md:left-auto ${
         notice?.tone === "error"
           ? "border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[var(--danger-soft)] text-danger-fg"
           : "border-[color-mix(in_srgb,var(--success)_35%,var(--border))] bg-[var(--success-soft)] text-success-fg"
@@ -123,7 +123,7 @@ export function ManualReviewShortcuts({
       role="status"
       aria-live="polite"
     >
-      <span>{busy ? "Saving..." : notice?.message}</span>
+      <span>{busy ? "Saving…" : notice?.message}</span>
       {!busy && notice?.undoId ? (
         <button
           type="button"

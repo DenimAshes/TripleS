@@ -38,11 +38,11 @@ export function RunSyncButton({ ruleId, children }: { ruleId: string; children: 
 
   return (
     <div className="flex flex-col items-end gap-1.5">
-      <button onClick={run} disabled={running} className="btn btn-primary">
-        {running ? "Running..." : children}
+      <button type="button" onClick={run} disabled={running} className="btn btn-primary">
+        {running ? "Running…" : children}
       </button>
-      {status ? <p className="max-w-80 text-right text-xs text-muted-fg">{status}</p> : null}
-      {error ? <p className="max-w-80 text-right text-xs text-danger-fg">{error}</p> : null}
+      {status ? <p role="status" aria-live="polite" className="max-w-80 text-right text-xs text-muted-fg">{status}</p> : null}
+      {error ? <p role="alert" className="max-w-80 text-right text-xs text-danger-fg">{error}</p> : null}
     </div>
   );
 }

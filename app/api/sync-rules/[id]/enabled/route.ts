@@ -36,17 +36,31 @@ async function enabledSiblingSourceCount(rule: {
   });
   if (!groupMembers.length) return null;
 
-  return prisma.syncRule.count({
+  const enabledRules = await prisma.syncRule.findMany({
     where: {
       userId: rule.userId,
-      direction: "TWO_WAY",
       isEnabled: true,
       OR: groupMembers.map((item) => ({
         sourceService: item.playlist.service,
         sourcePlaylistId: item.playlist.servicePlaylistId,
       })),
     },
+    select: {
+      direction: true,
+      destinations: { where: { isEnabled: true }, select: { service: true, playlistId: true } },
+    },
   });
+  const memberKeys = new Set(
+    groupMembers.map((item) => `${item.playlist.service.toUpperCase()}:${item.playlist.servicePlaylistId}`),
+  );
+  return enabledRules.filter(
+    (enabledRule) =>
+      enabledRule.direction === "TWO_WAY" ||
+      (enabledRule.destinations.length > 0 &&
+        enabledRule.destinations.every((destination) =>
+          memberKeys.has(`${destination.service.toUpperCase()}:${destination.playlistId}`),
+        )),
+  ).length;
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -61,7 +75,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const existing = await prisma.syncRule.findFirst({ where: { id, userId: session.userId } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (!enabled && existing.direction === "TWO_WAY") {
+  if (!enabled) {
     const siblingEnabledCount = await enabledSiblingSourceCount(existing);
     if (siblingEnabledCount !== null && siblingEnabledCount <= 1) {
       return NextResponse.json({ error: "Keep at least one source platform enabled." }, { status: 409 });

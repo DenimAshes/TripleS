@@ -62,7 +62,7 @@ export default async function AdminSessionsPage() {
         </Link>
       }
     >
-      <section className="grid items-stretch gap-4 xl:grid-cols-3">
+      <section className="grid gap-4">
         <ServiceConnectionCard
           service="SPOTIFY"
           status={spotifyConnected ? "Connected" : hasSpotifyCredentials() ? "Ready" : "Setup needed"}

@@ -49,12 +49,12 @@ export function RunDueSyncQueueButton({ disabled }: { disabled?: boolean }) {
 
   return (
     <div className="flex flex-col items-start gap-1.5 sm:items-end">
-      <button onClick={runDueQueue} disabled={running || disabled} className="btn btn-primary inline-flex items-center gap-2">
+      <button type="button" onClick={runDueQueue} disabled={running || disabled} className="btn btn-primary inline-flex items-center gap-2">
         {running ? <RotateCw size={16} className="animate-spin" /> : <Play size={16} />}
-        {running ? "Running queue..." : "Run due sync"}
+        {running ? "Running queue…" : "Run due sync"}
       </button>
-      {message ? <p className="max-w-72 text-left text-xs text-muted-fg sm:text-right">{message}</p> : null}
-      {error ? <p className="max-w-72 text-left text-xs text-danger-fg sm:text-right">{error}</p> : null}
+      {message ? <p role="status" aria-live="polite" className="max-w-72 text-left text-xs text-muted-fg sm:text-right">{message}</p> : null}
+      {error ? <p role="alert" className="max-w-72 text-left text-xs text-danger-fg sm:text-right">{error}</p> : null}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2, Zap } from "lucide-react";
+import { ChevronDown, SlidersHorizontal, Trash2, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -237,7 +237,11 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
         </div>
       ) : null}
       {outcome ? (
-        <div className={`basis-full text-xs ${outcome.startsWith(config.successVerb) ? "text-success" : "text-danger-fg"}`}>
+        <div
+          role={outcome.startsWith(config.successVerb) ? "status" : "alert"}
+          aria-live={outcome.startsWith(config.successVerb) ? "polite" : undefined}
+          className={`basis-full text-xs ${outcome.startsWith(config.successVerb) ? "text-success" : "text-danger-fg"}`}
+        >
           {outcome}
         </div>
       ) : null}
@@ -252,13 +256,25 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
 export function BulkAcceptControls({ totalPending }: { totalPending: number }) {
   if (totalPending === 0) return null;
   return (
-    <div className="rows mb-6 border-y border-[var(--border-soft)]">
-      <div className="py-4">
-        <BulkSection config={CONFIGS.accept} totalPending={totalPending} />
+    <details className="group mb-6 border-y border-[var(--border-soft)]">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-3 marker:content-none">
+        <span className="flex min-w-0 items-center gap-2.5">
+          <SlidersHorizontal size={15} className="shrink-0 text-accent" />
+          <span>
+            <span className="heading-row block">Bulk tools</span>
+            <span className="block text-xs text-muted-fg">Preview before approving likely matches or skipping weak ones.</span>
+          </span>
+        </span>
+        <ChevronDown size={16} className="shrink-0 text-muted-fg transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="rows border-t border-[var(--border-soft)]">
+        <div className="py-4">
+          <BulkSection config={CONFIGS.accept} totalPending={totalPending} />
+        </div>
+        <div className="py-4">
+          <BulkSection config={CONFIGS.reject} totalPending={totalPending} />
+        </div>
       </div>
-      <div className="py-4">
-        <BulkSection config={CONFIGS.reject} totalPending={totalPending} />
-      </div>
-    </div>
+    </details>
   );
 }

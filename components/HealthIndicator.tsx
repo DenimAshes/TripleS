@@ -6,11 +6,11 @@ type Health = "ok" | "warn" | "fail" | "unknown";
 
 // Tiny pulse-dot in the header that polls /api/health every ~60s. Green when
 // everything is fine, amber on a soft warn (e.g. stale-running sync job or
-// missing CloakBrowser binary), red on hard fail (DB unreachable). No copy
-// by default; hover/tap for the last seen state.
+// missing CloakBrowser binary), red on hard fail (DB unreachable). The compact
+// phone view keeps only the dot; assistive tech still receives the full state.
 export function HealthIndicator() {
   const [health, setHealth] = useState<Health>("unknown");
-  const [detail, setDetail] = useState<string>("Checking...");
+  const [detail, setDetail] = useState<string>("Checking…");
 
   useEffect(() => {
     let cancelled = false;
@@ -65,18 +65,21 @@ export function HealthIndicator() {
         ? "Attention"
         : health === "fail"
           ? "System issue"
-          : "Checking...";
+          : "Checking…";
 
   return (
     <div
       className="eyebrow flex items-center gap-2 text-muted-fg"
-      title={`${label} - ${detail}`}
+      role="status"
+      aria-live="polite"
+      title={`${label}: ${detail}`}
     >
-      <span className="relative inline-flex h-2 w-2">
-        <span className={`absolute inset-0 rounded-full ${color} opacity-60 animate-ping`} />
+      <span aria-hidden="true" className="relative inline-flex h-2 w-2">
+        <span className={`absolute -inset-1 rounded-full ${color} opacity-20`} />
         <span className={`relative inline-flex h-2 w-2 rounded-full ${color}`} />
       </span>
-      <span className="hidden sm:inline">{label}</span>
+      <span className="sr-only">{label}. {detail}</span>
+      <span aria-hidden="true" className="hidden sm:inline">{label}</span>
     </div>
   );
 }

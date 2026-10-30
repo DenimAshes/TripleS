@@ -1,6 +1,6 @@
 import type { SyncDestination, SyncRule } from "@prisma/client";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, Pencil, Play } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Pencil, Play } from "lucide-react";
 import { Callout } from "./Callout";
 import { CancelSyncButton } from "./CancelSyncButton";
 import { RunSyncButton } from "./RunSyncButton";
@@ -80,6 +80,10 @@ export function SyncRuleCard({
   const activeDestinations = rule.destinations.filter((destination) => destination.isEnabled);
   const partial = latestJob?.status === "PARTIAL_SUCCESS";
   const failed = latestJob?.status === "FAILED";
+  const progressExpected = progress ? progress.sourceTotal * progress.destinations.length : 0;
+  const progressSynced = progress?.destinations.reduce((sum, destination) => sum + destination.synced, 0) ?? 0;
+  const progressPercent = progressExpected ? Math.min(100, Math.round((progressSynced / progressExpected) * 100)) : 0;
+  const pendingReview = progress?.destinations.reduce((max, destination) => Math.max(max, destination.pendingReview), 0) ?? 0;
 
   // One badge, not seven pills of equal weight: this is the rule's state, and
   // everything else on the card is detail underneath it.
@@ -95,18 +99,15 @@ export function SyncRuleCard({
 
   return (
     <div className="py-4 sm:py-5">
-      {/* No frame and no brand stripe down the left edge: this is a row in a
-          divided list now, and the stripe repeated what the service icon
-          immediately to its right already says. */}
-      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-2.5">
           <ServiceIcon service={rule.sourceService} size="sm" />
           <div className="min-w-0">
-            <h3 className="heading-panel truncate" title={rule.name}>
-              {rule.name}
-            </h3>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-fg">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h3 className="heading-panel truncate" title={rule.name}>{rule.name}</h3>
               <span className={`pill ${state.className}`}>{state.label}</span>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-fg">
               <span>{modeLabel(rule.mode)}</span>
               {rule.intervalMinutes ? <span>· every {rule.intervalMinutes}m</span> : null}
               {lastRunRel ? <span>· ran {lastRunRel}</span> : null}
@@ -116,7 +117,7 @@ export function SyncRuleCard({
             </div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 self-start">
           <Link href={`/settings?rule=${rule.id}`} className="btn btn-ghost">
             <Pencil size={15} /> Edit
           </Link>
@@ -130,77 +131,80 @@ export function SyncRuleCard({
         </div>
       </div>
 
-      {/* Route, as one sentence rather than two labelled boxes whose captions
-          collided with the chips on narrow screens. */}
-      <div className="mt-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-        <span className="text-muted-fg">{sourceMeta.label}</span>
-        <ArrowRight size={14} className="text-dim-fg" />
-        {activeDestinations.length ? (
-          activeDestinations.map((item) => (
-            <span key={`${item.service}-${item.playlistId}`} className="text-[var(--text)]">
-              {serviceMeta(item.service).label}
-            </span>
-          ))
-        ) : (
-          <span className="text-danger-fg">No destinations</span>
-        )}
+      <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,0.7fr)] sm:items-end">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <span className="text-muted-fg">{sourceMeta.label}</span>
+          <ArrowRight size={14} className="text-dim-fg" />
+          {activeDestinations.length ? (
+            activeDestinations.map((item) => (
+              <span key={`${item.service}-${item.playlistId}`} className="text-[var(--text)]">
+                {serviceMeta(item.service).label}
+              </span>
+            ))
+          ) : (
+            <span className="text-danger-fg">No destinations</span>
+          )}
+        </div>
+        {progressExpected ? (
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-3 text-xs text-muted-fg">
+              <span>{progressPercent}% copied</span>
+              <span className="tabular-nums">{progressSynced}/{progressExpected}{pendingReview ? ` · ${pendingReview} review` : ""}</span>
+            </div>
+            <div className="h-1 overflow-hidden rounded-full bg-surface-3">
+              <div className={`h-full rounded-full ${progressPercent >= 100 ? "bg-success" : "bg-accent"}`} style={{ width: `${progressPercent}%` }} />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {failed || partial ? (
-        latestJob?.errorMessage ? (
-          <Callout tone={failed ? "danger" : "warning"} className="mt-3">
-            <span className="line-clamp-2 break-words" title={latestJob.errorMessage}>
-              {latestJob.errorMessage}
-            </span>
-          </Callout>
-        ) : (
-          <Callout tone="warning" className="mt-3" icon={<AlertTriangle size={16} className="mt-0.5 shrink-0" />}>
-            Last run finished as {latestJob?.status.toLowerCase().replaceAll("_", " ")}.
-          </Callout>
-        )
-      ) : null}
-
-      {progress && progress.sourceTotal > 0 ? (
-        <div className="mt-4 space-y-3">
-          {progress.destinations.map((dest) => {
-            const pct = Math.min(100, Math.round((dest.synced / progress.sourceTotal) * 100));
-            const complete = pct >= 100;
-            const destMeta = serviceMeta(dest.service);
-            return (
-              <div key={`${dest.service}::${dest.playlistId}`}>
-                <div className="mb-1.5 flex min-w-0 items-baseline justify-between gap-3 text-xs">
-                  <span className="flex min-w-0 items-baseline gap-1.5">
-                    <span className="shrink-0 text-muted-fg">{destMeta.label}</span>
-                    {dest.playlistName ? (
-                      <span className="truncate text-dim-fg" title={dest.playlistName}>
-                        {dest.playlistName}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="shrink-0 whitespace-nowrap text-muted-fg">
-                    <span className="tabular-nums text-[var(--text)]">{dest.synced}</span> of{" "}
-                    <span className="tabular-nums">{progress.sourceTotal}</span>
-                    {dest.pendingReview > 0 ? (
-                      <span className="text-warning-fg"> · {dest.pendingReview} to review</span>
-                    ) : null}
-                    {complete ? (
-                      <CheckCircle2 size={13} className="ml-1.5 inline align-[-2px] text-success" />
-                    ) : null}
-                  </span>
-                </div>
-                <div className="h-1 overflow-hidden rounded-full bg-surface-3">
-                  <div
-                    className={`dist-bar-fill h-full ${complete ? "bg-success" : destMeta.bg}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+        <div className={`mt-3 flex min-w-0 items-center gap-2 text-xs ${failed ? "text-danger-fg" : "text-warning-fg"}`}>
+          <AlertTriangle size={14} className="shrink-0" />
+          <span className="truncate" title={latestJob?.errorMessage || undefined}>
+            {latestJob?.errorMessage || `Last run finished as ${latestJob?.status.toLowerCase().replaceAll("_", " ")}.`}
+          </span>
         </div>
       ) : null}
 
-      <SyncRuleHistory ruleId={rule.id} />
+      <details className="group mt-3 border-t border-line-soft pt-2">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 py-1 text-xs font-medium text-muted-fg marker:content-none hover:text-[var(--text)]">
+          Details and run history
+          <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="pt-2">
+          {latestJob?.errorMessage && (failed || partial) ? (
+            <Callout tone={failed ? "danger" : "warning"} className="mb-3">
+              <span className="break-words">{latestJob.errorMessage}</span>
+            </Callout>
+          ) : null}
+          {progress && progress.sourceTotal > 0 ? (
+            <div className="space-y-3">
+              {progress.destinations.map((dest) => {
+                const pct = Math.min(100, Math.round((dest.synced / progress.sourceTotal) * 100));
+                const complete = pct >= 100;
+                const destMeta = serviceMeta(dest.service);
+                return (
+                  <div key={`${dest.service}::${dest.playlistId}`}>
+                    <div className="mb-1.5 flex min-w-0 items-baseline justify-between gap-3 text-xs">
+                      <span className="min-w-0 truncate text-muted-fg">{destMeta.label}{dest.playlistName ? ` · ${dest.playlistName}` : ""}</span>
+                      <span className="shrink-0 whitespace-nowrap text-muted-fg">
+                        <span className="tabular-nums text-[var(--text)]">{dest.synced}</span> of {progress.sourceTotal}
+                        {dest.pendingReview > 0 ? <span className="text-warning-fg"> · {dest.pendingReview} review</span> : null}
+                        {complete ? <CheckCircle2 size={13} className="ml-1.5 inline align-[-2px] text-success" /> : null}
+                      </span>
+                    </div>
+                    <div className="h-1 overflow-hidden rounded-full bg-surface-3">
+                      <div className={`h-full rounded-full ${complete ? "bg-success" : destMeta.bg}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+          <SyncRuleHistory ruleId={rule.id} />
+        </div>
+      </details>
     </div>
   );
 }

@@ -56,7 +56,7 @@ function Artwork({ playlist }: { playlist: SyncPlaylistOption }) {
   if (playlist.imageUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={playlist.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]" />
+      <img src={playlist.imageUrl} alt="" width={40} height={40} loading="lazy" className="h-10 w-10 shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]" />
     );
   }
   return (
@@ -385,7 +385,7 @@ export function AddPlaylistSyncButton({
                 </div>
               ) : null}
               {status ? (
-                <div className="mt-4 panel-inset px-3 py-2 text-sm text-muted-fg">
+                <div role="status" aria-live="polite" className="mt-4 panel-inset px-3 py-2 text-sm text-muted-fg">
                   <span className="pill pill-accent mr-2">
                     <Loader2 size={12} className="animate-spin" />
                     running
@@ -393,7 +393,7 @@ export function AddPlaylistSyncButton({
                   {humanStatus(status)}
                 </div>
               ) : null}
-              {error ? <Callout tone="danger" className="mt-4">{error}</Callout> : null}
+              {error ? <Callout tone="danger" role="alert" className="mt-4">{error}</Callout> : null}
               {pendingReviewCount ? (
                 <Callout tone="warning" className="mt-4" title={`${pendingReviewCount} songs need review`}>
                   <p className="text-sm">Pick the right versions once, then sync can reuse those choices.</p>
@@ -456,7 +456,7 @@ export function AddPlaylistSyncButton({
                 </button>
                 <button type="button" onClick={save} disabled={saving || !canSave || pendingReviewCount !== null} className="btn btn-primary">
                   {saving ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
-                  {saving ? "Syncing..." : `Start sync${enabledServices.length ? ` (${enabledServices.length})` : ""}`}
+                  {saving ? "Syncing…" : `Start sync${enabledServices.length ? ` (${enabledServices.length})` : ""}`}
                 </button>
               </div>
             </div>

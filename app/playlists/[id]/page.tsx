@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Clock3, Link2, Lock, ListMusic, Sparkles } from "lucide-react";
+import { Clock3, Link2, Lock, ListMusic, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddPlaylistSyncButton, type SyncPlaylistOption } from "@/components/AddPlaylistSyncButton";
 import { PlaylistDiagnosticsCard } from "@/components/PlaylistDiagnosticsCard";
@@ -131,7 +131,18 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
   const lastFetchedLabel = lastFetchedIso ? relativeFromNow(lastFetchedIso) : "never";
 
   return (
-    <AppShell title={playlist.name}>
+    <AppShell
+      title={playlist.name}
+      description={playlist.description || `${meta.label} playlist with ${playlist.trackCount} songs.`}
+      backHref="/playlists"
+      backLabel="All playlists"
+      actions={
+        <>
+          <AddPlaylistSyncButton sourcePlaylistId={playlist.id} sourceService={playlist.service} playlists={syncOptions} />
+          <RefreshPlaylistTracksButton playlistId={playlist.id} />
+        </>
+      }
+    >
       <PlaylistTracksAutoRefresh
         playlistId={playlist.id}
         hasTracks={states.length > 0}
@@ -140,24 +151,22 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
         lastFetchedAt={lastFetchedIso}
       />
 
-      <section className={`${meta.tint} relative mb-7 border-b border-[var(--border-soft)] pb-6`}>
-        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
+      <section className={`${meta.tint} workbench relative mb-7 overflow-hidden`}>
+        <div className="relative flex min-w-0 items-center gap-4 p-4 sm:p-5">
             {playlist.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={playlist.imageUrl}
                 alt=""
+                width={80}
+                height={80}
                 className="h-20 w-20 shrink-0 rounded-[var(--radius)] object-cover ring-1 ring-[var(--border-soft)]"
               />
             ) : (
               <ServiceIcon service={playlist.service} size="lg" className="h-20 w-20 rounded-[var(--radius)]" />
             )}
             <div className="min-w-0">
-              <Link href="/playlists" className="inline-flex items-center gap-1 text-sm text-muted-fg hover:text-[var(--text)]">
-                <ArrowLeft size={14} /> All playlists
-              </Link>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <ServicePill service={playlist.service} />
                 <span className="pill">
                   <ListMusic size={12} />
@@ -171,21 +180,14 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
                   fetched {lastFetchedLabel}
                 </span>
               </div>
-              {/* No playlist name here. AppShell already prints it as this page's
-                  h1 a few pixels above, so the hero was showing the same string
-                  twice — the one page still doing what the shared header was
-                  introduced to stop. */}
-              {playlist.description ? <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-fg">{playlist.description}</p> : null}
+              <p className="mt-3 text-xs text-muted-fg">
+                {group ? `Linked in ${group.name}` : "Not linked to a sync group yet"}
+              </p>
             </div>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <AddPlaylistSyncButton sourcePlaylistId={playlist.id} sourceService={playlist.service} playlists={syncOptions} />
-            <RefreshPlaylistTracksButton playlistId={playlist.id} />
-          </div>
         </div>
 
         {group ? (
-          <div className="relative mt-6 grid gap-4 border-t border-[var(--border-soft)] pt-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center">
+          <div className="relative grid gap-4 border-t border-[var(--border-soft)] px-4 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:px-5">
             <div className="min-w-0">
               <div className="eyebrow flex items-center gap-1.5">
                 <Sparkles size={12} />

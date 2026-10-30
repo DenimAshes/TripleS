@@ -149,6 +149,7 @@ async function upsertGroupSyncRules(
       },
       include: { destinations: true },
     });
+    const ruleEnabled = existingRule?.isEnabled ?? isEnabled;
     const data = {
       name: groupRuleName(groupName, source),
       sourceService: source.service,
@@ -156,10 +157,10 @@ async function upsertGroupSyncRules(
       mode,
       direction: "TWO_WAY",
       intervalMinutes,
-      isEnabled,
-      nextRunAt: isEnabled ? null : existingRule?.nextRunAt ?? null,
-      queuedReason: isEnabled ? "playlist_group_connected" : existingRule?.queuedReason ?? null,
-      queuedAt: isEnabled ? new Date() : existingRule?.queuedAt ?? null,
+      isEnabled: ruleEnabled,
+      nextRunAt: ruleEnabled ? null : existingRule?.nextRunAt ?? null,
+      queuedReason: ruleEnabled ? "playlist_group_connected" : existingRule?.queuedReason ?? null,
+      queuedAt: ruleEnabled ? new Date() : existingRule?.queuedAt ?? null,
       destinations: {
         create: destinations.map((playlist) => ({
           service: playlist.service,
@@ -368,4 +369,3 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
     throw error;
   }
 }
-

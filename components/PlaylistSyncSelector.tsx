@@ -20,10 +20,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { ServiceStatusRowProps } from "./ServiceStatusRow";
 import { ServiceIcon, serviceMeta } from "./ServiceBrand";
-
-export type ServiceStatus = ServiceStatusRowProps;
 
 export type PlaylistOption = {
   id: string;
@@ -56,12 +53,13 @@ const SERVICE_NAMES: Record<string, string> = {
 
 function Artwork({ playlist, compact = false }: { playlist: PlaylistOption; compact?: boolean }) {
   const size = compact ? "h-12 w-12" : "h-14 w-14 sm:h-16 sm:w-16";
+  const pixels = compact ? 48 : 64;
   const images = playlist.imageUrl ? [playlist.imageUrl] : Array.from(new Set(playlist.coverImages || [])).slice(0, 4);
 
   if (images.length === 1) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={images[0]} alt="" className={`${size} shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]`} />
+      <img src={images[0]} alt="" width={pixels} height={pixels} loading="lazy" className={`${size} shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]`} />
     );
   }
 
@@ -70,7 +68,7 @@ function Artwork({ playlist, compact = false }: { playlist: PlaylistOption; comp
       <div className={`${size} grid shrink-0 grid-cols-2 overflow-hidden rounded-[var(--radius-sm)] ring-1 ring-[var(--border-soft)]`}>
         {images.map((src, index) => (
           // eslint-disable-next-line @next/next/no-img-element
-          <img key={`${src}-${index}`} src={src} alt="" loading="lazy" className="h-full w-full object-cover" />
+          <img key={`${src}-${index}`} src={src} alt="" width={pixels / 2} height={pixels / 2} loading="lazy" className="h-full w-full object-cover" />
         ))}
       </div>
     );
@@ -86,14 +84,22 @@ function Artwork({ playlist, compact = false }: { playlist: PlaylistOption; comp
 export function PlaylistSyncSelector({
   playlists,
   rule,
+  initialService,
+  initialGroupMode = false,
+  initialGroupId,
 }: {
   playlists: PlaylistOption[];
   rule?: RuleWithDestinations;
-  serviceStatuses?: Record<string, ServiceStatus>;
+  initialService?: string;
+  initialGroupMode?: boolean;
+  initialGroupId?: string;
 }) {
   const router = useRouter();
-  const [activeService, setActiveService] = useState(rule?.sourceService || "SPOTIFY");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [activeService, setActiveService] = useState(rule?.sourceService || initialService || "SPOTIFY");
+  const [groupMode, setGroupMode] = useState(Boolean(rule) || initialGroupMode || Boolean(initialGroupId));
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(initialGroupId ? playlists.filter((playlist) => playlist.groupId === initialGroupId).map((playlist) => playlist.id) : []),
+  );
   const [query, setQuery] = useState("");
   const [showHidden, setShowHidden] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
@@ -169,6 +175,13 @@ export function PlaylistSyncSelector({
     return ordered.find((service) => !chosenServices.has(service)) || null;
   }
 
+  function showService(service: string) {
+    setActiveService(service);
+    const url = new URL(window.location.href);
+    url.searchParams.set("service", service);
+    window.history.replaceState(window.history.state, "", url);
+  }
+
   function toggleSelected(playlist: PlaylistOption) {
     setSaveOutcome(null);
     setOpenMenuId(null);
@@ -202,7 +215,7 @@ export function PlaylistSyncSelector({
       next.add(playlist.id);
       return next;
     });
-    if (nextService) setActiveService(nextService);
+    if (nextService) showService(nextService);
   }
 
   function togglePinned(playlist: PlaylistOption) {
@@ -243,7 +256,7 @@ export function PlaylistSyncSelector({
         body: JSON.stringify({
           sourcePlaylistId: anchor.id,
           destinationPlaylistIds: destinations.map((playlist) => playlist.id),
-          name: selectedPlaylists.map((playlist) => playlist.name).join(" + "),
+           name: selectedPlaylists.find((playlist) => playlist.groupId)?.groupName || selectedPlaylists.map((playlist) => playlist.name).join(" + "),
           mode: "ADD_ONLY",
           intervalMinutes: 60,
           isEnabled: true,
@@ -255,7 +268,11 @@ export function PlaylistSyncSelector({
         return;
       }
       setSaveOutcome({ ok: true, message: "Playlist group saved." });
-      router.refresh();
+      if (typeof payload?.group?.id === "string") {
+        router.push(`/settings?group=${encodeURIComponent(payload.group.id)}#group-editor`);
+      } else {
+        router.refresh();
+      }
     } catch (error) {
       setSaveOutcome({ ok: false, message: error instanceof Error ? error.message : "Could not save group." });
     } finally {
@@ -265,52 +282,69 @@ export function PlaylistSyncSelector({
 
   return (
     <div className="space-y-5">
-      <section className="border-y border-[var(--border-soft)] py-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="eyebrow inline-flex items-center gap-2">
-              <Layers3 size={14} />
-              Playlist group
-              </span>
-              <span className="text-sm font-semibold text-[var(--text)]">{selectedPlaylists.length || 0}/3 selected</span>
-              {!selectedPlaylists.length ? <span className="text-xs text-muted-fg">Pick matching playlists across services.</span> : null}
-              {selectedPlaylists.length > 0 && nextMissingService && nextMissingService !== activeService ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveService(nextMissingService)}
-                  className="rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-2 py-1 text-xs font-semibold text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
-                >
-                  Next: {SERVICE_NAMES[nextMissingService]}
-                </button>
-              ) : null}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-fg">
+      {groupMode ? (
+        <section className="workbench overflow-hidden">
+          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="grid h-8 w-8 place-items-center rounded-[var(--radius-sm)] bg-accent-soft text-accent"><Layers3 size={16} /></span>
+                <div>
+                  <h2 className="heading-panel">{initialGroupId ? `Edit ${selectedPlaylists[0]?.groupName || "sync group"}` : "Build a sync group"}</h2>
+                  <p className="mt-0.5 text-xs text-muted-fg">{initialGroupId ? "Choose a playlist on the missing platform." : "Choose the same playlist on two or three services."}</p>
+                </div>
+                <span className="pill pill-accent">{selectedPlaylists.length}/3 chosen</span>
+              </div>
               {selectedPlaylists.length ? (
-                selectedPlaylists.map((playlist) => (
-                  <span key={playlist.id} className="pill">
-                    <ServiceIcon service={playlist.service} size="sm" className="h-4 w-4" />
-                    <span className="max-w-[10rem] truncate">{playlist.name}</span>
-                  </span>
-                ))
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {selectedPlaylists.map((playlist) => (
+                    <span key={playlist.id} className="pill">
+                      <ServiceIcon service={playlist.service} size="sm" className="h-4 w-4" />
+                      <span className="max-w-[10rem] truncate">{playlist.name}</span>
+                    </span>
+                  ))}
+                  {nextMissingService && nextMissingService !== activeService ? (
+                    <button type="button" onClick={() => showService(nextMissingService)} className="text-xs font-semibold text-[var(--accent)]">
+                      Choose {SERVICE_NAMES[nextMissingService]} next
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {saveOutcome ? (
-              <span className={`text-xs font-semibold ${saveOutcome.ok ? "text-success-fg" : "text-danger-fg"}`} role="status">
-                {saveOutcome.message}
-              </span>
-            ) : null}
-            {canSave ? (
-              <button type="button" onClick={saveGroup} disabled={saving || selectedPlaylists.length < 2} className="btn btn-primary surface-lift">
+            <div className="flex flex-wrap items-center gap-2">
+              {saveOutcome ? <span role={saveOutcome.ok ? "status" : "alert"} aria-live={saveOutcome.ok ? "polite" : undefined} className={`text-xs font-semibold ${saveOutcome.ok ? "text-success-fg" : "text-danger-fg"}`}>{saveOutcome.message}</span> : null}
+              <button
+                type="button"
+                onClick={() => {
+                  if (initialGroupId) {
+                    router.push(`/settings?group=${encodeURIComponent(initialGroupId)}#group-editor`);
+                    return;
+                  }
+                  setGroupMode(false);
+                  setSelectedIds(new Set());
+                  setSaveOutcome(null);
+                }}
+                className="btn btn-ghost"
+              >
+                {initialGroupId ? "Back to group" : "Cancel"}
+              </button>
+              <button type="button" onClick={saveGroup} disabled={!canSave || saving} className="btn btn-primary">
                 {saving ? <RefreshCw size={16} className="animate-spin" /> : <Save size={16} />}
                 {saving ? "Saving" : "Save group"}
               </button>
-            ) : null}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="heading-section">Your library</h2>
+            <p className="mt-1 text-sm text-muted-fg">Open a playlist to inspect songs, or start a group when copies belong together.</p>
+          </div>
+          <button type="button" onClick={() => setGroupMode(true)} className="btn btn-primary self-start sm:self-auto">
+            <Layers3 size={15} /> Create sync group
+          </button>
+        </section>
+      )}
 
       <div
         role="tablist"
@@ -328,7 +362,9 @@ export function PlaylistSyncSelector({
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => setActiveService(service)}
+              id={`playlist-tab-${service.toLowerCase()}`}
+              aria-controls="playlist-service-panel"
+              onClick={() => showService(service)}
               className={`${meta.tint} group relative -mb-px flex min-w-[10.5rem] items-center justify-between gap-3 border-b-2 px-2 py-2.5 text-left transition md:min-w-0 ${
                 active
                   ? "border-[var(--service-glow)] text-[var(--text)]"
@@ -357,6 +393,9 @@ export function PlaylistSyncSelector({
           <input
             ref={searchRef}
             type="search"
+            name="playlistSearch"
+            autoComplete="off"
+            spellCheck={false}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={`Find ${SERVICE_NAMES[activeService]} playlist`}
@@ -386,7 +425,7 @@ export function PlaylistSyncSelector({
         ) : null}
       </div>
 
-      <div className="grid gap-2 lg:grid-cols-2 2xl:grid-cols-3">
+      <div id="playlist-service-panel" role="tabpanel" aria-labelledby={`playlist-tab-${activeService.toLowerCase()}`} className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {activePlaylists.map((playlist) => {
           const meta = serviceMeta(playlist.service);
           const selected = selectedIds.has(playlist.id);
@@ -396,19 +435,25 @@ export function PlaylistSyncSelector({
           return (
             <article
               key={playlist.id}
-              className={`${meta.tint} group relative border-b border-[var(--border-soft)] px-1 py-3 transition ${
-                selected ? "bg-[color-mix(in_srgb,var(--service-glow,var(--accent))_10%,transparent)]" : ""
+              className={`${meta.tint} group relative rounded-[var(--radius)] border p-3 transition ${
+                selected
+                  ? "border-[color-mix(in_srgb,var(--service-glow,var(--accent))_42%,var(--border))] bg-[color-mix(in_srgb,var(--service-glow,var(--accent))_11%,var(--surface))]"
+                  : "border-[var(--border-soft)] bg-[var(--surface)] hover:border-[var(--border)] hover:bg-[var(--surface-2)]"
               }`}
             >
-              <div className="flex items-center gap-3">
-                <Artwork playlist={playlist} compact />
+              <div className="flex items-start gap-3">
+                <div aria-hidden="true">
+                  <Artwork playlist={playlist} />
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-2">
-                    <h3 className="heading-row min-w-0 flex-1 truncate sm:text-base">{playlist.name}</h3>
+                    <h3 className="heading-row min-w-0 flex-1 truncate sm:text-base">
+                      <Link href={`/playlists/${playlist.id}`} className="inline-flex min-h-8 items-center hover:text-[var(--accent-fg)]">{playlist.name}</Link>
+                    </h3>
                     {pinned ? <Star size={14} className="shrink-0 fill-[var(--accent)] text-[var(--accent)]" /> : null}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-fg">
-                    <span className="tabular-nums text-[var(--text)]">{playlist.trackCount} tracks</span>
+                    <span className="tabular-nums">{playlist.trackCount} songs</span>
                     {playlist.isWritable ? null : <span className="rounded-[var(--radius-sm)] bg-warning/12 px-1.5 py-0.5 text-warning-fg">read-only</span>}
                     {linkedElsewhere ? (
                       <span className="rounded-[var(--radius-sm)] bg-success/12 px-1.5 py-0.5 text-success-fg" title={playlist.groupName || "Linked group"}>
@@ -417,35 +462,38 @@ export function PlaylistSyncSelector({
                     ) : null}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => toggleSelected(playlist)}
-                  disabled={disabledByService}
-                  className={`inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-sm font-semibold transition ${
-                    selected
-                      ? "border-success/40 bg-success text-[var(--text)] hover:bg-success"
-                      : linkedElsewhere
-                        ? "border-success/25 bg-success/10 text-success-fg hover:bg-success/15"
-                        : "border-[var(--border-soft)] bg-[var(--surface-2)] text-[var(--text)] hover:border-[var(--border)]"
-                  } disabled:cursor-not-allowed disabled:opacity-45`}
-                  title={disabledByService ? `Only one ${SERVICE_NAMES[playlist.service]} playlist can be in a group` : undefined}
-                >
-                  {selected ? <Check size={15} strokeWidth={3} /> : linkedElsewhere ? <Link2 size={15} /> : <Plus size={15} />}
-                  <span className="hidden sm:inline">{selected ? "Selected" : linkedElsewhere ? "Open" : "Add"}</span>
-                </button>
+                {groupMode ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleSelected(playlist)}
+                    disabled={disabledByService}
+                    className={`inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-sm font-semibold transition ${
+                      selected
+                        ? "border-success/40 bg-success text-[var(--on-accent)]"
+                        : linkedElsewhere
+                          ? "border-success/25 bg-success/10 text-success-fg hover:bg-success/15"
+                          : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--text)] hover:border-[var(--accent)]"
+                    } disabled:cursor-not-allowed disabled:opacity-45`}
+                    title={disabledByService ? `Only one ${SERVICE_NAMES[playlist.service]} playlist can be in a group` : undefined}
+                  >
+                    {selected ? <Check size={15} strokeWidth={3} /> : linkedElsewhere ? <Link2 size={15} /> : <Plus size={15} />}
+                    <span>{selected ? "Chosen" : linkedElsewhere ? "Select group" : "Choose"}</span>
+                  </button>
+                ) : null}
               </div>
 
-              <div className="mt-2.5 flex items-center gap-2">
-                <Link href={`/playlists/${playlist.id}`} className="btn btn-ghost surface-lift px-3" title="Open songs" aria-label={`Open ${playlist.name} songs`}>
+              <div className="mt-3 flex items-center gap-2 border-t border-line-soft pt-3">
+                <Link href={`/playlists/${playlist.id}`} className="inline-flex min-h-8 items-center gap-1.5 text-xs font-semibold text-[var(--accent)]" title="Open songs" aria-label={`Open ${playlist.name} songs`}>
                   <ListMusic size={15} />
-                  <span>Songs</span>
+                  <span>Open songs</span>
                 </Link>
                 <div className="relative ml-auto">
                   <button
                     type="button"
                     onClick={() => setOpenMenuId((current) => (current === playlist.id ? null : playlist.id))}
-                    className="rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] p-2 text-dim-fg transition hover:border-[var(--border)] hover:text-[var(--text)]"
+                    className="btn btn-ghost btn-icon text-dim-fg"
                     aria-expanded={openMenuId === playlist.id}
+                    aria-label={`Actions for ${playlist.name}`}
                     title="Playlist actions"
                   >
                     <MoreHorizontal size={15} />
@@ -486,9 +534,9 @@ export function PlaylistSyncSelector({
 
       <div
         className={`pointer-events-none fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+72px)] z-30 flex justify-center transition md:inset-x-6 md:bottom-6 ${
-          selectedPlaylists.length ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+          groupMode && selectedPlaylists.length ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
         }`}
-        aria-hidden={!selectedPlaylists.length}
+        aria-hidden={!groupMode || !selectedPlaylists.length}
       >
         <div className="pointer-events-auto panel flex w-full max-w-3xl flex-col gap-3 p-3 shadow-[var(--shadow-overlay)] sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">

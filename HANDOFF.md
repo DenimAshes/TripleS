@@ -12,7 +12,7 @@ Important product decision: **YouTube must not use YouTube Data API or Google OA
 - Prisma + PostgreSQL/Neon
 - TypeScript
 - Playwright browser worker
-- Windows local development path: `c:\Users\DrDyue\Desktop\TripleS`
+- Windows local development path: `C:\Users\DrDyue\Documents\Noklusējuma projekts\TripleS`
 
 ## Current YouTube Architecture
 
@@ -58,13 +58,14 @@ Everything visual resolves to a token in `app/globals.css`. A component that
 spells out a colour, a shadow or a radius is a bug, because the same value then
 drifts between pages.
 
-- **Colour**: surfaces (`--bg`, `--surface`, `--surface-2/3`), text (`--text`,
-  `--text-muted`, `--text-dim`), one accent with `-soft/-fg/-ring/-hover` plus
-  `--on-accent` for ink on a filled accent, and four status tones each with a
-  `-soft` tint and an `-fg`. Brand colours live as `--brand-spotify|youtube|soundcloud`
-  with a matching `-ink`.
-- **Radius**: two, plus a hairline. `--radius` (12px) wraps a container,
-  `--radius-sm` (8px) wraps a control, `--hairline-radius` (4px) is only for
+- **Colour**: the studio-console palette uses booth black, graphite surfaces and
+  signal cyan (`--accent`). Surfaces (`--bg`, `--surface`, `--surface-2/3`), text
+  (`--text`, `--text-muted`, `--text-dim`), the accent with
+  `-soft/-fg/-ring/-hover` plus `--on-accent`, and status tones all resolve to
+  tokens. Brand colours live as `--brand-spotify|youtube|soundcloud` with a
+  matching `-ink` and identify services only.
+- **Radius**: two, plus a hairline. `--radius` (10px) wraps a container,
+  `--radius-sm` (6px) wraps a control, `--hairline-radius` (4px) is only for
   shapes a few pixels across (row stripes, inline highlights). Write
   `rounded-[var(--radius-sm)]`, never `rounded-md`/`rounded-lg`.
 - **Elevation**: `--shadow-overlay` for anything that floats (dialog, popover,
@@ -77,17 +78,19 @@ drifts between pages.
   rule under it, content on the page background) and `.rows` (one hairline
   between rows, no frame or gap per row). If `.panel` is not one of those three
   cases, you want `.section` or `.rows`.
-- **Type**: five heading rungs, all weight 600 — `.heading-page` (24px, the h1),
+- **Type**: IBM Plex Sans carries the interface and Cyrillic playlist names;
+  IBM Plex Mono is reserved for technical values. Five heading rungs use weight
+  600 — `.heading-page` (24px, the h1),
   `.heading-card` (20px, a card standing for one whole thing), `.heading-section`
   (18px, a region or a dialog title), `.heading-panel` (16px, the commonest),
   `.heading-row` (14px, a row or list entry). `.eyebrow` (12px/600) is the small
   label that introduces a block; its tone comes from a colour utility, which
   outranks the components layer (`eyebrow text-muted-fg`). Nothing below the page
-  title is heavier than the page title, and `font-bold` appears only on the two
-  monogram tiles.
+  title is heavier than the page title. The brand mark is three service faders,
+  not a typographic monogram.
 - **Vertical rhythm**: `.section` owns the gap between regions (2.5rem). Do not
   hand-roll `mt-10`/`mb-8`/`space-y-5` for it.
-- **Shared classes**: `.section`, `.section-head`, `.rows`, `.panel`,
+- **Shared classes**: `.section`, `.section-head`, `.rows`, `.panel`, `.workbench`, `.workbench-header`,
   `.panel-inset`, `.panel-accent`, `.btn` + `.btn-primary|ghost|danger`, `.pill`
   + `.pill-success|warning|danger|accent` and `.pill-spotify|youtube|soundcloud`,
   `.service-mark` (the brand tile behind a glyph), `.service-border`, `.kbd`,
@@ -166,7 +169,29 @@ pass is deliberately near-invisible per screen; the second half is not:
 - The three remaining hand-rolled message boxes (all in the add-sync dialog) became `Callout`s. That class has now absorbed 23.
 - The dashboard's match-source strip printed the matcher's own keys at the reader — `no_match`, `search_manual`, `stored`. `matchSourceLabel()` maps the known ones and unpicks the rest from snake_case.
 - Deleted `components/YouTubeBrowserConnector.tsx` and `components/SoundCloudConnector.tsx`: unreferenced, and both still carried the pre-flattening look (a panel holding three `panel-inset`s), so reusing either would have reintroduced it. Same reason `PlaylistCard` and `ConnectServiceButton` went last pass.
-- Still on `--text-dim` at 12px in places: that is 2.7:1 against `--surface-2`, below the 4.5:1 AA floor. Fine for decoration, wrong for anything informational. The stat labels and eyebrows were moved to `--text-muted` (5.4:1); the remaining uses were not audited one by one.
+- `--text-dim` was lifted with the studio-console palette and now reaches 4.9:1 against `--surface-2`. It remains the tertiary tone; labels and explanations use `--text-muted`.
+
+Design pass, fourth half — identity, responsive polish and the review workflow:
+
+- Replaced the typographic `S` tile with a three-fader mark, moved the interface to IBM Plex Sans/Mono and rebuilt `/login` as a restrained control-room entry screen.
+- The shared shell now has a skip link, safe-area spacing, a sticky console sidebar and a five-slot mobile bar. Setup-only Connections moved under More instead of squeezing six destinations across 390px.
+- `/manual-match` shows one decision at a time, keeps bulk actions collapsed and reserves Skip for the whole song instead of repeating it beside every candidate. Its mobile grid now uses an explicit `minmax(0, 1fr)` track so controls cannot be clipped by intrinsic width.
+- Form metadata, async status announcements, image dimensions, coarse-pointer targets and overlay semantics were tightened across the changed surfaces. `ui:shots` now covers `/manual-match` at 390px too.
+
+Design pass, fifth half — dense mobile data:
+
+- `/history` switches from a 720px scrolling table to compact semantic activity rows below 640px; filters now keep 44px touch targets.
+- `/playlists/[id]` no longer overflows by 158px at 390px. Mobile rows keep artwork, match state and the external link while moving duration and secondary columns to wider layouts.
+- The track list renders 50 rows at a time instead of 100, and the screenshot harness now checks mobile History plus the discovered playlist-detail route.
+
+Structure pass — task-first page layouts:
+
+- The shell now keeps global health/sign-out in navigation, leaving page headers for page context and one local action. Primary mobile navigation remains five items with safe-area spacing.
+- `/dashboard` leads with actionable attention rows, keeps automation and the latest run compact, and collapses worker/rule diagnostics. The old connection-card grid and repeated run summary are gone.
+- `/playlists` defaults to a thumbnail-led library. Creating a cross-service group is an explicit mode with a selected-playlist tray instead of controls on every row.
+- `/settings` is now group-centric master/detail: choose one playlist group, then manage its platform members, source switches and shared behavior in one workspace. Legacy one-way rules remain under a secondary disclosure instead of being deleted or mixed into the primary model. Group settings save through `PATCH /api/playlist-groups/[groupId]`; saving also migrates matching legacy in-group routes to `TWO_WAY` without changing their source-enabled state.
+- Connections are ordered as setup progress, next action, then one horizontal workspace per platform. Browser tools switch between playlist songs and song search rather than stacking both workflows.
+- Destructive source and browser-track deletion now asks for confirmation. Async feedback has live-region semantics, service/library tabs expose state, and the UI harness ignores controls hidden inside closed disclosures.
 
 ## Verification
 

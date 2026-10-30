@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   requireAuth: vi.fn(),
   syncRuleFindFirst: vi.fn(),
   syncRuleUpdate: vi.fn(),
-  syncRuleCount: vi.fn(),
+  syncRuleFindMany: vi.fn(),
   playlistFindUnique: vi.fn(),
   playlistGroupMemberFindUnique: vi.fn(),
   playlistGroupMemberFindMany: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock("@/lib/db/prisma", () => ({
     syncRule: {
       findFirst: mocks.syncRuleFindFirst,
       update: mocks.syncRuleUpdate,
-      count: mocks.syncRuleCount,
+      findMany: mocks.syncRuleFindMany,
     },
     playlist: {
       findUnique: mocks.playlistFindUnique,
@@ -48,7 +48,7 @@ describe("/api/sync-rules/[id]/enabled", () => {
     mocks.requireAuth.mockReset();
     mocks.syncRuleFindFirst.mockReset();
     mocks.syncRuleUpdate.mockReset();
-    mocks.syncRuleCount.mockReset();
+    mocks.syncRuleFindMany.mockReset();
     mocks.playlistFindUnique.mockReset();
     mocks.playlistGroupMemberFindUnique.mockReset();
     mocks.playlistGroupMemberFindMany.mockReset();
@@ -68,7 +68,10 @@ describe("/api/sync-rules/[id]/enabled", () => {
       { playlist: { service: "SPOTIFY", servicePlaylistId: "sp-1" } },
       { playlist: { service: "YOUTUBE", servicePlaylistId: "yt-1" } },
     ]);
-    mocks.syncRuleCount.mockResolvedValue(2);
+    mocks.syncRuleFindMany.mockResolvedValue([
+      { direction: "TWO_WAY", destinations: [] },
+      { direction: "ONE_WAY", destinations: [{ service: "SPOTIFY", playlistId: "sp-1" }] },
+    ]);
     mocks.syncRuleUpdate.mockResolvedValue({ id: "rule-1", isEnabled: false, destinations: [] });
   });
 
@@ -89,7 +92,7 @@ describe("/api/sync-rules/[id]/enabled", () => {
   });
 
   test("rejects disabling the last active source in a group", async () => {
-    mocks.syncRuleCount.mockResolvedValue(1);
+    mocks.syncRuleFindMany.mockResolvedValue([{ direction: "TWO_WAY", destinations: [] }]);
 
     const response = await PATCH(request({ enabled: false }), context);
     const payload = await response.json();

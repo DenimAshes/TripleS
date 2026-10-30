@@ -16,6 +16,7 @@ const styles: Record<string, string> = {
   failed: "pill-danger",
   error: "pill-danger",
   running: "pill-accent animate-pulse",
+  cancelled: "",
   mock: "pill-accent",
   info: "",
 };
@@ -36,6 +37,7 @@ const labels: Record<string, string> = {
   failed: "Failed",
   error: "Error",
   running: "Running",
+  cancelled: "Stopped",
   mock: "Mock data",
   info: "Info",
 };

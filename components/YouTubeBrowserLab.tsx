@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ExternalLink, Loader2, Music2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { CheckCircle2, ExternalLink, ListMusic, Loader2, Music2, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Callout } from "./Callout";
@@ -94,6 +94,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Track[]>([]);
+  const [workspaceView, setWorkspaceView] = useState<"tracks" | "search">("tracks");
   const [busy, setBusy] = useState<string | null>(null);
   const [busyLabel, setBusyLabel] = useState("");
   const [error, setError] = useState("");
@@ -113,7 +114,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
 
   async function loadPlaylists(force = false) {
     setBusy("playlists");
-    setBusyLabel(force ? "Updating playlists..." : "Loading playlists...");
+    setBusyLabel(force ? "Updating playlists…" : "Loading playlists…");
     setError("");
     setNotice("");
     try {
@@ -141,7 +142,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
     }
 
     setBusy("tracks");
-    setBusyLabel(force ? "Updating tracks..." : "Loading tracks...");
+    setBusyLabel(force ? "Updating tracks…" : "Loading tracks…");
     setError("");
     try {
       const data = await readJson<TracksResponse>(`/api/youtube-browser/tracks?playlistId=${encodeURIComponent(playlistId)}${force ? "&refresh=1" : ""}`);
@@ -210,7 +211,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
     event.preventDefault();
     if (!searchQuery.trim()) return;
     setBusy("search");
-    setBusyLabel("Searching...");
+    setBusyLabel("Searching…");
     setError("");
     setNotice("");
     try {
@@ -228,7 +229,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
   async function addTrack(query: string) {
     if (!selectedId) return;
     setBusy(`add:${query}`);
-    setBusyLabel("Adding track...");
+    setBusyLabel("Adding track…");
     setError("");
     setNotice("");
     try {
@@ -255,8 +256,9 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
 
   async function removeTrack(track: Track) {
     if (!selectedId) return;
+    if (!window.confirm(`Remove “${track.title}” from this playlist?`)) return;
     setBusy(`remove:${track.sourceTrackId}`);
-    setBusyLabel("Removing track...");
+    setBusyLabel("Removing track…");
     setError("");
     setNotice("");
     try {
@@ -325,14 +327,14 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
         </Callout>
       ) : null}
 
-      {error ? <Callout tone="danger">{error}</Callout> : null}
+      {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
       {notice ? (
-        <Callout tone="success" icon={<CheckCircle2 size={16} className="mt-0.5 shrink-0" />}>
+        <Callout tone="success" role="status" icon={<CheckCircle2 size={16} className="mt-0.5 shrink-0" />}>
           {notice}
         </Callout>
       ) : null}
       {busyLabel ? (
-        <Callout tone="info" icon={<Loader2 size={16} className="mt-0.5 shrink-0 animate-spin" />}>
+        <Callout tone="info" role="status" icon={<Loader2 size={16} className="mt-0.5 shrink-0 animate-spin" />}>
           {busyLabel}
         </Callout>
       ) : null}
@@ -357,8 +359,10 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
             {playlists.map((playlist) => (
               <button
                 key={playlist.id}
+                aria-pressed={selectedId === playlist.id}
                 onClick={() => {
                   setSelectedId(playlist.id);
+                  setWorkspaceView("tracks");
                   const snapshot = tracksByPlaylist[playlist.id];
                   setTracks(snapshot?.tracks || []);
                   setTracksMeta({
@@ -385,26 +389,30 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
           </div>
         </section>
 
-        <section className="space-y-5">
-          <div>
-            <div className="section-head flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="heading-panel">{selectedPlaylist?.name || "Select playlist"}</h2>
-                <div className="text-sm text-muted-fg">
-                  {tracks.length} tracks
-                  {selectedId && tracksMeta.lastFetchedAt ? ` · updated ${formatRelative(tracksMeta.lastFetchedAt, nowMs)}` : ""}
-                </div>
+        <section className="min-w-0">
+          <div className="section-head flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="heading-panel">{selectedPlaylist?.name || "Select playlist"}</h2>
+              <div className="text-sm text-muted-fg">
+                {tracks.length} tracks{selectedId && tracksMeta.lastFetchedAt ? ` · updated ${formatRelative(tracksMeta.lastFetchedAt, nowMs)}` : ""}
               </div>
-              <button
-                onClick={() => loadTracks(selectedId, true)}
-                disabled={!selectedId || busy !== null}
-                className="btn btn-ghost"
-              >
-                <RefreshCw size={16} className={busy === "tracks" ? "animate-spin" : ""} />
-                Refresh
-              </button>
             </div>
-            <div className="divide-y divide-[var(--border-soft)]">
+            <button onClick={() => loadTracks(selectedId, true)} disabled={!selectedId || busy !== null} className="btn btn-ghost">
+              <RefreshCw size={16} className={busy === "tracks" ? "animate-spin" : ""} /> Refresh
+            </button>
+          </div>
+
+          <div className="mb-4 inline-flex rounded-[var(--radius-sm)] bg-surface-2 p-1" role="tablist" aria-label="Playlist workspace">
+            <button id="youtube-tracks-tab" aria-controls="youtube-workspace-panel" type="button" role="tab" aria-selected={workspaceView === "tracks"} onClick={() => setWorkspaceView("tracks")} className={`inline-flex items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium ${workspaceView === "tracks" ? "bg-surface-3 text-[var(--text)]" : "text-muted-fg"}`}>
+              <ListMusic size={15} /> Playlist songs
+            </button>
+            <button id="youtube-search-tab" aria-controls="youtube-workspace-panel" type="button" role="tab" aria-selected={workspaceView === "search"} onClick={() => setWorkspaceView("search")} className={`inline-flex items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-sm font-medium ${workspaceView === "search" ? "bg-surface-3 text-[var(--text)]" : "text-muted-fg"}`}>
+              <Plus size={15} /> Add songs
+            </button>
+          </div>
+
+          {workspaceView === "tracks" ? (
+            <div id="youtube-workspace-panel" role="tabpanel" aria-labelledby="youtube-tracks-tab" className="divide-y divide-[var(--border-soft)]">
               {busy === "tracks" && tracks.length === 0 ? <LoadingRow label="Loading tracks" /> : null}
               {!busy && !selectedId ? <EmptyRow label="Pick a playlist on the left to see its tracks." /> : null}
               {!busy && selectedId && tracks.length === 0 ? <EmptyRow label="No tracks to show yet. Press Refresh to load this playlist." /> : null}
@@ -412,107 +420,43 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
                 const ytUrl = track.url || `https://music.youtube.com/watch?v=${track.sourceTrackId}`;
                 return (
                   <div key={track.sourceTrackId} className="grid grid-cols-[40px_1fr_auto] items-center gap-3 py-3">
-                    <div
-                      className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-[var(--radius-sm)] bg-surface-3 bg-cover bg-center text-muted-fg"
-                      style={track.imageUrl ? { backgroundImage: `url(${track.imageUrl})` } : undefined}
-                    >
-                      {track.imageUrl ? null : <Music2 size={16} />}
+                    <div className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-[var(--radius-sm)] bg-surface-3 bg-cover bg-center text-muted-fg" style={track.imageUrl ? { backgroundImage: `url(${track.imageUrl})` } : undefined}>{track.imageUrl ? null : <Music2 size={16} />}</div>
+                    <div className="min-w-0"><div className="truncate text-sm font-medium">{track.title}</div><div className="truncate text-xs text-muted-fg">{track.artists.join(", ")} {formatDuration(track.durationMs) ? `· ${formatDuration(track.durationMs)}` : ""}</div></div>
+                    <div className="flex items-center gap-2">
+                      <a href={ytUrl} target="_blank" rel="noreferrer" title="Open in YouTube Music" aria-label={`Open ${track.title} in YouTube Music`} className="btn btn-ghost btn-icon text-muted-fg hover:text-[var(--text)]"><ExternalLink size={16} /></a>
+                      <button type="button" onClick={() => removeTrack(track)} disabled={busy !== null} title="Remove" aria-label={`Remove ${track.title}`} className="btn btn-ghost btn-icon text-muted-fg hover:border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] hover:bg-danger-soft hover:text-danger-fg">{busy === `remove:${track.sourceTrackId}` ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}</button>
                     </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{track.title}</div>
-                      <div className="truncate text-xs text-muted-fg">
-                        {track.artists.join(", ")} {formatDuration(track.durationMs) ? `· ${formatDuration(track.durationMs)}` : ""}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div id="youtube-workspace-panel" role="tabpanel" aria-labelledby="youtube-search-tab">
+              <form onSubmit={search} className="flex flex-col gap-3 border-b border-line-soft pb-4 sm:flex-row">
+                <div className="relative flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-fg" size={16} /><input name="youtubeSearch" type="search" autoComplete="off" spellCheck={false} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Artist – track…" aria-label="Search YouTube Music" className="h-10 w-full pl-9 text-sm" /></div>
+                <button disabled={busy !== null || !searchQuery.trim()} className="btn btn-primary h-10 px-4">{busy === "search" ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />} Search</button>
+              </form>
+              <div className="divide-y divide-[var(--border-soft)]">
+                {!busy && !searchQuery && searchResults.length === 0 ? <EmptyRow label="Search YouTube Music, then add a result to the selected playlist." /> : null}
+                {busy === "search" && searchResults.length === 0 ? <LoadingRow label="Searching" /> : null}
+                {!busy && searchQuery && searchResults.length === 0 ? <EmptyRow label="Nothing matched that search." /> : null}
+                {searchResults.map((track) => {
+                  const query = `${track.artists[0] || ""} ${track.title}`.trim();
+                  const ytUrl = track.url || `https://music.youtube.com/watch?v=${track.sourceTrackId}`;
+                  return (
+                    <div key={track.sourceTrackId} className="grid grid-cols-[40px_1fr_auto] items-center gap-3 py-3">
+                      <div className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-[var(--radius-sm)] bg-surface-3 bg-cover bg-center text-muted-fg" style={track.imageUrl ? { backgroundImage: `url(${track.imageUrl})` } : undefined}>{track.imageUrl ? null : <Music2 size={16} />}</div>
+                      <div className="min-w-0"><div className="truncate text-sm font-medium">{track.title}</div><div className="truncate text-xs text-muted-fg">{track.artists.join(", ")}</div></div>
+                      <div className="flex items-center gap-2">
+                        <a href={ytUrl} target="_blank" rel="noreferrer" title="Open in YouTube Music" aria-label={`Open ${track.title} in YouTube Music`} className="btn btn-ghost btn-icon text-muted-fg hover:text-[var(--text)]"><ExternalLink size={16} /></a>
+                        <button type="button" onClick={() => addTrack(query)} disabled={!selectedId || busy !== null} title="Add" aria-label={`Add ${track.title}`} className="btn btn-ghost btn-icon text-muted-fg hover:border-[color-mix(in_srgb,var(--success)_35%,var(--border))] hover:bg-success-soft hover:text-success-fg">{busy === `add:${query}` ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}</button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={ytUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Open in YouTube Music"
-                        className="btn btn-ghost btn-icon text-muted-fg hover:text-[var(--text)]"
-                      >
-                        <ExternalLink size={16} />
-                      </a>
-                      <button
-                        onClick={() => removeTrack(track)}
-                        disabled={busy !== null}
-                        title="Remove"
-                        className="btn btn-ghost btn-icon text-muted-fg hover:border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] hover:bg-danger-soft hover:text-danger-fg"
-                      >
-                        {busy === `remove:${track.sourceTrackId}` ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <form onSubmit={search} className="section-head flex-col gap-3 sm:flex-row">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-fg" size={16} />
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Artist - Track"
-                  className="h-10 w-full pl-9 text-sm"
-                />
+                  );
+                })}
               </div>
-              <button
-                disabled={busy !== null || !searchQuery.trim()}
-                className="btn btn-primary h-10 px-4"
-              >
-                {busy === "search" ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                Search
-              </button>
-            </form>
-            <div className="divide-y divide-[var(--border-soft)]">
-              {!busy && !searchQuery && searchResults.length === 0 ? (
-                <EmptyRow label="Search YouTube Music for a song, then add it to the selected playlist." />
-              ) : null}
-              {busy === "search" && searchResults.length === 0 ? <LoadingRow label="Searching" /> : null}
-              {!busy && searchQuery && searchResults.length === 0 ? <EmptyRow label="Nothing matched that search." /> : null}
-              {searchResults.map((track) => {
-                const query = `${track.artists[0] || ""} ${track.title}`.trim();
-                const ytUrl = track.url || `https://music.youtube.com/watch?v=${track.sourceTrackId}`;
-                return (
-                  <div key={track.sourceTrackId} className="grid grid-cols-[40px_1fr_auto] items-center gap-3 py-3">
-                    <div
-                      className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-[var(--radius-sm)] bg-surface-3 bg-cover bg-center text-muted-fg"
-                      style={track.imageUrl ? { backgroundImage: `url(${track.imageUrl})` } : undefined}
-                    >
-                      {track.imageUrl ? null : <Music2 size={16} />}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{track.title}</div>
-                      <div className="truncate text-xs text-muted-fg">{track.artists.join(", ")}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={ytUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Open in YouTube Music"
-                        className="btn btn-ghost btn-icon text-muted-fg hover:text-[var(--text)]"
-                      >
-                        <ExternalLink size={16} />
-                      </a>
-                      <button
-                        onClick={() => addTrack(query)}
-                        disabled={!selectedId || busy !== null}
-                        title="Add"
-                        className="btn btn-ghost btn-icon text-muted-fg hover:border-[color-mix(in_srgb,var(--success)_35%,var(--border))] hover:bg-success-soft hover:text-success-fg"
-                      >
-                        {busy === `add:${query}` ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
-          </div>
+          )}
         </section>
       </div>
     </div>

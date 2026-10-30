@@ -56,7 +56,7 @@ export default async function ManualMatchPage() {
 
   return (
     <AppShell
-      title="Review songs"
+      title="Review queue"
       description="Pick the right version once. The saved match is reused by every sync rule that touches the source song."
       actions={
         <span className={`pill ${empty ? "pill-success" : "pill-warning"}`}>
@@ -67,25 +67,38 @@ export default async function ManualMatchPage() {
     >
       <ManualReviewShortcuts reviewId={firstItem?.id} candidateTrackIds={firstItemCandidateIds} />
 
-      {empty ? null : (
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
-          <span className="pill pill-success">{highConfidenceCount} likely</span>
-          <span className="pill pill-warning">{lowConfidenceCount} weak</span>
+      {empty ? (
+        <div className="py-14 text-center">
+          <CheckCircle2 size={32} className="mx-auto text-success" />
+          <div className="heading-panel mt-3">Nothing needs review</div>
+          <p className="mt-1 text-sm text-muted-fg">All pending matches are resolved.</p>
         </div>
+      ) : (
+        <>
+          <section className="mb-5 flex flex-col gap-3 border-y border-line-soft py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="heading-row">One decision now, {enriched.length - 1} after this</div>
+              <div className="mt-0.5 text-xs text-muted-fg">Compare the source with the suggested versions before choosing.</div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {highConfidenceCount ? <span className="pill pill-success">{highConfidenceCount} likely</span> : null}
+              {lowConfidenceCount ? <span className="pill pill-warning">{lowConfidenceCount} need a closer look</span> : null}
+            </div>
+          </section>
+
+          <BulkAcceptControls totalPending={enriched.length} />
+
+          <section className="section">
+            <div className="section-head">
+              <h2 className="heading-section">Next decision</h2>
+              <span className="text-xs text-muted-fg">Resolve or skip to load the next song</span>
+            </div>
+            <div className="border-y border-[var(--border-soft)]">
+              <ManualMatchDialog item={firstItem!} />
+            </div>
+          </section>
+        </>
       )}
-
-      <BulkAcceptControls totalPending={enriched.length} />
-
-      <div className="rows">
-        {enriched.map((item) => <ManualMatchDialog key={item.id} item={item} />)}
-        {empty ? (
-          <div className="py-14 text-center">
-            <CheckCircle2 size={32} className="mx-auto text-success" />
-            <div className="heading-panel mt-3">Nothing needs review</div>
-            <p className="mt-1 text-sm text-muted-fg">All pending matches are resolved.</p>
-          </div>
-        ) : null}
-      </div>
     </AppShell>
   );
 }

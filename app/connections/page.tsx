@@ -3,9 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Clock3, KeyRound, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { Callout } from "@/components/Callout";
 import { ServiceConnectionCard } from "@/components/ServiceConnectionCard";
-import { ServiceIcon, serviceMeta } from "@/components/ServiceBrand";
+import { serviceMeta } from "@/components/ServiceBrand";
 import { SessionUploader } from "@/components/SessionUploader";
 import { SpotifyOAuthSetup } from "@/components/SpotifyOAuthSetup";
 import { prisma } from "@/lib/db/prisma";
@@ -62,30 +61,6 @@ export default async function ConnectionsPage() {
   const hasSpotifyCookie = session ? Boolean(await getSpotifyWebCookie(session.userId)) : false;
   const spotifyConnected = Boolean(spotifyAccount) && spotifyAccount?.connectionStatus === "CONNECTED" && !spotifyAccount?.isMock;
   const spotifyCredentialsReady = hasSpotifyCredentials();
-  const overviewItems = [
-    {
-      service: "SPOTIFY",
-      title: "Login",
-      subtitle: spotifyConnected ? spotifyAccount?.serviceUsername ?? "Connected" : spotifyCredentialsReady ? "Ready to connect" : "Setup needed",
-      status: spotifyConnected ? "Connected" : spotifyCredentialsReady ? "Ready" : "Setup",
-      tone: spotifyConnected ? "success" : "warning",
-      icon: <KeyRound size={15} />,
-      href: "#connection-spotify",
-    },
-    ...browserSessions.map((item) => {
-      const sessionStatus = browserSessionStatus(item.exists, item.updatedAt);
-      return {
-        service: item.service,
-        title: "Session",
-        subtitle: item.exists ? "Saved browser JSON" : "Upload required",
-        status: sessionStatus.label,
-        tone: sessionStatus.tone,
-        icon: item.exists ? <Clock3 size={15} /> : <UploadCloud size={15} />,
-        href: `#connection-${item.service.toLowerCase()}`,
-      };
-    }),
-  ];
-  // The one thing worth doing next, instead of a panel restating all three.
   const setupTasks = [
     {
       service: "SPOTIFY",
@@ -120,6 +95,7 @@ export default async function ConnectionsPage() {
   ];
 
   const nextTask = setupTasks.find((task) => task.tone !== "success") ?? null;
+  const readyCount = setupTasks.filter((task) => task.tone === "success").length;
 
   return (
     <AppShell
@@ -131,31 +107,48 @@ export default async function ConnectionsPage() {
         </Link>
       }
     >
-      <div className="space-y-5">
-        {/* One status summary, then the cards that act on it. This screen used to
-            state "three services are fine" five times over: brand chips, a
-            progress bar, this strip, a setup assistant and the cards. */}
-        <section className="grid gap-1 border-y border-[var(--border-soft)] py-2 lg:grid-cols-3" aria-label="Connection status">
-          {overviewItems.map((item) => (
-            <ConnectionOverviewItem key={item.service} {...item} />
-          ))}
-        </section>
-
+      <section className="workbench overflow-hidden" aria-labelledby="connection-progress-heading">
+        <div className="workbench-header">
+          <div>
+            <div className="eyebrow text-muted-fg">Setup progress</div>
+            <h2 id="connection-progress-heading" className="heading-card mt-1">{readyCount} of 3 platforms ready</h2>
+          </div>
+          <span className={`pill ${readyCount === 3 ? "pill-success" : "pill-warning"}`}>{readyCount === 3 ? "Ready to sync" : `${3 - readyCount} remaining`}</span>
+        </div>
+        <div className="grid gap-4 p-4 sm:p-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+          <div className="flex gap-2" aria-label={`${readyCount} of 3 platforms ready`}>
+            {setupTasks.map((task) => (
+              <div key={task.service} className="min-w-0 flex-1">
+                <div className={`h-1.5 rounded-full ${task.tone === "success" ? "bg-success" : "bg-warning"}`} />
+                <div className="mt-2 truncate text-xs text-muted-fg">{serviceMeta(task.service).shortLabel}: {task.status}</div>
+              </div>
+            ))}
+          </div>
+          {nextTask ? (
+            <Link href={nextTask.href} className="btn btn-primary">
+              {nextTask.icon}
+              {nextTask.action}
+            </Link>
+          ) : (
+            <Link href="/playlists" className="btn btn-primary">Open playlists</Link>
+          )}
+        </div>
         {nextTask ? (
-          <Callout
-            tone={nextTask.tone === "danger" ? "danger" : "warning"}
-            title={nextTask.title}
-            action={
-              <Link href={nextTask.href} className="btn btn-ghost">
-                {nextTask.action}
-              </Link>
-            }
-          >
-            {nextTask.detail}
-          </Callout>
+          <div className="border-t border-line-soft px-4 py-3 sm:px-5">
+            <p className="text-sm font-semibold text-[var(--text)]">Next: {nextTask.title}</p>
+            <p className="mt-0.5 text-xs text-muted-fg">{nextTask.detail}</p>
+          </div>
         ) : null}
+      </section>
 
-        <section className="grid items-stretch gap-4 xl:grid-cols-3">
+      <section className="section">
+        <div className="section-head">
+          <div>
+            <h2 className="heading-section">Platform access</h2>
+            <p className="mt-1 text-xs text-muted-fg">Each row explains what TripleS uses and keeps advanced controls close to that platform.</p>
+          </div>
+        </div>
+        <div className="grid gap-4">
           <ServiceConnectionCard
             id="connection-spotify"
             service="SPOTIFY"
@@ -178,48 +171,8 @@ export default async function ConnectionsPage() {
           {browserSessions.map((item) => (
             <SessionUploader key={item.service} cardId={`connection-${item.service.toLowerCase()}`} initial={item} />
           ))}
-        </section>
-      </div>
+        </div>
+      </section>
     </AppShell>
   );
 }
-
-function ConnectionOverviewItem({
-  service,
-  title,
-  subtitle,
-  status,
-  tone,
-  href,
-}: {
-  service: string;
-  title: string;
-  subtitle: string;
-  status: string;
-  tone: string;
-  href: string;
-}) {
-  const meta = serviceMeta(service);
-  const pillClass =
-    tone === "success" ? "pill-success" : tone === "warning" ? "pill-warning" : tone === "danger" ? "pill-danger" : "";
-
-  return (
-    <a
-      href={href}
-      aria-label={`Jump to ${meta.label} connection setup`}
-      className="flex min-w-0 items-center justify-between gap-3 rounded-[var(--radius-sm)] px-2.5 py-2 transition-colors hover:bg-surface-2"
-    >
-      <div className="flex min-w-0 items-center gap-2.5">
-        <ServiceIcon service={service} size="sm" />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-[var(--text)]">{meta.label}</p>
-          <p className="truncate text-xs text-muted-fg">
-            {title} · {subtitle}
-          </p>
-        </div>
-      </div>
-      <span className={`pill shrink-0 ${pillClass}`}>{status}</span>
-    </a>
-  );
-}
-

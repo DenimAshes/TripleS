@@ -35,6 +35,7 @@ export type SyncRuleGroupMember = {
 };
 
 export function SyncRuleGroupCard({
+  groupId,
   groupName,
   members,
   rules,
@@ -42,6 +43,7 @@ export function SyncRuleGroupCard({
   progressByRule,
   latestJobByRule,
 }: {
+  groupId: string;
   groupName: string;
   members: SyncRuleGroupMember[];
   rules: RuleWithDestinations[];
@@ -109,7 +111,7 @@ export function SyncRuleGroupCard({
           </div>
         </div>
 
-        <Link href="/playlists" className="btn btn-ghost shrink-0">
+        <Link href={`/settings?group=${encodeURIComponent(groupId)}#group-editor`} className="btn btn-ghost shrink-0">
           Edit group
         </Link>
       </div>

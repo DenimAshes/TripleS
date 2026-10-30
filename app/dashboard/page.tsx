@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { Activity, ArrowRight, Cpu, ListMusic, RotateCw } from "lucide-react";
+import type { ReactNode } from "react";
+import { Activity, AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, Cpu, PlugZap, RotateCw, Shuffle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Callout } from "@/components/Callout";
 import { ServiceIcon, ServicePill, serviceMeta } from "@/components/ServiceBrand";
 import { PlaylistsAutoRefresh } from "@/components/PlaylistsAutoRefresh";
 import { RunningJobsAutoRefresh } from "@/components/RunningJobsAutoRefresh";
 import { RunDueSyncQueueButton } from "@/components/RunDueSyncQueueButton";
-import { ServiceCard } from "@/components/ServiceCard";
-import { SessionStalenessBanner, classifySession, type SessionStaleness } from "@/components/SessionStalenessBanner";
+import { classifySession, type SessionStaleness } from "@/components/SessionStalenessBanner";
 import { SyncRuleCard } from "@/components/SyncRuleCard";
 import { SyncRuleGroupCard } from "@/components/SyncRuleGroupCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -19,6 +19,7 @@ import { buildSourcePlaylistGroupMap, ruleBatchKey } from "@/lib/sync/groupAware
 const WORKER_SERVICES = ["youtube", "spotify", "soundcloud"];
 const WORKER_STALE_WHILE_QUEUED_MS = 30 * 60_000;
 const WORKER_RUNNING_STALE_MS = 60 * 60_000;
+const DATE_TIME = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
 
 type RuleWithDestinations = Awaited<ReturnType<typeof prisma.syncRule.findMany>>[number] & {
   destinations: Awaited<ReturnType<typeof prisma.syncDestination.findMany>>;
@@ -138,8 +139,7 @@ async function computeRuleProgress(
 
 export default async function DashboardPage() {
   const session = await getSession();
-  const [accounts, rules, lastJob, playlists, sessionRows, pendingReviewCount, runningJobs, recentJobs, groupMembers, lastWorkerRun] = await Promise.all([
-    prisma.connectedAccount.findMany({ where: { userId: session!.userId }, orderBy: { service: "asc" } }),
+  const [rules, lastJob, playlists, sessionRows, pendingReviewCount, runningJobs, recentJobs, groupMembers, lastWorkerRun] = await Promise.all([
     prisma.syncRule.findMany({ where: { userId: session!.userId }, include: { destinations: true }, orderBy: { createdAt: "asc" } }),
     prisma.syncJob.findFirst({ where: { syncRule: { userId: session!.userId } }, orderBy: { startedAt: "desc" } }),
     prisma.playlist.findMany({ where: { userId: session!.userId }, select: { updatedAt: true } }),
@@ -235,7 +235,19 @@ export default async function DashboardPage() {
   const standaloneRules: RuleWithDestinations[] = [];
   for (const rule of rules) {
     const member = memberByPlaylistKey.get(`${rule.sourceService}:${rule.sourcePlaylistId}`);
-    if (rule.direction === "TWO_WAY" && member) {
+    const groupPlaylistKeys = member
+      ? new Set(
+          groupMembers
+            .filter((groupMember) => groupMember.groupId === member.groupId)
+            .map((groupMember) => `${groupMember.playlist.service}:${groupMember.playlist.servicePlaylistId}`),
+        )
+      : null;
+    const staysInsideGroup = Boolean(
+      groupPlaylistKeys &&
+        rule.destinations.length > 0 &&
+        rule.destinations.every((destination) => groupPlaylistKeys.has(`${destination.service}:${destination.playlistId}`)),
+    );
+    if (member && (rule.direction === "TWO_WAY" || staysInsideGroup)) {
       const rows = groupedRules.get(member.groupId) || [];
       rows.push(rule);
       groupedRules.set(member.groupId, rows);
@@ -256,143 +268,162 @@ export default async function DashboardPage() {
       rules: groupRules,
     };
   });
+  const failedRuleCount = rules.filter((rule) => {
+    const status = latestJobByRule.get(rule.id)?.status;
+    return status === "FAILED" || status === "PARTIAL_SUCCESS";
+  }).length;
+  const attentionCount = Number(pendingReviewCount > 0) + Number(staleSessions.length > 0) + Number(workerWarnings.length > 0 || failedRuleCount > 0);
 
   return (
     <AppShell
-      title="Dashboard"
-      description="What the worker is about to do, and what the last run produced."
+      title="Overview"
+      description="See what needs you, what is running, and whether playlist copies are healthy."
     >
       <PlaylistsAutoRefresh hasPlaylists={playlists.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
       <RunningJobsAutoRefresh runningCount={runningJobs.length} />
-      <SessionStalenessBanner items={staleSessions} />
-      {/* Two sections, not one panel with the second buried inside it. The
-          queue and the worker are separate facts about separate machinery, and
-          nesting the worker box inside the queue box was what made this page
-          open on a single 700px frame. */}
-      <section className="section">
-        <div className="section-head items-center">
-          <h2 className="heading-section flex items-center gap-2">
-            <RotateCw size={15} className="text-accent" />
-            {dueRules.length
-              ? `${dueRules.length} rule${dueRules.length === 1 ? "" : "s"} ready to run`
-              : runningJobs.length
-                ? `${runningJobs.length} sync ${runningJobs.length === 1 ? "is" : "are"} running`
-                : "No sync work waiting"}
-          </h2>
-          <RunDueSyncQueueButton disabled={!dueRules.length || runningJobs.length > 0} />
-        </div>
-        <p className="max-w-2xl text-sm leading-6 text-muted-fg">
-          {dueRules.length
-            ? `${dueSyncBatches} grouped batch${dueSyncBatches === 1 ? "" : "es"} will be picked up by cron or worker. Running it here applies the same cooldown, preflight and batch limits as the worker does.`
-            : nextScheduledRun
-              ? `Next scheduled rule is due ${nextScheduledRun.toLocaleString()}.`
-              : "Manual matches and rule edits will appear here when they queue follow-up sync."}
-        </p>
-        <div className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
-          <QueueMetric label="Due" value={dueRules.length} tone={dueRules.length ? "accent" : "neutral"} />
-          <QueueMetric label="Batches" value={dueSyncBatches} tone={dueSyncBatches ? "accent" : "neutral"} />
-          <QueueMetric label="Running" value={runningJobs.length} tone={runningJobs.length ? "success" : "neutral"} />
-        </div>
-        {queuePreviewRules.length ? (
-          <div className="rows mt-5 border-t border-[var(--border-soft)]">
-            {queuePreviewRules.map((rule) => (
-              <SyncQueueRuleRow key={rule.id} rule={rule} running={Boolean(runningByRule.get(rule.id))} />
-            ))}
-            {hiddenQueueRules > 0 ? (
-              <div className="py-3 text-xs text-muted-fg">
-                + {hiddenQueueRules} more queued rule{hiddenQueueRules === 1 ? "" : "s"}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
-
-      <section className="section">
-        <div className="section-head">
-          <h2 className="heading-section flex items-center gap-2">
-            <Cpu size={15} className="text-accent" />
-            Worker
-          </h2>
-          <span className="text-xs text-muted-fg">
-            {lastWorkerRun
-              ? `${lastWorkerRun.ran} ran · ${lastWorkerRun.failed} failed · ${lastWorkerRun.skipped} skipped`
-              : "no runs recorded"}
-          </span>
-        </div>
-        {workerWarnings.length ? (
-          <div className="mb-4 grid gap-2">
-            {workerWarnings.map((warning) => (
-              <Callout key={warning.title} tone={warning.tone === "danger" ? "danger" : "warning"} title={warning.title}>
-                <span className="text-xs opacity-90">{warning.detail}</span>
-              </Callout>
-            ))}
-          </div>
-        ) : null}
-        <p className="text-sm text-muted-fg">
-          {lastWorkerRun
-            ? `Last ${lastWorkerRun.status.toLowerCase().replaceAll("_", " ")} run ${lastWorkerRun.startedAt.toLocaleString()}`
-            : "No sync-worker runs recorded yet. Start npm run sync-worker or the worker supervisor to record activity."}
-        </p>
-        {lastWorkerRun ? (
-          <div className="mt-5 flex flex-wrap gap-x-10 gap-y-4">
-            <QueueMetric label="Runnable" value={lastWorkerRun.runnable} tone={lastWorkerRun.runnable ? "accent" : "neutral"} />
-            <QueueMetric label="Ran" value={lastWorkerRun.ran} tone={lastWorkerRun.ran ? "success" : "neutral"} />
-            <QueueMetric label="Skipped" value={lastWorkerRun.skipped} tone={lastWorkerRun.skipped ? "accent" : "neutral"} />
-          </div>
-        ) : null}
-        {workerSkippedReasons.length ? (
-          <div className="rows mt-5 border-t border-[var(--border-soft)]">
-            {workerSkippedReasons.slice(0, 3).map((item, index) => (
-              <div key={`${item.ruleId || item.reason}:${index}`} className="py-2 text-xs text-muted-fg">
-                <span className="font-semibold text-[var(--text)]">{item.name || item.reason}</span>
-                <span> · {item.reason}</span>
-                {item.detail ? <span> · {item.detail}</span> : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </section>
-      {pendingReviewCount > 0 ? (
-        <Link
-          href="/manual-match"
-          className="panel-accent surface-lift section flex items-center justify-between gap-4 p-6"
-        >
-          <div>
-            <div className="heading-panel">
-              {pendingReviewCount} {pendingReviewCount === 1 ? "song needs" : "songs need"} your review
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(19rem,0.65fr)] lg:items-start">
+        <div className="grid gap-5">
+          <section className="workbench overflow-hidden" aria-labelledby="attention-heading">
+          <div className="workbench-header">
+            <div>
+              <div className="eyebrow text-muted-fg">Today</div>
+              <h2 id="attention-heading" className="heading-card mt-1">What needs attention</h2>
             </div>
-            <div className="mt-1 text-sm text-muted-fg">
-              Sync wasn&apos;t sure where to put them. Pick a match or skip.
-            </div>
+            <span className={`pill ${attentionCount ? "pill-warning" : "pill-success"}`}>
+              {attentionCount ? `${attentionCount} ${attentionCount === 1 ? "area" : "areas"}` : "All clear"}
+            </span>
           </div>
-          <span className="text-base font-semibold text-[var(--accent)] whitespace-nowrap">Review now -&gt;</span>
-        </Link>
-      ) : null}
-      <section className="section">
-        <div className="section-head">
-          <h2 className="heading-section">Connections</h2>
-          <Link href="/connections" className="text-xs font-semibold text-[var(--accent)] hover:underline">
-            Manage
-          </Link>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-        {["SPOTIFY", "YOUTUBE", "SOUNDCLOUD"].map((service) => {
-          const account = accounts.find((item) => item.service === service);
-          return (
-            <ServiceCard
-              key={service}
-              name={service}
-              username={account?.serviceUsername}
-              isMock={account?.isMock}
-              connectionStatus={account?.connectionStatus}
-              lastError={account?.lastError}
+          <div className="rows px-4 sm:px-5">
+            <DashboardActionRow
+              icon={<Shuffle size={17} />}
+              title={pendingReviewCount ? `${pendingReviewCount} songs need a decision` : "Review queue is clear"}
+              detail={pendingReviewCount ? "Choose the right version so future syncs can reuse it." : "No uncertain matches are blocking copies."}
+              href="/manual-match"
+              action={pendingReviewCount ? "Review" : "Open queue"}
+              tone={pendingReviewCount ? "warning" : "success"}
             />
-          );
-        })}
-        </div>
-      </section>
+            <DashboardActionRow
+              icon={<PlugZap size={17} />}
+              title={staleSessions.length ? `${staleSessions.length} connections need a refresh` : "Connections are ready"}
+              detail={staleSessions.length ? staleSessions.map(sessionIssueLabel).join(" · ") : "Spotify, YouTube Music and SoundCloud can be reached."}
+              href="/connections"
+              action="Manage"
+              tone={staleSessions.length ? "danger" : "success"}
+            />
+            <DashboardActionRow
+              icon={failedRuleCount || workerWarnings.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}
+              title={failedRuleCount ? `${failedRuleCount} playlist ${failedRuleCount === 1 ? "copy has" : "copies have"} an issue` : workerWarnings.length ? workerWarnings[0].title : "Recent copies look healthy"}
+              detail={failedRuleCount ? "Open the affected copy below for the latest error and progress." : workerWarnings.length ? workerWarnings[0].detail : "No failed or partial runs need action."}
+              href={failedRuleCount ? "#playlist-copies" : "/history"}
+              action={failedRuleCount ? "View copies" : "Activity"}
+              tone={failedRuleCount || workerWarnings.length ? "warning" : "success"}
+            />
+          </div>
+          </section>
 
-      <section className="section">
+          <section className="workbench" aria-labelledby="latest-run-heading">
+            <div className="workbench-header">
+              <div>
+                <div className="eyebrow flex items-center gap-1.5 text-muted-fg"><Activity size={12} /> Latest run</div>
+                <h2 id="latest-run-heading" className="heading-panel mt-1">
+                  {lastJob ? DATE_TIME.format(lastJob.finishedAt || lastJob.startedAt) : "No runs yet"}
+                </h2>
+              </div>
+              {lastJob ? <StatusBadge status={lastJob.status.toLowerCase()} /> : null}
+            </div>
+            <div className="grid grid-cols-2 gap-x-5 gap-y-5 p-4 sm:grid-cols-4 sm:p-5">
+              <StatTile value={stats.synced} label="Added" tone="accent" />
+              <StatTile value={stats.alreadySynced || 0} label="Already there" tone="neutral" />
+              <StatTile value={stats.notFound} label="Not found" tone="danger" />
+              <StatTile value={pendingReviewCount} label="Review" tone="warning" />
+            </div>
+            <div className="flex items-center justify-between border-t border-line-soft px-4 py-3 sm:px-5">
+              <span className="text-xs text-muted-fg">{bySourceEntries.length ? `${bySourceEntries.length} match sources` : "No source breakdown"}</span>
+              <Link
+                href={lastJob ? `/history?run=${encodeURIComponent(lastJob.id)}#run-${encodeURIComponent(lastJob.id)}` : "/history"}
+                className="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-[var(--accent)]"
+              >
+                Open activity <ArrowRight size={12} />
+              </Link>
+            </div>
+          </section>
+        </div>
+
+        <div className="grid gap-5">
+          <section className="workbench" aria-labelledby="automation-heading">
+            <div className="workbench-header">
+              <div>
+                <div className="eyebrow flex items-center gap-1.5 text-muted-fg">
+                  <RotateCw size={12} /> Automation
+                </div>
+                <h2 id="automation-heading" className="heading-panel mt-1">
+                  {runningJobs.length
+                    ? `${runningJobs.length} running now`
+                    : dueRules.length
+                      ? `${dueRules.length} ready to run`
+                      : "Queue is caught up"}
+                </h2>
+              </div>
+              <span className={`signal-dot ${workerWarnings.length ? "signal-dot-warning" : "signal-dot-success"}`} aria-hidden="true" />
+            </div>
+            <div className="p-4 sm:p-5">
+              <div className="grid grid-cols-3 gap-3">
+                <QueueMetric label="Due" value={dueRules.length} tone={dueRules.length ? "accent" : "neutral"} />
+                <QueueMetric label="Batches" value={dueSyncBatches} tone={dueSyncBatches ? "accent" : "neutral"} />
+                <QueueMetric label="Running" value={runningJobs.length} tone={runningJobs.length ? "success" : "neutral"} />
+              </div>
+              <div className="mt-5 [&>button]:w-full">
+                <RunDueSyncQueueButton disabled={!dueRules.length || runningJobs.length > 0} />
+              </div>
+              <p className="mt-3 text-xs leading-5 text-muted-fg">
+                {dueRules.length
+                  ? "Runs the same guarded queue as the background worker."
+                  : nextScheduledRun
+                    ? `Next copy is due ${DATE_TIME.format(nextScheduledRun)}.`
+                    : "New changes will appear here automatically."}
+              </p>
+              {workerWarnings.length ? (
+                <Callout tone={workerWarnings[0].tone} className="mt-4" title={workerWarnings[0].title}>
+                  <span className="text-xs">{workerWarnings[0].detail}</span>
+                </Callout>
+              ) : null}
+            </div>
+            <details className="group border-t border-line-soft">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-medium text-muted-fg marker:content-none sm:px-5">
+                <span className="inline-flex items-center gap-2"><Cpu size={14} /> Queue and worker details</span>
+                <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="border-t border-line-soft px-4 py-4 text-xs sm:px-5">
+                <p className="text-muted-fg">
+                  {lastWorkerRun
+                    ? `Last ${lastWorkerRun.status.toLowerCase().replaceAll("_", " ")} run ${DATE_TIME.format(lastWorkerRun.startedAt)} · ${lastWorkerRun.ran} ran · ${lastWorkerRun.failed} failed · ${lastWorkerRun.skipped} skipped`
+                    : "No sync-worker runs recorded yet."}
+                </p>
+                {queuePreviewRules.length ? (
+                  <div className="rows mt-3 border-t border-line-soft">
+                    {queuePreviewRules.map((rule) => (
+                      <SyncQueueRuleRow key={rule.id} rule={rule} running={Boolean(runningByRule.get(rule.id))} />
+                    ))}
+                    {hiddenQueueRules > 0 ? <div className="py-2 text-muted-fg">+ {hiddenQueueRules} more queued</div> : null}
+                  </div>
+                ) : null}
+                {workerSkippedReasons.length ? (
+                  <div className="rows mt-3 border-t border-line-soft">
+                    {workerSkippedReasons.slice(0, 3).map((item, index) => (
+                      <div key={`${item.ruleId || item.reason}:${index}`} className="py-2 text-muted-fg">
+                        <span className="font-semibold text-[var(--text)]">{item.name || item.reason}</span> · {item.reason}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          </section>
+
+        </div>
+      </div>
+
+      <section id="playlist-copies" className="section scroll-mt-6">
         <div className="section-head">
           <h2 className="heading-section">Playlist copies</h2>
           <span className="pill pill-accent">
@@ -403,9 +434,10 @@ export default async function DashboardPage() {
           <div className="rows">
             {ruleGroups.map((item) =>
               item.group ? (
-                <SyncRuleGroupCard
-                  key={item.group.id}
-                  groupName={item.group.name}
+                 <SyncRuleGroupCard
+                   key={item.group.id}
+                   groupId={item.group.id}
+                   groupName={item.group.name}
                   members={item.members}
                   rules={item.rules}
                   runningByRule={runningByRule}
@@ -430,72 +462,17 @@ export default async function DashboardPage() {
           </p>
         )}
       </section>
-
-      <section className="section">
-        <div className="section-head items-center">
-          <h2 className="heading-section flex items-center gap-2">
-            <Activity size={15} className="text-accent" />
-            Latest run
-          </h2>
-          <div className="flex items-center gap-2">
-            {lastJob ? <StatusBadge status={lastJob.status.toLowerCase()} /> : null}
-            <Link href="/history" className="btn btn-ghost">
-              History <ArrowRight size={14} />
-            </Link>
-          </div>
-        </div>
-        <p className="text-sm text-muted-fg">
-          {lastJob
-            ? lastJob.finishedAt?.toLocaleString() || lastJob.startedAt.toLocaleString()
-            : "No runs yet"}
-        </p>
-        <div className="mt-5 grid grid-cols-2 gap-x-10 gap-y-5 sm:grid-cols-4">
-          <StatTile value={stats.synced} label="Added" tone="accent" />
-          <StatTile value={stats.alreadySynced || 0} label="Already there" tone="neutral" />
-          <StatTile value={stats.notFound} label="Not found" tone="danger" />
-          <Link href="/manual-match" className="group block">
-            <div className="text-3xl font-semibold tracking-tight tabular-nums text-warning-fg">{pendingReviewCount}</div>
-            <div className="eyebrow mt-2 flex items-center gap-1 text-muted-fg transition-colors group-hover:text-[var(--text)]">
-              Review{stats.manualRequired ? ` · ${stats.manualRequired} last run` : ""}
-              <ArrowRight size={12} />
-            </div>
-          </Link>
-        </div>
-        {bySourceEntries.length ? (
-          <div className="mt-7">
-            <h3 className="eyebrow mb-1 flex items-center gap-1.5 text-muted-fg">
-              <ListMusic size={14} /> Match sources
-            </h3>
-            <div className="rows max-w-md">
-              {bySourceEntries.map(([source, count]) => {
-                const upper = source.toUpperCase();
-                const known = upper === "SPOTIFY" || upper === "YOUTUBE" || upper === "SOUNDCLOUD";
-                const meta = known ? serviceMeta(upper) : null;
-                return (
-                  <div key={source} className="flex items-center justify-between gap-2 py-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      {meta ? <ServiceIcon service={upper} size="sm" /> : null}
-                      <span className="truncate text-sm text-muted-fg">{matchSourceLabel(source, meta?.label)}</span>
-                    </div>
-                    <span className="text-sm font-semibold tabular-nums text-[var(--text)]">{count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-      </section>
     </AppShell>
   );
 }
 
-function StatTile({ value, label, tone }: { value: number; label: string; tone: "accent" | "neutral" | "danger" }) {
+function StatTile({ value, label, tone }: { value: number; label: string; tone: "accent" | "neutral" | "danger" | "warning" }) {
   const valueClass =
-    tone === "accent" ? "text-[var(--accent)]" : tone === "danger" ? "text-danger-fg" : "text-[var(--text)]";
+    tone === "accent" ? "text-[var(--accent)]" : tone === "danger" ? "text-danger-fg" : tone === "warning" ? "text-warning-fg" : "text-[var(--text)]";
   return (
     <div>
-      <div className={`text-3xl font-semibold tracking-tight tabular-nums ${valueClass}`}>{value}</div>
-      <div className="eyebrow mt-2 text-muted-fg">{label}</div>
+      <div className={`text-2xl font-semibold tracking-tight tabular-nums ${valueClass}`}>{value}</div>
+      <div className="eyebrow mt-1 text-muted-fg">{label}</div>
     </div>
   );
 }
@@ -509,6 +486,43 @@ function QueueMetric({ value, label, tone }: { value: number; label: string; ton
       <div className="eyebrow mt-1 text-muted-fg">{label}</div>
     </div>
   );
+}
+
+function DashboardActionRow({
+  icon,
+  title,
+  detail,
+  href,
+  action,
+  tone,
+}: {
+  icon: ReactNode;
+  title: string;
+  detail: string;
+  href: string;
+  action: string;
+  tone: "success" | "warning" | "danger";
+}) {
+  const toneClass = tone === "success" ? "text-success-fg" : tone === "danger" ? "text-danger-fg" : "text-warning-fg";
+  return (
+    <Link href={href} className="group flex min-w-0 items-center gap-3 py-4">
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-sm)] bg-surface-2 ${toneClass}`}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="heading-row block">{title}</span>
+        <span className="mt-0.5 block line-clamp-2 text-xs leading-5 text-muted-fg">{detail}</span>
+      </span>
+      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--accent)]">
+        <span className="hidden sm:inline">{action}</span><ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+      </span>
+    </Link>
+  );
+}
+
+function sessionIssueLabel(item: SessionStaleness): string {
+  const name = serviceMeta(item.service).shortLabel;
+  if (item.severity === "missing") return `${name} missing`;
+  if (item.severity === "stale") return `${name} ${item.daysOld}d old`;
+  return `${name} ageing`;
 }
 
 function SyncQueueRuleRow({ rule, running }: { rule: RuleWithDestinations; running: boolean }) {
@@ -537,24 +551,6 @@ function SyncQueueRuleRow({ rule, running }: { rule: RuleWithDestinations; runni
       </div>
     </div>
   );
-}
-
-// The match-source strip printed the matcher's own keys straight through, so
-// the dashboard read "no_match", "search_manual" and "stored" at the reader.
-// A brand label wins when the key is a service; otherwise unpick the snake_case.
-function matchSourceLabel(source: string, brandLabel?: string): string {
-  if (brandLabel) return brandLabel;
-  const known: Record<string, string> = {
-    stored: "Reused earlier match",
-    search: "Found by search",
-    search_manual: "Found after manual review",
-    no_match: "No match found",
-    isrc: "Matched by ISRC",
-    manual: "Chosen by hand",
-  };
-  if (known[source]) return known[source];
-  const words = source.replaceAll("_", " ").trim();
-  return words ? words.charAt(0).toUpperCase() + words.slice(1) : source;
 }
 
 function queueReasonLabel(reason?: string | null): string {

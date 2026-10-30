@@ -148,7 +148,11 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
           </div>
         ) : null}
         {outcome ? (
-          <div className={`mt-1.5 inline-flex items-center gap-1.5 text-xs ${outcome.ok ? "text-success" : "text-danger-fg"}`}>
+          <div
+            role={outcome.ok ? "status" : "alert"}
+            aria-live={outcome.ok ? "polite" : undefined}
+            className={`mt-1.5 inline-flex items-center gap-1.5 text-xs ${outcome.ok ? "text-success" : "text-danger-fg"}`}
+          >
             {outcome.ok ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
             {outcome.message}
           </div>
@@ -161,7 +165,7 @@ export function ServiceStatusRow(props: ServiceStatusRowProps) {
         className="btn btn-ghost surface-lift relative shrink-0"
       >
         <RefreshCw size={14} className={busy ? "animate-spin" : ""} />
-        {busy ? "Loading..." : "Refresh"}
+        {busy ? "Loading…" : "Refresh"}
       </button>
     </div>
   );

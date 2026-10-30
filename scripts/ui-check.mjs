@@ -24,8 +24,9 @@ const PAGES = [
   ["soundcloud-browser", "/soundcloud-browser"],
   ["admin-sessions", "/admin/sessions"],
 ];
+const EXTRA_PAGES = [["group-builder", "/playlists?groupMode=1"]];
 
-const MOBILE_PAGES = ["dashboard", "playlists", "settings", "connections", "youtube-browser"];
+const MOBILE_PAGES = ["dashboard", "playlists", "manual-match", "history", "settings", "connections", "youtube-browser"];
 
 // PAGES is also the sidebar contract, so it can only hold static routes.
 // /playlists/[id] is a real page with its own hero, table and dialogs, and it
@@ -40,9 +41,9 @@ async function routes(page) {
     .catch(() => null);
   if (!href) {
     console.log("note: no playlist to open, skipping /playlists/[id]");
-    return PAGES;
+    return [...PAGES, ...EXTRA_PAGES];
   }
-  return [...PAGES, ["playlist-detail", href]];
+  return [...PAGES, ...EXTRA_PAGES, ["playlist-detail", href]];
 }
 
 function readEnv() {
@@ -102,7 +103,7 @@ async function screenshots(browser) {
     current = url;
     await page.goto(BASE + url, { waitUntil: "domcontentloaded", timeout: 90_000 });
     await page.waitForTimeout(2200);
-    await page.screenshot({ path: path.join(OUT, `${name}.png`), fullPage: true });
+    await page.screenshot({ path: path.join(OUT, `${name}.png`), fullPage: true, caret: "initial" });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (overflow > 1) problems.push(`overflow-x ${overflow}px  ${url}  (1440)`);
     console.log(`shot ${url}`);
@@ -114,12 +115,15 @@ async function screenshots(browser) {
   });
   const mp = await mobile.newPage();
   watch(mp, () => `${current} (390)`);
-  for (const name of MOBILE_PAGES) {
-    const url = PAGES.find(([key]) => key === name)?.[1];
+  const mobileRoutes = MOBILE_PAGES.map((name) => PAGES.find(([key]) => key === name)).filter(Boolean);
+  mobileRoutes.push(...EXTRA_PAGES);
+  const playlistDetail = pages.find(([name]) => name === "playlist-detail");
+  if (playlistDetail) mobileRoutes.push(playlistDetail);
+  for (const [name, url] of mobileRoutes) {
     current = url;
     await mp.goto(BASE + url, { waitUntil: "domcontentloaded", timeout: 90_000 });
     await mp.waitForTimeout(1800);
-    await mp.screenshot({ path: path.join(OUT, `m-${name}.png`), fullPage: true });
+    await mp.screenshot({ path: path.join(OUT, `m-${name}.png`), fullPage: true, caret: "initial" });
     const overflow = await mp.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     if (overflow > 1) problems.push(`overflow-x ${overflow}px  ${url}  (390)`);
     console.log(`shot mobile ${url}`);
@@ -165,7 +169,7 @@ async function smoke(browser) {
     // fails closed instead - an unrecognised button is skipped and reported.
     const SAFE_CLICK =
       /^(all|done|needs attention|failed|filter|filters|clear filters|show|hide|show more|show less|more|less|expand|collapse|close|dismiss|run history|sort|next|previous|prev|paste json instead|jump)\b/i;
-    const buttons = await page.$$("main button:not([disabled])");
+    const buttons = await page.$$("main button:not([disabled]):visible");
     const labels = [];
     for (const button of buttons) {
       labels.push(((await button.textContent()) || "").trim().replace(/\s+/g, " "));
@@ -176,7 +180,7 @@ async function smoke(browser) {
       if (!label || !SAFE_CLICK.test(label)) continue;
       // Re-query: a click can re-render the list, which detaches a handle
       // captured before it - that reported as a failure when it was not one.
-      const live = (await page.$$("main button:not([disabled])"))[index];
+      const live = (await page.$$("main button:not([disabled]):visible"))[index];
       if (!live) continue;
       const stillLabel = ((await live.textContent()) || "").trim().replace(/\s+/g, " ");
       if (stillLabel !== label) continue;
@@ -196,7 +200,7 @@ async function smoke(browser) {
   watch(mp, () => "mobile nav");
   await mp.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 90_000 });
   await mp.getByRole("button", { name: "More" }).click();
-  for (const href of ["/history", "/youtube-browser", "/soundcloud-browser", "/admin/sessions"]) {
+  for (const href of ["/connections", "/history", "/youtube-browser", "/soundcloud-browser", "/admin/sessions"]) {
     const count = await mp.locator(`nav ~ div a[href="${href}"], div a[href="${href}"]`).count();
     if (!count) problems.push(`unreachable  ${href} missing from the mobile More sheet`);
   }

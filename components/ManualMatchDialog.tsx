@@ -32,10 +32,11 @@ function confidenceTone(score: number): string {
 
 function Artwork({ track, size = "lg" }: { track?: ServiceTrack | null; size?: "md" | "lg" }) {
   const cls = size === "lg" ? "h-16 w-16" : "h-12 w-12";
+  const pixels = size === "lg" ? 64 : 48;
   if (track?.imageUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={track.imageUrl} alt="" className={`${cls} shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]`} />
+      <img src={track.imageUrl} alt="" width={pixels} height={pixels} className={`${cls} shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]`} />
     );
   }
   return (
@@ -73,9 +74,9 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
       : [];
 
   return (
-    <article className="overflow-hidden">
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
-        <div className="border-b border-[var(--border-soft)] bg-[var(--surface-2)]/65 p-4 lg:border-b-0 lg:border-r">
+    <article className="min-w-0 overflow-hidden">
+      <div className="grid min-w-0 grid-cols-1 gap-0 lg:grid-cols-[minmax(16rem,0.75fr)_minmax(0,1.6fr)]">
+        <div className="min-w-0 border-b border-[var(--border-soft)] bg-[var(--surface-2)]/65 p-4 lg:self-start lg:border-b-0 lg:border-r lg:p-5">
           <div className="eyebrow flex items-center gap-2">
             <ServiceIcon service={item.source?.service || ""} size="sm" className="h-5 w-5 rounded-[var(--radius-sm)]" />
             Source
@@ -95,13 +96,13 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
               </div>
             </div>
           </div>
-          <div className="mt-4 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] p-3">
+          <div className="mt-4 border-t border-[var(--border-soft)] pt-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
               <ListMusic size={15} />
-              Resolve once, reuse everywhere
+              Your choice is saved
             </div>
             <p className="mt-1 text-xs leading-5 text-muted-fg">
-              Accepted picks feed future sync runs for the same song.
+              Future copies reuse it for the same song.
             </p>
             <div className="mt-3">
               <ManualMatchActions id={item.id} targetService={item.targetService} />
@@ -109,7 +110,7 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
           </div>
         </div>
 
-        <div className="p-3 sm:p-4">
+        <div className="min-w-0 p-3 sm:p-4 lg:p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="eyebrow">Choose match</div>
             <div className="text-xs text-muted-fg">{candidates.length} candidates</div>

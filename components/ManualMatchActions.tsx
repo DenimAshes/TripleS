@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Link, MinusCircle, SkipForward } from "lucide-react";
+import { Check, Link, MinusCircle, MoreHorizontal, SkipForward } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -83,41 +83,47 @@ export function ManualMatchActions({
       setLinkOpen(false);
       setLinkUrl("");
       router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save link");
     } finally {
       setBusy(null);
     }
   }
   return (
     <div className={compact ? "" : "space-y-2"}>
-      <div className="flex flex-wrap gap-2">
-        {serviceTrackId ? (
-          <button disabled={Boolean(busy)} onClick={useThis} className={compact ? "btn btn-primary h-8 px-3 text-xs" : "btn btn-primary"}>
+      {serviceTrackId ? (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={Boolean(busy)} onClick={useThis} className={compact ? "btn btn-primary h-8 px-3 text-xs" : "btn btn-primary"}>
             <Check size={compact ? 13 : 16} />
-            {busy === "use" ? "Saving..." : "Use"}
+            {busy === "use" ? "Saving…" : "Use"}
           </button>
-        ) : (
-          <button disabled={Boolean(busy)} onClick={() => act("accept")} className="btn btn-primary">
-            <Check size={16} />
-            {busy === "accept" ? "Saving..." : "Use best"}
-          </button>
-        )}
-        {!serviceTrackId ? (
-          <>
-            <button disabled={Boolean(busy)} onClick={() => setLinkOpen((open) => !open)} className="btn btn-ghost">
-              <Link size={16} />
-              {linkOpen ? "Close link" : "Use link"}
+        </div>
+      ) : (
+        <div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={Boolean(busy)} onClick={() => act("accept")} className="btn btn-primary">
+              <Check size={16} />
+              {busy === "accept" ? "Saving…" : "Use best match"}
             </button>
-            <button disabled={Boolean(busy)} onClick={() => act("exclude")} className="btn btn-ghost">
-              <MinusCircle size={16} />
-              {busy === "exclude" ? "Saving..." : "Don't sync"}
-            </button>
-          </>
-        ) : null}
-        <button disabled={Boolean(busy)} onClick={() => act("reject")} className={compact ? "btn btn-ghost h-8 px-3 text-xs" : "btn btn-ghost"}>
-          <SkipForward size={compact ? 13 : 16} />
-          {busy === "reject" ? "Skipping..." : "Skip"}
-        </button>
-      </div>
+            <details className="group">
+              <summary className="btn btn-ghost list-none marker:content-none">
+                <MoreHorizontal size={16} /> Other choices
+              </summary>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" disabled={Boolean(busy)} onClick={() => setLinkOpen((open) => !open)} className="btn btn-ghost">
+                  <Link size={16} /> {linkOpen ? "Close link" : "Use a link"}
+                </button>
+                <button type="button" disabled={Boolean(busy)} onClick={() => act("exclude")} className="btn btn-ghost">
+                  <MinusCircle size={16} /> {busy === "exclude" ? "Saving…" : "Keep only here"}
+                </button>
+                <button type="button" disabled={Boolean(busy)} onClick={() => act("reject")} className="btn btn-ghost">
+                  <SkipForward size={16} /> {busy === "reject" ? "Skipping…" : "Skip suggestion"}
+                </button>
+              </div>
+            </details>
+          </div>
+        </div>
+      )}
       {linkOpen ? (
         <form
           className="flex max-w-xl flex-col gap-2 sm:flex-row"
@@ -127,18 +133,23 @@ export function ManualMatchActions({
           }}
         >
           <input
+            name="songUrl"
+            type="url"
             value={linkUrl}
             onChange={(event) => setLinkUrl(event.target.value)}
-            placeholder={`Paste song link${targetService ? ` for ${targetService}` : ""}`}
+            autoComplete="off"
+            spellCheck={false}
+            aria-label={`Song link${targetService ? ` for ${targetService}` : ""}`}
+            placeholder={`Paste song link${targetService ? ` for ${targetService}` : ""}…`}
             className="min-w-0 flex-1"
           />
           <button disabled={Boolean(busy)} className="btn btn-primary" type="submit">
-            {busy === "link" ? "Saving..." : "Save link"}
+            {busy === "link" ? "Saving…" : "Save link"}
           </button>
         </form>
       ) : null}
-      {notice ? <div className="text-xs font-medium text-success-fg">{notice}</div> : null}
-      {error ? <div className="text-xs font-medium text-danger-fg">{error}</div> : null}
+      {notice ? <div role="status" className="text-xs font-medium text-success-fg">{notice}</div> : null}
+      {error ? <div role="alert" className="text-xs font-medium text-danger-fg">{error}</div> : null}
     </div>
   );
 }
