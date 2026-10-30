@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { calculateSimilarity } from "../lib/utils/similarity";
+import { scoreStoredMatch } from "../lib/sync/matchEngine";
 import type { NormalizedTrack } from "../lib/sync/syncTypes";
 
 const base: NormalizedTrack = {
@@ -15,6 +16,32 @@ const base: NormalizedTrack = {
 describe("track similarity", () => {
   it("returns a perfect match for identical ISRC values", () => {
     expect(calculateSimilarity(base, { ...base, sourceService: "youtube", sourceTrackId: "yt_1" })).toBe(1);
+  });
+
+  it("re-scores automatic stored matches but keeps manual confirmations trusted", () => {
+    const target: NormalizedTrack = {
+      title: "5 минут назад",
+      artists: ["Boulevard Depo"],
+      durationMs: 221773,
+      sourceService: "soundcloud",
+      sourceTrackId: "sc_stored",
+    };
+    const source: NormalizedTrack = {
+      title: "5 минут назад",
+      artists: ["PHARAOH un Boulevard Depo Плакшери"],
+      album: "Плакшери",
+      durationMs: 222000,
+      sourceService: "youtube",
+      sourceTrackId: "yt_stored",
+    };
+
+    const automatic = scoreStoredMatch(source, { track: target, confidence: 0.82, status: "AUTO_MATCHED" });
+    const confirmed = scoreStoredMatch(base, { track: target, confidence: 0.2, status: "CONFIRMED" });
+
+    expect(automatic.confidence).toBeGreaterThanOrEqual(0.85);
+    expect(automatic.source).toBe("stored_rescored");
+    expect(confirmed.confidence).toBe(1);
+    expect(confirmed.source).toBe("stored_confirmed");
   });
 
   it("keeps decorated platform titles highly similar", () => {

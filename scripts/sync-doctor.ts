@@ -92,10 +92,14 @@ async function diagnoseRule(syncRuleId: string, liveMode: boolean): Promise<Chec
     select: { id: true, status: true, startedAt: true, finishedAt: true, errorMessage: true, statsJson: true },
   });
   checks.push({
-    status: recentJobs.some((job) => job.status === "FAILED") ? "WARN" : "OK",
+    status: recentJobs[0]?.status === "FAILED" ? "WARN" : "OK",
     name: "recent jobs",
     detail: recentJobs.length
-      ? recentJobs.map((job) => `${job.status} ${job.startedAt.toISOString()}${job.errorMessage ? ` (${job.errorMessage})` : ""}`).join(" | ")
+      ? recentJobs
+          .map((job, index) =>
+            `${job.status} ${job.startedAt.toISOString()}${index === 0 && job.errorMessage ? ` (${job.errorMessage})` : ""}`,
+          )
+          .join(" | ")
       : "no prior jobs",
   });
 

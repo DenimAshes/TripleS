@@ -8,7 +8,7 @@ import {
 } from "@/lib/services/persistentRunnerRegistry";
 import { syncPlaylistTracksToDb } from "@/lib/services/playlistTracksStore";
 import type { NormalizedTrack, ServiceKey } from "./syncTypes";
-import { findMatch, prewarmLocalCatalog, type LocalCatalogPool } from "./matchEngine";
+import { findMatch, prewarmLocalCatalog, scoreStoredMatch, type LocalCatalogPool, type MatchResult } from "./matchEngine";
 import {
   invalidateDestinationTrack,
   shouldInvalidateDestinationTrack,
@@ -745,13 +745,13 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
         const storedMatch = lookupStoredMatch(matchContext, sourceServiceTrack.internalTrackId);
         const isrcDbMatch = lookupIsrcMatch(matchContext, sourceTrack);
 
-        let match: { track: NormalizedTrack; confidence: number; source?: string; candidates?: { track: NormalizedTrack; confidence: number }[] } | null;
+        let match: MatchResult | null;
         if (overrideTrack) {
           match = { track: normalizedFromServiceTrack(overrideTrack), confidence: 1, source: "manual_override" };
         } else if (existing) {
           match = { track: existing, confidence: 0.95, source: "playlist" };
         } else if (storedMatch) {
-          match = { track: storedMatch.track, confidence: storedMatch.confidence, source: "stored" };
+          match = scoreStoredMatch(sourceTrack, storedMatch);
         } else if (isrcDbMatch) {
           match = { track: isrcDbMatch, confidence: 1, source: "isrc_db" };
         } else {

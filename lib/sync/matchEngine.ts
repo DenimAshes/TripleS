@@ -169,6 +169,26 @@ export type MatchResult = RankedMatch & {
   source?: string;
 };
 
+export function scoreStoredMatch(
+  sourceTrack: NormalizedTrack,
+  stored: { track: NormalizedTrack; confidence: number; status: string },
+): MatchResult {
+  if (stored.status === "CONFIRMED") {
+    return { track: stored.track, confidence: 1, source: "stored_confirmed" };
+  }
+
+  // AUTO_MATCHED rows keep the score produced by the matcher version that
+  // created them. Re-score against today's metadata and rules so an obsolete
+  // confidence cannot push an obvious match back into manual review forever.
+  const breakdown = calculateSimilarityWithBreakdown(sourceTrack, stored.track);
+  return {
+    track: stored.track,
+    confidence: breakdown.score,
+    candidates: [{ track: stored.track, confidence: breakdown.score, breakdown }],
+    source: "stored_rescored",
+  };
+}
+
 const ACCEPT_CONFIDENCE = Number(process.env.MATCH_ACCEPT_CONFIDENCE ?? 0.65);
 const EARLY_EXIT_CONFIDENCE = 0.9;
 const AMBIGUITY_GAP = 0.04;
