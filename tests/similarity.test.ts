@@ -63,6 +63,41 @@ describe("track similarity", () => {
     expect(withSnippetDuration).toBeLessThan(0.65);
   });
 
+  it("does not charge SoundCloud for album metadata it does not provide", () => {
+    const source: NormalizedTrack = {
+      title: "Ice Baby",
+      artists: ["Guf Doma"],
+      album: "Doma",
+      durationMs: 253000,
+      sourceService: "youtube",
+      sourceTrackId: "yt_4",
+    };
+    const score = calculateSimilarity(source, {
+      title: "Ice Baby",
+      artists: ["Guf"],
+      durationMs: 252000,
+      sourceService: "soundcloud",
+      sourceTrackId: "sc_3",
+    });
+
+    expect(score).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it("keeps a live version below the auto-match threshold without album metadata", () => {
+    const score = calculateSimilarity(
+      { ...base, isrc: undefined },
+      {
+        title: "Save Your Tears (Live)",
+        artists: ["The Weeknd"],
+        durationMs: 219000,
+        sourceService: "soundcloud",
+        sourceTrackId: "sc_live",
+      },
+    );
+
+    expect(score).toBeLessThan(0.85);
+  });
+
   it("penalizes unrelated tracks", () => {
     const score = calculateSimilarity(base, {
       title: "Midnight City",

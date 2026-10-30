@@ -212,7 +212,8 @@ export function calculateSimilarityWithBreakdown(a: NormalizedTrack, b: Normaliz
   const albumScore = a.album && b.album ? dice(normalizeTitle(a.album), normalizeTitle(b.album)) : 0;
   const vPenalty = variantPenalty(a, b);
 
-  const weighted = titleScore * 0.52 + artistScore * 0.26 + durScore * 0.12 + albumScore * 0.10;
+  const availableWeight = 0.78 + (a.durationMs && b.durationMs ? 0.12 : 0) + (a.album && b.album ? 0.1 : 0);
+  const weighted = (titleScore * 0.52 + artistScore * 0.26 + durScore * 0.12 + albumScore * 0.1) / availableWeight;
   const exactTitleArtistContained = titleA === titleB && titleA.length > 2 && artistOverlap >= 0.6 ? 0.93 : 0;
   const strongTitleArtistContained = titleScore >= 0.92 && artistOverlap >= 0.75 ? 0.9 : 0;
 
