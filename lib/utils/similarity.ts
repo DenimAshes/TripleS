@@ -93,6 +93,21 @@ function setOverlap(a: Set<string>, b: Set<string>) {
   return hits / Math.min(a.size, b.size);
 }
 
+function artistsWithoutTrailingMetadata(track: NormalizedTrack) {
+  const suffixes = [track.album, track.title]
+    .map((value) => normalizeArtist(value || ""))
+    .filter((value) => value.length > 2)
+    .sort((a, b) => b.length - a.length);
+
+  return track.artists.map((rawArtist) => {
+    const artist = normalizeArtist(rawArtist);
+    for (const suffix of suffixes) {
+      if (artist.endsWith(` ${suffix}`)) return artist.slice(0, -suffix.length).trim();
+    }
+    return rawArtist;
+  });
+}
+
 function fuzzyArtistOverlap(a: Set<string>, b: Set<string>) {
   if (!a.size || !b.size) return 0;
   const smaller = a.size <= b.size ? a : b;
@@ -142,8 +157,8 @@ function durationScore(a?: number, b?: number) {
   const rawDiff = b - a;
   const diff = Math.abs(rawDiff);
   const longerTarget = rawDiff > 0;
-  if (diff <= 3_000) return { score: 1, penalty: 0 };
   const toleratedDiff = longerTarget ? diff * 0.65 : diff;
+  if (toleratedDiff <= 3_000) return { score: 1, penalty: 0 };
   if (toleratedDiff <= 20_000) return { score: 1 - (toleratedDiff - 3_000) / 17_000, penalty: 0 };
   if (toleratedDiff <= 45_000) return { score: 0, penalty: 0.18 };
   if (toleratedDiff <= 90_000) return { score: 0, penalty: 0.3 };
@@ -158,8 +173,12 @@ function explicitness(title: string) {
 }
 
 function variantPenalty(a: NormalizedTrack, b: NormalizedTrack) {
-  const va = extractVariantTag(a.title);
-  const vb = extractVariantTag(b.title);
+  // YouTube occasionally appends "Cover" to its byline instead of the title.
+  // Keep that signal so an otherwise identical title and duration cannot turn a
+  // known cover into an automatic match.
+  const cover = /(?:^|[^\p{L}\p{N}])(?:cover|кавер)(?=$|[^\p{L}\p{N}])/iu;
+  const va = extractVariantTag(a.title) || (cover.test(a.artists.join(" ")) ? "cover" : undefined);
+  const vb = extractVariantTag(b.title) || (cover.test(b.artists.join(" ")) ? "cover" : undefined);
   const ea = explicitness(a.title);
   const eb = explicitness(b.title);
   if (ea && eb && ea !== eb) return 0.12;
@@ -193,13 +212,15 @@ export function calculateSimilarityWithBreakdown(a: NormalizedTrack, b: Normaliz
   const allArtists = [...a.artists, ...b.artists];
   const titleA = normalizeTitle(stripLeadingArtist(a.title, allArtists));
   const titleB = normalizeTitle(stripLeadingArtist(b.title, allArtists));
-  const artistA = normalizeArtist(a.artists[0] || "");
-  const artistB = normalizeArtist(b.artists[0] || "");
+  const cleanedArtistsA = artistsWithoutTrailingMetadata(a);
+  const cleanedArtistsB = artistsWithoutTrailingMetadata(b);
+  const artistA = normalizeArtist(cleanedArtistsA[0] || "");
+  const artistB = normalizeArtist(cleanedArtistsB[0] || "");
   // Pass titles too so "Сосед (piedalās Гера Джио)" contributes "Гера
   // Джио" to the artist set even if the artists field only lists the
   // primary. Same trick handles "Track (feat. X)" / "Track (ft. X)".
-  const artistsA = normalizedArtistSet(a.artists, a.title);
-  const artistsB = normalizedArtistSet(b.artists, b.title);
+  const artistsA = normalizedArtistSet(cleanedArtistsA, a.title);
+  const artistsB = normalizedArtistSet(cleanedArtistsB, b.title);
 
   const titleScore = textScore(titleA, titleB);
   const primaryArtistScore = textScore(artistA, artistB);
@@ -214,7 +235,13 @@ export function calculateSimilarityWithBreakdown(a: NormalizedTrack, b: Normaliz
 
   const availableWeight = 0.78 + (a.durationMs && b.durationMs ? 0.12 : 0) + (a.album && b.album ? 0.1 : 0);
   const weighted = (titleScore * 0.52 + artistScore * 0.26 + durScore * 0.12 + albumScore * 0.1) / availableWeight;
-  const exactTitleArtistContained = titleA === titleB && titleA.length > 2 && artistOverlap >= 0.6 ? 0.93 : 0;
+  // SoundCloud exposes the uploader and YouTube sometimes folds the album into
+  // the artist byline. For an exact title, a near-identical duration is stronger
+  // evidence than those unreliable artist fields.
+  const closeDuration = Boolean(a.durationMs && b.durationMs && Math.abs(a.durationMs - b.durationMs) <= 10_000);
+  const corroborated = artistOverlap >= 0.6 || closeDuration;
+  const exactTitleArtistContained =
+    titleA === titleB && titleA.length > 2 && corroborated && vPenalty === 0 ? 0.93 : 0;
   const strongTitleArtistContained = titleScore >= 0.92 && artistOverlap >= 0.75 ? 0.9 : 0;
 
   const raw = Math.max(weighted, exactTitleArtistContained, strongTitleArtistContained) - vPenalty - durPenalty;

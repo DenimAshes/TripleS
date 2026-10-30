@@ -83,6 +83,89 @@ describe("track similarity", () => {
     expect(score).toBeGreaterThanOrEqual(0.85);
   });
 
+  it("auto-matches an exact title and duration despite unreliable uploader names", () => {
+    const score = calculateSimilarity(
+      {
+        title: "Егор Крид - Невеста",
+        artists: ["Егор Крид Холостяк"],
+        durationMs: 207000,
+        sourceService: "youtube",
+        sourceTrackId: "yt_bride",
+      },
+      {
+        title: "Егор Крид - Невеста (Премьера Клипа, 2015)",
+        artists: ["Самед Садыхов"],
+        durationMs: 208634,
+        sourceService: "soundcloud",
+        sourceTrackId: "sc_bride",
+      },
+    );
+
+    expect(score).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it("removes an album or title appended to the YouTube artist byline", () => {
+    const score = calculateSimilarity(
+      {
+        title: "Chao, bambino (Чао, бамбино)",
+        artists: ["CarMan Car-Mania"],
+        album: "Car-Mania",
+        sourceService: "youtube",
+        sourceTrackId: "yt_carman",
+      },
+      {
+        title: "Chao, bambino (Чао, бамбино)",
+        artists: ["CarMan"],
+        sourceService: "soundcloud",
+        sourceTrackId: "sc_carman",
+      },
+    );
+
+    expect(score).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it("does not auto-match a cover hidden in the artist byline", () => {
+    const score = calculateSimilarity(
+      {
+        title: "Сумасшедшая",
+        artists: ["Comedy Club Cover, Алексей Воробьёв"],
+        durationMs: 115000,
+        sourceService: "youtube",
+        sourceTrackId: "yt_cover",
+      },
+      {
+        title: "Сумасшедшая (ПОШЛАЯ МОЛЛИ)",
+        artists: ["Мэнди/Mandy"],
+        durationMs: 111709,
+        sourceService: "soundcloud",
+        sourceTrackId: "sc_cover",
+      },
+    );
+
+    expect(score).toBeLessThan(0.85);
+  });
+
+  it("recognizes a Russian cover label", () => {
+    const score = calculateSimilarity(
+      {
+        title: "Блядская натура",
+        artists: ["LoToR"],
+        durationMs: 183000,
+        sourceService: "youtube",
+        sourceTrackId: "yt_original",
+      },
+      {
+        title: "Блядская натура (LoToR кавер)",
+        artists: ["Второй Шанс"],
+        durationMs: 182000,
+        sourceService: "soundcloud",
+        sourceTrackId: "sc_russian_cover",
+      },
+    );
+
+    expect(score).toBeLessThan(0.85);
+  });
+
   it("keeps a live version below the auto-match threshold without album metadata", () => {
     const score = calculateSimilarity(
       { ...base, isrc: undefined },

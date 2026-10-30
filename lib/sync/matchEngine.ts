@@ -425,6 +425,10 @@ function isAmbiguous(ranked: RankedMatch[]) {
   const top = ranked[0];
   const second = ranked[1];
   if (!top || !second) return false;
+  // Several platforms can return duplicate uploads of the same recording. If
+  // the top result has an exact, corroborated title match, either upload is good
+  // enough and asking the user to choose adds no value.
+  if ((top.breakdown?.exactTitleArtistBoost ?? 0) >= 0.93) return false;
   const closeGap = top.confidence - second.confidence < AMBIGUITY_GAP;
   if (!closeGap) return false;
   if (top.confidence <= AMBIGUITY_ZONE_MAX) return true;

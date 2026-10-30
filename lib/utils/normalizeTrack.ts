@@ -16,7 +16,7 @@ const VARIANT_PATTERNS_ANYWHERE: { tag: string; regex: RegExp }[] = [
 
 const VARIANT_PATTERNS_BRACKET_ONLY: { tag: string; regex: RegExp }[] = [
   { tag: "live", regex: /\blive\b/i },
-  { tag: "cover", regex: /\bcover\b/i },
+  { tag: "cover", regex: /(?:^|[^\p{L}\p{N}])(?:cover|кавер)(?=$|[^\p{L}\p{N}])/iu },
 ];
 
 const DECORATIONS_RE = /\b(official|video|audio|lyrics?|lyric|remaster(?:ed)?|visualizer|music|clip|hd|hq|4k|8k|mv|m\/v|topic|free\s*download|out\s*now|premiere)\b/gi;
