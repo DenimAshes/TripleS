@@ -123,7 +123,8 @@ async function diagnoseRule(syncRuleId: string, liveMode: boolean): Promise<Chec
     let storedCookies: string[] = [];
     if (stored && sessionService) {
       try {
-        storedCookies = sessionCookiesPresent(sessionService, decodeStorageState(stored.stateGzipBase64));
+        const state = decodeStorageState(stored.stateGzipBase64);
+        if (state) storedCookies = sessionCookiesPresent(sessionService, state);
       } catch {}
     }
     checks.push({
