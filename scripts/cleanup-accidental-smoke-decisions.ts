@@ -72,6 +72,11 @@ async function main() {
       `rejected=${preservedCandidates.filter((candidate) => candidate.status === "REJECTED").length}`,
   );
 
+  if (Object.values(counts).every((count) => count === 0)) {
+    console.log("[cleanup-smoke-decisions] no accidental smoke-test decisions remain.");
+    return;
+  }
+
   if (mismatches.length) {
     console.warn(`[cleanup-smoke-decisions] safety check failed:\n- ${mismatches.join("\n- ")}`);
   }
