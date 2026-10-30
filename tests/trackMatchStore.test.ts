@@ -1,35 +1,53 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ deleteMany: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  transaction: vi.fn(),
+  trackMatchDeleteMany: vi.fn(),
+  serviceTrackDeleteMany: vi.fn(),
+}));
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    trackMatch: { deleteMany: mocks.deleteMany },
+    $transaction: mocks.transaction,
   },
 }));
 
-import { deleteStoredTrackMatch, shouldInvalidateStoredTrackMatch } from "@/lib/sync/trackMatchStore";
+import { invalidateDestinationTrack, shouldInvalidateDestinationTrack } from "@/lib/sync/trackMatchStore";
 
 describe("stored track matches", () => {
-  beforeEach(() => mocks.deleteMany.mockReset());
-
-  test("invalidates only a missing remote track selected from stored matches", () => {
-    expect(shouldInvalidateStoredTrackMatch("stored", new Error("SoundCloud track not found."))).toBe(true);
-    expect(shouldInvalidateStoredTrackMatch("search", new Error("SoundCloud track not found."))).toBe(false);
-    expect(shouldInvalidateStoredTrackMatch("stored", new Error("SoundCloud playlist not found."))).toBe(false);
+  beforeEach(() => {
+    for (const mock of Object.values(mocks)) mock.mockReset();
+    mocks.transaction.mockImplementation(async (callback) => callback({
+      trackMatch: { deleteMany: mocks.trackMatchDeleteMany },
+      serviceTrack: { deleteMany: mocks.serviceTrackDeleteMany },
+    }));
   });
 
-  test("deletes the matching destination link", async () => {
-    mocks.deleteMany.mockResolvedValue({ count: 1 });
+  test("invalidates a missing automatic destination but not a manual override", () => {
+    expect(shouldInvalidateDestinationTrack("stored", new Error("SoundCloud track not found."))).toBe(true);
+    expect(shouldInvalidateDestinationTrack("local_catalog", new Error("SoundCloud track not found."))).toBe(true);
+    expect(shouldInvalidateDestinationTrack("manual_override", new Error("SoundCloud track not found."))).toBe(false);
+    expect(shouldInvalidateDestinationTrack("stored", new Error("SoundCloud playlist not found."))).toBe(false);
+  });
 
-    await deleteStoredTrackMatch("internal-1", "SOUNDCLOUD", "target-1");
+  test("deletes the match and an unreferenced cached destination track", async () => {
+    mocks.trackMatchDeleteMany.mockResolvedValue({ count: 1 });
+    mocks.serviceTrackDeleteMany.mockResolvedValue({ count: 1 });
 
-    expect(mocks.deleteMany).toHaveBeenCalledWith({
+    await expect(invalidateDestinationTrack("internal-1", "SOUNDCLOUD", "target-1")).resolves.toEqual({
+      matches: 1,
+      tracks: 1,
+    });
+
+    expect(mocks.trackMatchDeleteMany).toHaveBeenCalledWith({
       where: {
         internalTrackId: "internal-1",
         soundcloudServiceTrackId: "target-1",
         status: { in: ["CONFIRMED", "AUTO_MATCHED"] },
       },
+    });
+    expect(mocks.serviceTrackDeleteMany).toHaveBeenCalledWith({
+      where: { id: "target-1", playlistStates: { none: {} } },
     });
   });
 });

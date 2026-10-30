@@ -10,8 +10,8 @@ import { syncPlaylistTracksToDb } from "@/lib/services/playlistTracksStore";
 import type { NormalizedTrack, ServiceKey } from "./syncTypes";
 import { findMatch, prewarmLocalCatalog, type LocalCatalogPool } from "./matchEngine";
 import {
-  deleteStoredTrackMatch,
-  shouldInvalidateStoredTrackMatch,
+  invalidateDestinationTrack,
+  shouldInvalidateDestinationTrack,
   upsertAutoTrackMatch,
 } from "./trackMatchStore";
 import {
@@ -784,13 +784,13 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
             try {
               await targetAdapter.addTrackToPlaylist(destination.playlistId, match.track);
             } catch (error) {
-              if (!shouldInvalidateStoredTrackMatch(match.source, error)) throw error;
-              const deleted = await deleteStoredTrackMatch(
+              if (!shouldInvalidateDestinationTrack(match.source, error)) throw error;
+              const invalidated = await invalidateDestinationTrack(
                 sourceServiceTrack.internalTrackId,
                 destination.service,
                 targetServiceTrack.id,
               );
-              if (!deleted.count) throw error;
+              if (!invalidated.matches) throw error;
               matchContext.storedMatchByInternalId.delete(sourceServiceTrack.internalTrackId);
               recordOutcome(destination, "notFound");
               pendingLogs.push({
@@ -800,8 +800,12 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
                 service: destination.service,
                 playlistId: destination.playlistId,
                 trackTitle: sourceTrack.title,
-                message: "Stored destination match no longer exists; it will be searched again on the next run.",
-                metadataJson: JSON.stringify({ matchSource: "stored", staleTargetTrackId: targetServiceTrack.id }),
+                message: "Destination track no longer exists; it will be searched again on the next run.",
+                metadataJson: JSON.stringify({
+                  matchSource: match.source,
+                  staleTargetTrackId: targetServiceTrack.id,
+                  removedCachedTrack: Boolean(invalidated.tracks),
+                }),
               });
               continue;
             }

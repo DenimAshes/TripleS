@@ -8,22 +8,30 @@ function trackMatchField(service: string) {
   return "soundcloudServiceTrackId";
 }
 
-export function shouldInvalidateStoredTrackMatch(source: string | undefined, error: unknown) {
+export function shouldInvalidateDestinationTrack(source: string | undefined, error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  return source === "stored" && /\btrack not found\b/i.test(message);
+  return source !== "manual_override" && source !== "playlist" && /\btrack not found\b/i.test(message);
 }
 
-export function deleteStoredTrackMatch(
+export function invalidateDestinationTrack(
   internalTrackId: string,
   destinationService: string,
   targetServiceTrackId: string,
 ) {
-  return prisma.trackMatch.deleteMany({
-    where: {
-      internalTrackId,
-      [trackMatchField(destinationService)]: targetServiceTrackId,
-      status: { in: ["CONFIRMED", "AUTO_MATCHED"] },
-    },
+  return prisma.$transaction(async (tx) => {
+    const matches = await tx.trackMatch.deleteMany({
+      where: {
+        internalTrackId,
+        [trackMatchField(destinationService)]: targetServiceTrackId,
+        status: { in: ["CONFIRMED", "AUTO_MATCHED"] },
+      },
+    });
+    const tracks = matches.count
+      ? await tx.serviceTrack.deleteMany({
+          where: { id: targetServiceTrackId, playlistStates: { none: {} } },
+        })
+      : { count: 0 };
+    return { matches: matches.count, tracks: tracks.count };
   });
 }
 
