@@ -17,7 +17,7 @@ const stateDir = path.resolve(process.cwd(), "worker", "state");
 function usage(): never {
   console.error(
     [
-      "Usage: npm run state:push -- <youtube|spotify|soundcloud>... [--all] [--dry-run]",
+      "Usage: npm run state:push -- <youtube|soundcloud>... [--all] [--dry-run]",
       "",
       "Reads worker/state/<service>.json and stores it in WorkerSessionState, which is",
       "what scripts/restore-worker-state.ts prefers over the *_STATE_GZIP_BASE64 secrets.",

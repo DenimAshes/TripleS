@@ -121,7 +121,6 @@ jobs:
             worker/state/soundcloud-*.json
             sync-doctor.log
             !worker/state/youtube.json
-            !worker/state/spotify.json
             !worker/state/soundcloud.json
           if-no-files-found: ignore
           retention-days: 7

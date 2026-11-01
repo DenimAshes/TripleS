@@ -4,7 +4,7 @@ import { gunzipSync } from "node:zlib";
 import { prisma } from "@/lib/db/prisma";
 
 type StateTarget = {
-  service: "youtube" | "soundcloud" | "spotify";
+  service: "youtube" | "soundcloud";
   gzipEnvName: string;
   legacyEnvName: string;
 };
@@ -12,7 +12,6 @@ type StateTarget = {
 const targets: StateTarget[] = [
   { service: "youtube", gzipEnvName: "YOUTUBE_STATE_GZIP_BASE64", legacyEnvName: "YOUTUBE_STATE_JSON_BASE64" },
   { service: "soundcloud", gzipEnvName: "SOUNDCLOUD_STATE_GZIP_BASE64", legacyEnvName: "SOUNDCLOUD_STATE_JSON_BASE64" },
-  { service: "spotify", gzipEnvName: "SPOTIFY_STATE_GZIP_BASE64", legacyEnvName: "SPOTIFY_STATE_JSON_BASE64" },
 ];
 
 const stateDir = path.resolve(process.cwd(), "worker", "state");

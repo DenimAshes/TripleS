@@ -22,7 +22,6 @@ const PAGES = [
   ["settings", "/settings"],
   ["youtube-browser", "/youtube-browser"],
   ["soundcloud-browser", "/soundcloud-browser"],
-  ["admin-sessions", "/admin/sessions"],
 ];
 const EXTRA_PAGES = [["group-builder", "/playlists?groupMode=1"]];
 
@@ -200,7 +199,7 @@ async function smoke(browser) {
   watch(mp, () => "mobile nav");
   await mp.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 90_000 });
   await mp.getByRole("button", { name: "More" }).click();
-  for (const href of ["/connections", "/history", "/youtube-browser", "/soundcloud-browser", "/admin/sessions"]) {
+  for (const href of ["/connections", "/history", "/youtube-browser", "/soundcloud-browser"]) {
     const count = await mp.locator(`nav ~ div a[href="${href}"], div a[href="${href}"]`).count();
     if (!count) problems.push(`unreachable  ${href} missing from the mobile More sheet`);
   }

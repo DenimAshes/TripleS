@@ -2,10 +2,7 @@ import type { ReactNode } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
-// The editable card for one service connection. /connections and
-// /admin/sessions both show it; the second page used to inline its own copy,
-// which is how it ended up as the one Spotify card in the app with no status
-// pill on it.
+// The editable card for one service connection on /connections.
 export function ServiceConnectionCard({
   id,
   service,

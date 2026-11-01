@@ -5,7 +5,6 @@ import {
   Clock3,
   CornerDownLeft,
   Gauge,
-  KeyRound,
   ListMusic,
   PlugZap,
   Search,
@@ -38,7 +37,6 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "nav-rules", group: "Navigate", icon: <Settings size={15} />, label: "Sync groups", href: "/settings", hint: "Linked playlists & source controls" },
   { id: "nav-yt-tools", group: "Navigate", icon: <YouTubeGlyph size={15} />, label: "YouTube Music tools", href: "/youtube-browser", hint: "Browser session: create, read, search, add", keywords: "browser lab ytm automation" },
   { id: "nav-sc-tools", group: "Navigate", icon: <SoundCloudGlyph size={15} />, label: "SoundCloud tools", href: "/soundcloud-browser", hint: "Browser session: read, search, add", keywords: "browser lab sc automation" },
-  { id: "nav-admin", group: "Navigate", icon: <KeyRound size={15} />, label: "Admin sessions", href: "/admin/sessions", hint: "Operator-only" },
 ];
 
 const SERVICE_ITEMS: CommandItem[] = [

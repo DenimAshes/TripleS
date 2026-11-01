@@ -46,7 +46,7 @@ function cdpUrlForService(service: string): string | undefined {
 
 async function hasStoredSession(service: string): Promise<boolean> {
   const key = serviceKey(service);
-  if (key !== "youtube" && key !== "soundcloud" && key !== "spotify") return true;
+  if (key !== "youtube" && key !== "soundcloud") return true;
   if (fs.existsSync(stateFilePath(key))) return true;
   const row = await prisma.workerSessionState.findUnique({ where: { service: key } }).catch(() => null);
   return Boolean(row);
@@ -58,7 +58,7 @@ async function checkBrowserSession(service: string): Promise<string | null> {
   const key = serviceKey(service);
 
   if (mode === "state") {
-    return (await hasStoredSession(key)) ? null : `${service} browser session is missing. Upload it in /admin/sessions or set ${service}_STATE_GZIP_BASE64.`;
+    return (await hasStoredSession(key)) ? null : `${service} browser session is missing. Upload it in /connections or set ${service}_STATE_GZIP_BASE64.`;
   }
 
   if (mode === "cdp") {

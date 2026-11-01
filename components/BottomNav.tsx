@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import {
   Clock3,
   Gauge,
-  KeyRound,
   ListMusic,
   LogOut,
   MoreHorizontal,
@@ -32,7 +31,6 @@ const MORE = [
   { href: "/history", label: "Activity", icon: Clock3 },
   { href: "/youtube-browser", label: "YouTube Music tools", icon: YouTubeGlyph },
   { href: "/soundcloud-browser", label: "SoundCloud tools", icon: SoundCloudGlyph },
-  { href: "/admin/sessions", label: "Admin sessions", icon: KeyRound },
 ];
 
 export function BottomNav() {

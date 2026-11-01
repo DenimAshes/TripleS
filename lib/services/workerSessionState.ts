@@ -1,7 +1,7 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import { prisma } from "@/lib/db/prisma";
 
-export const SESSION_SERVICES = ["youtube", "spotify", "soundcloud"] as const;
+export const SESSION_SERVICES = ["youtube", "soundcloud"] as const;
 export type SessionService = (typeof SESSION_SERVICES)[number];
 
 export const MAX_STATE_BYTES = 2_000_000;
@@ -13,13 +13,11 @@ export const MAX_STATE_BYTES = 2_000_000;
  */
 export const SESSION_COOKIE_HINTS: Record<SessionService, string[]> = {
   youtube: ["SID", "__Secure-1PSID", "__Secure-3PSID", "SAPISID", "LOGIN_INFO", "SIDCC"],
-  spotify: ["sp_dc", "sp_key", "sp_t"],
   soundcloud: ["oauth_token", "sc_anonymous_id"],
 };
 
 const SESSION_AUTH_COOKIE_HINTS: Record<SessionService, string[]> = {
   youtube: ["SID", "__Secure-1PSID", "__Secure-3PSID", "SAPISID", "LOGIN_INFO"],
-  spotify: ["sp_dc"],
   soundcloud: ["oauth_token"],
 };
 

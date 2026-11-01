@@ -11,15 +11,27 @@ import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { hasSpotifyCredentials, validateSpotifyRedirectUri } from "@/lib/services/spotify/spotifyAuth";
 import { getSpotifyWebCookie } from "@/lib/services/spotify/spotifyCookieStore";
+import {
+  decodeStorageState,
+  usableSessionCookies,
+  type SessionService,
+} from "@/lib/services/workerSessionState";
 
-const BROWSER_SERVICES = ["youtube", "soundcloud"];
+const BROWSER_SERVICES = ["youtube", "soundcloud"] as const satisfies readonly SessionService[];
 
-function browserSessionStatus(exists: boolean, iso: string | null) {
-  if (!exists || !iso) return { label: "Missing", tone: "muted" };
-  const days = (Date.now() - new Date(iso).getTime()) / 86_400_000;
-  if (days >= 14) return { label: "Stale", tone: "danger" };
-  if (days >= 7) return { label: "Ageing", tone: "warning" };
-  return { label: "Fresh", tone: "success" };
+function browserSessionStatus(exists: boolean, isUsable: boolean) {
+  if (!exists) return { label: "Missing", tone: "muted" };
+  return isUsable ? { label: "Ready", tone: "success" } : { label: "Invalid", tone: "danger" };
+}
+
+function hasUsableBrowserSession(service: SessionService, encoded?: string) {
+  if (!encoded) return false;
+  try {
+    const state = decodeStorageState(encoded);
+    return Boolean(state && usableSessionCookies(service, state).length);
+  } catch {
+    return false;
+  }
 }
 
 function browserRoute(service: string): string {
@@ -32,7 +44,7 @@ export default async function ConnectionsPage() {
 
   const [rows, spotifyAccount] = await Promise.all([
     prisma.workerSessionState.findMany({
-      where: { service: { in: BROWSER_SERVICES } },
+      where: { service: { in: [...BROWSER_SERVICES] } },
     }),
     prisma.connectedAccount.findUnique({
       where: { userId_service: { userId: session.userId, service: "SPOTIFY" } },
@@ -52,9 +64,8 @@ export default async function ConnectionsPage() {
     return {
       service,
       exists: !!row,
-      bytes: row?.bytes ?? 0,
+      isUsable: hasUsableBrowserSession(service, row?.stateGzipBase64),
       updatedAt: row?.updatedAt?.toISOString() ?? null,
-      updatedBy: row?.updatedBy ?? null,
     };
   });
 
@@ -77,18 +88,18 @@ export default async function ConnectionsPage() {
       icon: <KeyRound size={16} />,
     },
     ...browserSessions.map((item) => {
-      const sessionStatus = browserSessionStatus(item.exists, item.updatedAt);
+      const sessionStatus = browserSessionStatus(item.exists, item.isUsable);
       const ready = sessionStatus.tone === "success";
       const needsUpload = !item.exists;
       const meta = serviceMeta(item.service);
       return {
         service: item.service,
-        title: ready ? `${meta.label} session is fresh` : needsUpload ? `Upload ${meta.label} session` : `Refresh ${meta.label} session`,
-        detail: ready ? "Browser automation can read playlists." : needsUpload ? "Upload a JSON export from the logged-in browser." : "The saved session is old enough to refresh soon.",
+        title: ready ? `${meta.label} session is ready` : needsUpload ? `Upload ${meta.label} session` : `Replace invalid ${meta.label} session`,
+        detail: ready ? "Authentication cookies are present and unexpired." : needsUpload ? "Upload a JSON export from the logged-in browser." : "The saved state has no usable authentication cookies.",
         status: sessionStatus.label,
         tone: sessionStatus.tone,
         href: ready ? browserRoute(item.service) : `#connection-${item.service.toLowerCase()}`,
-        action: ready ? "Browse playlists" : "Upload JSON",
+        action: ready ? "Browse playlists" : "Fix session",
         icon: item.exists ? <Clock3 size={16} /> : <UploadCloud size={16} />,
       };
     }),
@@ -101,11 +112,6 @@ export default async function ConnectionsPage() {
     <AppShell
       title="Connections"
       description="Spotify signs in with OAuth. YouTube Music and SoundCloud work through a saved browser session."
-      actions={
-        <Link href="/playlists" className="btn btn-ghost">
-          Open playlists
-        </Link>
-      }
     >
       <section className="workbench overflow-hidden" aria-labelledby="connection-progress-heading">
         <div className="workbench-header">

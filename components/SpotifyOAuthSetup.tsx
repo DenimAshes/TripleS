@@ -49,20 +49,35 @@ export function SpotifyOAuthSetup({
           </Callout>
         ) : null}
 
-        <div className="mt-auto grid gap-2 pt-6">
-          <form method="post" action="/api/oauth/spotify/start">
-            <button type="submit" className="btn btn-primary w-full">
-              <Link2 size={16} />
-              {isConnected ? "Reconnect Spotify" : "Login with Spotify"}
-            </button>
-          </form>
+        <div className="mt-auto pt-6">
           {isConnected ? (
-            <Link href="/playlists?service=SPOTIFY" className="btn btn-ghost w-full">
+            <Link href="/playlists?service=SPOTIFY" className="btn btn-primary w-full">
               <ListMusic size={16} />
               View Spotify playlists
             </Link>
-          ) : null}
-          <SpotifyCookieLogin hasCookie={hasCookie} />
+          ) : (
+            <form method="post" action="/api/oauth/spotify/start">
+              <button type="submit" className="btn btn-primary w-full">
+                <Link2 size={16} /> Login with Spotify
+              </button>
+            </form>
+          )}
+
+          {isConnected ? (
+            <details className="mt-3 text-xs text-muted-fg">
+              <summary className="cursor-pointer rounded-[var(--radius-sm)] py-1 hover:text-[var(--text)]">Connection options</summary>
+              <div className="mt-2 border-t border-line-soft pt-3">
+                <form method="post" action="/api/oauth/spotify/start">
+                  <button type="submit" className="btn btn-ghost w-full">
+                    <Link2 size={16} /> Reconnect Spotify
+                  </button>
+                </form>
+                <SpotifyCookieLogin hasCookie={hasCookie} />
+              </div>
+            </details>
+          ) : (
+            <SpotifyCookieLogin hasCookie={hasCookie} />
+          )}
         </div>
       </div>
     );
@@ -90,9 +105,6 @@ export function SpotifyOAuthSetup({
         </code>
       </div>
       <SpotifyCookieLogin hasCookie={hasCookie} />
-      <Link href="/settings" className="btn btn-ghost mt-auto w-full">
-        Open settings
-      </Link>
     </div>
   );
 }

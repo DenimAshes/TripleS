@@ -117,10 +117,10 @@ describe("sessionCookiesPresent", () => {
 });
 
 describe("isSessionService", () => {
-  test("accepts the three supported services only", () => {
+  test("accepts browser-automated services only", () => {
     expect(isSessionService("youtube")).toBe(true);
     expect(isSessionService("soundcloud")).toBe(true);
-    expect(isSessionService("spotify")).toBe(true);
+    expect(isSessionService("spotify")).toBe(false);
     expect(isSessionService("tidal")).toBe(false);
   });
 });

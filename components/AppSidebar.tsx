@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clock3, Gauge, KeyRound, ListMusic, LogOut, PlugZap, Settings, Shuffle } from "lucide-react";
+import { Clock3, Gauge, ListMusic, LogOut, PlugZap, Settings, Shuffle } from "lucide-react";
 import { SoundCloudGlyph, YouTubeGlyph } from "./ServiceBrand";
 import { TripleSMark } from "./TripleSMark";
 import { HealthIndicator } from "./HealthIndicator";
@@ -35,10 +35,6 @@ const SECTIONS: Array<{ title?: string; items: NavItem[] }> = [
       { href: "/youtube-browser", label: "YouTube Music", icon: YouTubeGlyph },
       { href: "/soundcloud-browser", label: "SoundCloud", icon: SoundCloudGlyph },
     ],
-  },
-  {
-    title: "Ops",
-    items: [{ href: "/admin/sessions", label: "Admin sessions", icon: KeyRound }],
   },
 ];
 

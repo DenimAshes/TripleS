@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: "That doesn't look like an sp_dc value.",
-        hint: "Paste the value of the sp_dc cookie from open.spotify.com (or a Cookie-Editor JSON export — both are accepted).",
+        hint: "Paste the value of the sp_dc cookie from open.spotify.com.",
       },
       { status: 400 },
     );

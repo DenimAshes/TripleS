@@ -17,10 +17,7 @@ type DiagnoseResult = {
   results: Record<string, { status?: number; error?: string; contentType?: string | null }>;
 };
 
-// The cookie path has been implemented server-side all along
-// (POST /api/connections/spotify/cookie, plus a /test endpoint whose error text
-// literally says "Click Diagnose below") but nothing in the UI ever called it,
-// so the only way to connect Spotify was OAuth. This is that missing surface.
+// Advanced read-only fallback for accounts that cannot complete OAuth.
 export function SpotifyCookieLogin({ hasCookie }: { hasCookie: boolean }) {
   const [open, setOpen] = useState(false);
   const [cookie, setCookie] = useState("");
@@ -88,7 +85,7 @@ export function SpotifyCookieLogin({ hasCookie }: { hasCookie: boolean }) {
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="mt-3 min-h-8 text-left text-xs text-muted-fg underline-offset-2 hover:text-accent hover:underline">
-        {stored ? "Manage the saved sp_dc cookie" : "Can't use OAuth? Sign in with an sp_dc cookie"}
+        {stored ? "Manage fallback Spotify cookie" : "Use an sp_dc cookie instead"}
       </button>
     );
   }
@@ -102,8 +99,7 @@ export function SpotifyCookieLogin({ hasCookie }: { hasCookie: boolean }) {
             Cookie login
           </div>
           <p className="mt-1 text-xs leading-5 text-muted-fg">
-            Paste the <code className="text-[var(--text)]">sp_dc</code> value from a logged-in open.spotify.com tab. A
-            Cookie-Editor JSON export or a Playwright storageState file works too.
+            Paste the <code className="text-[var(--text)]">sp_dc</code> value from a logged-in open.spotify.com tab.
           </p>
         </div>
         <button type="button" onClick={() => setOpen(false)} className="shrink-0 text-xs text-muted-fg hover:text-[var(--text)]">
@@ -114,9 +110,12 @@ export function SpotifyCookieLogin({ hasCookie }: { hasCookie: boolean }) {
       <textarea
         value={cookie}
         onChange={(event) => setCookie(event.target.value)}
+        name="spotifyCookie"
+        aria-label="Spotify sp_dc cookie"
+        autoComplete="off"
         rows={3}
         spellCheck={false}
-        placeholder="sp_dc=… or exported JSON"
+        placeholder="sp_dc=…"
         className="w-full font-mono text-xs"
       />
 

@@ -67,7 +67,7 @@ Paste each output into the matching GitHub secret. The older `YOUTUBE_STATE_JSON
 
 ### Session Refresh (Database Wins Over Secrets)
 
-`npm run state:restore` reads the `WorkerSessionState` table **first** and only falls back to the `*_STATE_GZIP_BASE64` secrets when the row is missing. So once a row exists — uploaded through `/admin/sessions` or `state:push` — updating the GitHub secret changes nothing. Refresh the row instead:
+`npm run state:restore` reads the `WorkerSessionState` table **first** and only falls back to the `*_STATE_GZIP_BASE64` secrets when the row is missing. So once a row exists — uploaded through `/connections` or `state:push` — updating the GitHub secret changes nothing. Refresh the row instead:
 
 ```powershell
 npm run state:push -- youtube soundcloud --dry-run
