@@ -306,30 +306,44 @@ export default async function DashboardPage() {
             </span>
           </div>
           <div className="rows px-4 sm:px-5">
-            <DashboardActionRow
-              icon={<Shuffle size={17} />}
-              title={pendingReviewCount ? `${pendingReviewCount} songs need a decision` : "Review queue is clear"}
-              detail={pendingReviewCount ? "Choose the right version so future syncs can reuse it." : "No uncertain matches are blocking copies."}
-              href="/manual-match"
-              action={pendingReviewCount ? "Review" : "Open queue"}
-              tone={pendingReviewCount ? "warning" : "success"}
-            />
-            <DashboardActionRow
-              icon={<PlugZap size={17} />}
-              title={connectionIssues.length ? `${connectionIssues.length} connections need attention` : "Connections are ready"}
-              detail={connectionIssues.length ? connectionIssues.map(connectionIssueLabel).join(" · ") : "Spotify, YouTube Music and SoundCloud can be reached."}
-              href="/connections"
-              action="Manage"
-              tone={connectionIssues.length ? "danger" : "success"}
-            />
-            <DashboardActionRow
-              icon={failedRuleCount || workerWarnings.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}
-              title={failedRuleCount ? `${failedRuleCount} playlist ${failedRuleCount === 1 ? "copy has" : "copies have"} an issue` : workerWarnings.length ? workerWarnings[0].title : "Recent copies look healthy"}
-              detail={failedRuleCount ? "Open the affected copy below for the latest error and progress." : workerWarnings.length ? workerWarnings[0].detail : "No failed or partial runs need action."}
-              href={failedRuleCount ? "#playlist-copies" : "/history"}
-              action={failedRuleCount ? "View copies" : "Activity"}
-              tone={failedRuleCount || workerWarnings.length ? "warning" : "success"}
-            />
+            {pendingReviewCount ? (
+              <DashboardActionRow
+                icon={<Shuffle size={17} />}
+                title={`${pendingReviewCount} songs need a decision`}
+                detail="Choose the right version so future syncs can reuse it."
+                href="/manual-match"
+                action="Review"
+                tone="warning"
+              />
+            ) : null}
+            {connectionIssues.length ? (
+              <DashboardActionRow
+                icon={<PlugZap size={17} />}
+                title={`${connectionIssues.length} connections need attention`}
+                detail={connectionIssues.map(connectionIssueLabel).join(" · ")}
+                href="/connections"
+                action="Manage"
+                tone="danger"
+              />
+            ) : null}
+            {failedRuleCount || workerWarnings.length ? (
+              <DashboardActionRow
+                icon={<AlertTriangle size={17} />}
+                title={failedRuleCount ? `${failedRuleCount} playlist ${failedRuleCount === 1 ? "copy has" : "copies have"} an issue` : workerWarnings[0].title}
+                detail={failedRuleCount ? "Open the affected copy below for the latest error and progress." : workerWarnings[0].detail}
+                href={failedRuleCount ? "#playlist-copies" : "/history"}
+                action={failedRuleCount ? "View copies" : "Activity"}
+                tone="warning"
+              />
+            ) : null}
+            {!attentionCount ? (
+              <div className="flex items-center gap-3 py-4 text-sm text-muted-fg">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[var(--radius-sm)] bg-success-soft text-success-fg">
+                  <CheckCircle2 size={17} />
+                </span>
+                Nothing needs attention right now.
+              </div>
+            ) : null}
           </div>
           </section>
 
