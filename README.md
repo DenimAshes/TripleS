@@ -156,6 +156,8 @@ Created YouTube Music playlists are private. Creating the same normalized name a
 
 Add sync accepts any mix of existing and new destinations: one missing platform can be created on its own, or missing YouTube Music and SoundCloud playlists can be created together. Remote creates run sequentially and only playlists created by that request are removed if setup fails.
 
+The browser tools page at `http://127.0.0.1:3000/youtube-browser` can also create private playlists and delete unused playlists. Deletion is blocked while a playlist belongs to a group or sync rule.
+
 To let the app's sync engine use the YouTube Music browser runner instead of mock data, set:
 
 ```env

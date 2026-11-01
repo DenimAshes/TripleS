@@ -93,6 +93,7 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
     isStale: initialPlaylists.isStale,
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [newPlaylistName, setNewPlaylistName] = useState("");
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [workspaceView, setWorkspaceView] = useState<"tracks" | "search">("tracks");
   const [busy, setBusy] = useState<string | null>(null);
@@ -156,6 +157,76 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load tracks";
       setError(message);
+    } finally {
+      setBusy(null);
+      setBusyLabel("");
+    }
+  }
+
+  async function createPlaylist(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const name = newPlaylistName.trim();
+    if (!name) return;
+    setBusy("create-playlist");
+    setBusyLabel("Creating private playlist…");
+    setError("");
+    setNotice("");
+    try {
+      const data = await readJson<{ playlist: Playlist }>("/api/youtube-browser/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      setPlaylists((current) =>
+        [...current.filter((playlist) => playlist.id !== data.playlist.id), data.playlist].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      );
+      setSelectedId(data.playlist.id);
+      setTracks([]);
+      setTracksMeta({ lastFetchedAt: null, fromCache: false, isStale: true });
+      setPlaylistsMeta({ lastSyncedAt: new Date().toISOString(), fromCache: false, isStale: false });
+      setNewPlaylistName("");
+      setWorkspaceView("tracks");
+      setNotice(`Playlist ready: ${data.playlist.name}`);
+      if (data.playlist.trackCount > 0) await loadTracks(data.playlist.id, true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create playlist");
+    } finally {
+      setBusy(null);
+      setBusyLabel("");
+    }
+  }
+
+  async function deleteSelectedPlaylist() {
+    if (!selectedPlaylist) return;
+    if (!window.confirm(`Delete “${selectedPlaylist.name}” permanently from YouTube Music?`)) return;
+    setBusy("delete-playlist");
+    setBusyLabel("Deleting playlist…");
+    setError("");
+    setNotice("");
+    try {
+      await readJson("/api/youtube-browser/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playlistId: selectedPlaylist.id }),
+      });
+      const remaining = playlists.filter((playlist) => playlist.id !== selectedPlaylist.id);
+      const nextId = remaining[0]?.id || "";
+      setPlaylists(remaining);
+      setSelectedId(nextId);
+      setTracks([]);
+      setTracksMeta({ lastFetchedAt: null, fromCache: false, isStale: true });
+      setPlaylistsMeta({ lastSyncedAt: new Date().toISOString(), fromCache: false, isStale: false });
+      setTracksByPlaylist((current) => {
+        const next = { ...current };
+        delete next[selectedPlaylist.id];
+        return next;
+      });
+      setWorkspaceView("tracks");
+      setNotice(`Playlist deleted: ${selectedPlaylist.name}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete playlist");
     } finally {
       setBusy(null);
       setBusyLabel("");
@@ -353,6 +424,25 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
               Refresh
             </button>
           </div>
+          <form onSubmit={createPlaylist} className="mb-3 border-b border-[var(--border-soft)] pb-3">
+            <label htmlFor="youtube-new-playlist" className="field-label">New private playlist</label>
+            <div className="mt-1.5 flex gap-2">
+              <input
+                id="youtube-new-playlist"
+                name="youtubePlaylistName"
+                autoComplete="off"
+                maxLength={150}
+                value={newPlaylistName}
+                onChange={(event) => setNewPlaylistName(event.target.value)}
+                placeholder="Playlist name…"
+                className="min-w-0 flex-1 text-sm"
+              />
+              <button type="submit" disabled={busy !== null || !newPlaylistName.trim()} className="btn btn-primary">
+                {busy === "create-playlist" ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                Create
+              </button>
+            </div>
+          </form>
           <div className="-mx-2 max-h-[560px] overflow-y-auto">
             {busy === "playlists" && playlists.length === 0 ? <LoadingRow label="Loading playlists…" /> : null}
             {!busy && playlists.length === 0 ? <EmptyRow label="No playlists loaded yet" /> : null}
@@ -397,9 +487,20 @@ export function YouTubeBrowserLab({ initialPlaylists }: { initialPlaylists: Play
                 {tracks.length} tracks{selectedId && tracksMeta.lastFetchedAt ? ` · updated ${formatRelative(tracksMeta.lastFetchedAt, nowMs)}` : ""}
               </div>
             </div>
-            <button onClick={() => loadTracks(selectedId, true)} disabled={!selectedId || busy !== null} className="btn btn-ghost">
-              <RefreshCw size={16} className={busy === "tracks" ? "animate-spin" : ""} /> Refresh
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => loadTracks(selectedId, true)} disabled={!selectedId || busy !== null} className="btn btn-ghost">
+                <RefreshCw size={16} className={busy === "tracks" ? "animate-spin" : ""} /> Refresh
+              </button>
+              <button
+                type="button"
+                onClick={deleteSelectedPlaylist}
+                disabled={!selectedId || busy !== null}
+                className="btn btn-danger"
+              >
+                {busy === "delete-playlist" ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                Delete
+              </button>
+            </div>
           </div>
 
           <div className="mb-4 inline-flex rounded-[var(--radius-sm)] bg-surface-2 p-1" role="tablist" aria-label="Playlist workspace">

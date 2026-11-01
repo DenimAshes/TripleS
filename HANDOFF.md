@@ -129,7 +129,7 @@ Two Tailwind v4 traps this codebase already hit:
 - Search results are deduplicated and basic localized media-type labels are cleaned.
 - Tested browser add/remove on playlist `PLkEG3hafrR607OtRgPKwpOFniIvCp_4hc` (`Mans atskanosanas saraksts Nr. 23`) with `Rick Astley Never Gonna Give You Up`; the test track was removed and the playlist is back to 6 tracks.
 - Hardened YouTube Music removal by hovering the row and force-clicking the row action menu, which is sometimes covered by YouTube Music layout layers.
-- Added `/youtube-browser`, a web UI for YouTube Music browser automation with playlist loading, track viewing, search, add and remove controls.
+- Added `/youtube-browser`, a web UI for YouTube Music browser automation with playlist create/delete, loading, track viewing, search, add and remove controls. Deletion is blocked for playlists still used by a group or sync rule.
 - Added internal `/api/youtube-browser/*` routes. They call the existing `worker/runners/youtube.ts` CLI in a child Node process so Next/Turbopack does not directly bundle Playwright into the route module.
 - Improved `/youtube-browser` operation states: long browser actions now show explicit status text, errors and empty states.
 - Added duplicate detection before YouTube add operations. It checks `videoId`, ISRC, normalized title/artist and normalized query/title overlap before clicking add.

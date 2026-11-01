@@ -36,7 +36,7 @@ const NAV_ITEMS: CommandItem[] = [
   { id: "nav-review", group: "Navigate", icon: <Shuffle size={15} />, label: "Review queue", href: "/manual-match", hint: "Resolve uncertain matches" },
   { id: "nav-history", group: "Navigate", icon: <Clock3 size={15} />, label: "Activity", href: "/history", hint: "Changes & failures" },
   { id: "nav-rules", group: "Navigate", icon: <Settings size={15} />, label: "Sync groups", href: "/settings", hint: "Linked playlists & source controls" },
-  { id: "nav-yt-tools", group: "Navigate", icon: <YouTubeGlyph size={15} />, label: "YouTube Music tools", href: "/youtube-browser", hint: "Browser session: read, search, add", keywords: "browser lab ytm automation" },
+  { id: "nav-yt-tools", group: "Navigate", icon: <YouTubeGlyph size={15} />, label: "YouTube Music tools", href: "/youtube-browser", hint: "Browser session: create, read, search, add", keywords: "browser lab ytm automation" },
   { id: "nav-sc-tools", group: "Navigate", icon: <SoundCloudGlyph size={15} />, label: "SoundCloud tools", href: "/soundcloud-browser", hint: "Browser session: read, search, add", keywords: "browser lab sc automation" },
   { id: "nav-admin", group: "Navigate", icon: <KeyRound size={15} />, label: "Admin sessions", href: "/admin/sessions", hint: "Operator-only" },
 ];

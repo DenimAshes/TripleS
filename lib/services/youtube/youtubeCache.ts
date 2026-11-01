@@ -3,7 +3,7 @@ import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import { writePlaylistSnapshot } from "@/lib/sync/snapshot";
 import { listYouTubePlaylistsCli, listYouTubePlaylistTracksCli, type YtPlaylist } from "./youtubeBrowserCli";
 
-const SERVICE = "youtube";
+const SERVICE = "YOUTUBE";
 const HOUR_MS = 3600_000;
 const PLAYLISTS_TTL_MS = Number(process.env.YT_PLAYLISTS_TTL_HOURS || 24) * HOUR_MS;
 const TRACKS_TTL_MS = Number(process.env.YT_TRACKS_TTL_HOURS || 24) * HOUR_MS;
@@ -103,6 +103,39 @@ export async function refreshYouTubePlaylists(userId: string): Promise<CachedPla
   const value = { playlists: rowsToYtPlaylists(rows), lastSyncedAt: now, fromCache: false, isStale: false };
   playlistMemoryCache.set(userId, { value, expiresAt: Date.now() + PLAYLISTS_MEMORY_TTL_MS });
   return value;
+}
+
+export async function storeCreatedYouTubePlaylist(userId: string, playlist: YtPlaylist): Promise<void> {
+  await prisma.playlist.upsert({
+    where: { service_servicePlaylistId: { service: SERVICE, servicePlaylistId: playlist.id } },
+    update: {
+      userId,
+      name: playlist.name,
+      imageUrl: playlist.imageUrl,
+      trackCount: playlist.trackCount,
+      isWritable: true,
+      lastFetchedAt: null,
+    },
+    create: {
+      userId,
+      service: SERVICE,
+      servicePlaylistId: playlist.id,
+      name: playlist.name,
+      imageUrl: playlist.imageUrl,
+      trackCount: playlist.trackCount,
+      isWritable: true,
+      lastFetchedAt: null,
+    },
+  });
+  playlistMemoryCache.delete(userId);
+}
+
+export async function removeCachedYouTubePlaylist(userId: string, servicePlaylistId: string): Promise<void> {
+  await prisma.playlist.deleteMany({ where: { userId, service: SERVICE, servicePlaylistId } });
+  playlistMemoryCache.delete(userId);
+  for (const key of tracksMemoryCache.keys()) {
+    if (key.endsWith(`:${servicePlaylistId}`)) tracksMemoryCache.delete(key);
+  }
 }
 
 type ServiceTrackRow = {

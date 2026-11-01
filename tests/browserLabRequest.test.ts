@@ -4,6 +4,8 @@ import {
   parsePlaylistRefreshRequest,
   parseSoundCloudTrackRequest,
   parseYouTubeAddRequest,
+  parseYouTubeCreateRequest,
+  parseYouTubeDeleteRequest,
   parseYouTubeRemoveRequest,
 } from "../lib/services/browserLabRequest";
 
@@ -22,6 +24,8 @@ describe("browser lab request parsing", () => {
       trackId: "t",
     });
     expect(parsePlaylistRefreshRequest({ playlistId: " p " })).toEqual({ playlistId: "p" });
+    expect(parseYouTubeCreateRequest({ name: " New playlist " })).toEqual({ name: "New playlist" });
+    expect(parseYouTubeDeleteRequest({ playlistId: " PL123 " })).toEqual({ playlistId: "PL123" });
   });
 
   test("rejects missing and overlong fields", () => {
@@ -30,5 +34,6 @@ describe("browser lab request parsing", () => {
     expect(() => parseSoundCloudTrackRequest({ playlistId: "p", trackId: "x".repeat(2001) })).toThrow(
       BrowserLabRequestError,
     );
+    expect(() => parseYouTubeCreateRequest({ name: "x".repeat(151) })).toThrow(BrowserLabRequestError);
   });
 });

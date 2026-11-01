@@ -10,7 +10,7 @@ export default async function YouTubeBrowserPage() {
     : { playlists: [], lastSyncedAt: null, fromCache: true, isStale: true };
 
   return (
-    <AppShell title="YouTube Music" description="Read, search and edit playlists through the saved browser session.">
+    <AppShell title="YouTube Music" description="Create, read, search and edit playlists through the saved browser session.">
       <YouTubeBrowserLab
         initialPlaylists={{
           playlists: playlists.playlists,
