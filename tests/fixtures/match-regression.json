@@ -1,0 +1,1086 @@
+{
+  "threshold": 0.85,
+  "cases": [
+    {
+      "accepted": false,
+      "source": {
+        "title": "Save Your Tears",
+        "artists": [
+          "The Weeknd"
+        ],
+        "album": "After Hours",
+        "durationMs": 215626,
+        "isrc": "USUG12100010",
+        "sourceService": "spotify"
+      },
+      "candidate": {
+        "title": "Save Your Tears (Live)",
+        "artists": [
+          "The Weeknd"
+        ],
+        "album": "After Hours",
+        "durationMs": 219000,
+        "isrc": null,
+        "sourceService": "youtube"
+      }
+    },
+    {
+      "accepted": false,
+      "source": {
+        "title": "Сумасшедшая",
+        "artists": [
+          "Comedy Club Cover, Алексей Воробьёв feat. Зураб Матуа, Андрей Аверин, Дмитрий Сорокин Сумасшедшая"
+        ],
+        "album": "Сумасшедшая",
+        "durationMs": 115000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Сумасшедшая (ПОШЛАЯ МОЛЛИ)",
+        "artists": [
+          "Мэнди/Mandy"
+        ],
+        "album": null,
+        "durationMs": 111709,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": false,
+      "source": {
+        "title": "Это не женщина",
+        "artists": [
+          "Те100стерон Лети"
+        ],
+        "album": "Лети",
+        "durationMs": 191000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Это не женщина 2.0",
+        "artists": [
+          "Те100стерон"
+        ],
+        "album": null,
+        "durationMs": 171080,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "#Ракетабомбапетарда",
+        "artists": [
+          "Олег Кензов #Ракетабомбапетарда"
+        ],
+        "album": "#Ракетабомбапетарда",
+        "durationMs": 232000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "#Ракетабомбапетарда",
+        "artists": [
+          "Олег Кензов"
+        ],
+        "album": null,
+        "durationMs": null,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "18 Мне уже",
+        "artists": [
+          "Руки Вверх Маленькие девочки"
+        ],
+        "album": "Маленькие девочки",
+        "durationMs": 246000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "18 Мне Уже",
+        "artists": [
+          "Руки Вверх"
+        ],
+        "album": null,
+        "durationMs": 242114,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Chao, bambino (Чао, бамбино)",
+        "artists": [
+          "CarMan Car-Mania"
+        ],
+        "album": "Car-Mania",
+        "durationMs": 256000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Chao, bambino (Чао, бамбино)",
+        "artists": [
+          "CarMan"
+        ],
+        "album": null,
+        "durationMs": null,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Credo",
+        "artists": [
+          "Zivert Vinyl #1"
+        ],
+        "album": "Vinyl #1",
+        "durationMs": 185000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Credo",
+        "artists": [
+          "Zivert"
+        ],
+        "album": null,
+        "durationMs": 184220,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Ice Baby",
+        "artists": [
+          "Guf Doma"
+        ],
+        "album": "Doma",
+        "durationMs": 253000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Ice Baby",
+        "artists": [
+          "Guf"
+        ],
+        "album": null,
+        "durationMs": 252160,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "madam",
+        "artists": [
+          "Kai Angel madam"
+        ],
+        "album": "madam",
+        "durationMs": 143000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "madam",
+        "artists": [
+          "kai angel"
+        ],
+        "album": null,
+        "durationMs": 142309,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Moscow Never Sleeps",
+        "artists": [
+          "DJ SMASH IDDQD"
+        ],
+        "album": "IDDQD",
+        "durationMs": 235000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Moscow Never Sleeps",
+        "artists": [
+          "Dj Smash"
+        ],
+        "album": null,
+        "durationMs": null,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "quiet turn up",
+        "artists": [
+          "Kai Angel"
+        ],
+        "album": "quiet turn up",
+        "durationMs": 111000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "quiet turn up",
+        "artists": [
+          "kai angel 🍸"
+        ],
+        "album": null,
+        "durationMs": 110728,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Serdceedka",
+        "artists": [
+          "EGOR KREED Serdceedka"
+        ],
+        "album": "Serdceedka",
+        "durationMs": 185000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Сердцеедка",
+        "artists": [
+          "Егор Крид"
+        ],
+        "album": null,
+        "durationMs": 174178,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Беги от меня",
+        "artists": [
+          "Гости из будущего Беги от меня"
+        ],
+        "album": "Беги от меня",
+        "durationMs": 304000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Беги от меня",
+        "artists": [
+          "Гости из будущего"
+        ],
+        "album": null,
+        "durationMs": null,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Буду честен",
+        "artists": [
+          "Каспийский Груз Пиджакикостюмы"
+        ],
+        "album": "Пиджакикостюмы",
+        "durationMs": 189000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Буду Честен",
+        "artists": [
+          "Каспийский Груз"
+        ],
+        "album": null,
+        "durationMs": 188937,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Владимирский централ",
+        "artists": [
+          "Михаил Круг Круг Михаил - Владимирский централ Альбом 1999"
+        ],
+        "album": "Круг Михаил - Владимирский централ Альбом 1999",
+        "durationMs": 268000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Владимирский централ",
+        "artists": [
+          "Михаил Круг"
+        ],
+        "album": null,
+        "durationMs": 267174,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Все пучком",
+        "artists": [
+          "Потап и Настя Все пучком"
+        ],
+        "album": "Все пучком",
+        "durationMs": 199000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Все пучком",
+        "artists": [
+          "Потап и Настя"
+        ],
+        "album": null,
+        "durationMs": 198740,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Выбирать чудо",
+        "artists": [
+          "NYUSHA Выбирать чудо"
+        ],
+        "album": "Выбирать чудо",
+        "durationMs": 267000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Nyusha — Выбирать Чудо",
+        "artists": [
+          "NYUSHA"
+        ],
+        "album": null,
+        "durationMs": 267383,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Выше",
+        "artists": [
+          "NYUSHA Выбирать чудо"
+        ],
+        "album": "Выбирать чудо",
+        "durationMs": 239000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Нюша / Nyusha - Выше",
+        "artists": [
+          "Nyusha/Нюша"
+        ],
+        "album": null,
+        "durationMs": 238193,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Где ты, где я (piedalās ЕГОР КРИД)",
+        "artists": [
+          "Тимати Олимп"
+        ],
+        "album": "Олимп",
+        "durationMs": 283000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Где ты, где я (feat. ЕГОР КРИД)",
+        "artists": [
+          "Тимати"
+        ],
+        "album": null,
+        "durationMs": null,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "гладиатор/рыцарь",
+        "artists": [
+          "fallen777angel glory of heartbroken"
+        ],
+        "album": "glory of heartbroken",
+        "durationMs": 105000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "гладиатор/рыцарь (prod. greyrock)",
+        "artists": [
+          "fallen777angel"
+        ],
+        "album": null,
+        "durationMs": 104093,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Держи",
+        "artists": [
+          "Дима Билан Держи"
+        ],
+        "album": "Держи",
+        "durationMs": 222000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Держи",
+        "artists": [
+          "Дима Билан"
+        ],
+        "album": null,
+        "durationMs": 221309,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Держи",
+        "artists": [
+          "Дима Билан Эгоист"
+        ],
+        "album": "Эгоист",
+        "durationMs": 221000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Держи",
+        "artists": [
+          "Дима Билан"
+        ],
+        "album": null,
+        "durationMs": 221263,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Дом Периньон",
+        "artists": [
+          "Пошлая Молли un Элджей Дом Периньон"
+        ],
+        "album": "Дом Периньон",
+        "durationMs": 175000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Дом Периньон (feat. Элджей)",
+        "artists": [
+          "ПОШЛАЯ МОЛЛИ"
+        ],
+        "album": null,
+        "durationMs": 174911,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Ева",
+        "artists": [
+          "Винтаж Sex"
+        ],
+        "album": "Sex",
+        "durationMs": 249000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Ева",
+        "artists": [
+          "Винтаж"
+        ],
+        "album": null,
+        "durationMs": null,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Если ты меня не любишь",
+        "artists": [
+          "Егор Крид un MOLLY Если ты меня не любишь"
+        ],
+        "album": "Если ты меня не любишь",
+        "durationMs": 207000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Если ты меня не любишь (при уч. MOLLY)",
+        "artists": [
+          "Егор Крид"
+        ],
+        "album": null,
+        "durationMs": 202630,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Если чё",
+        "artists": [
+          "4К Матовый"
+        ],
+        "album": "Матовый",
+        "durationMs": 199000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "4К-Если че",
+        "artists": [
+          "CHEDRDILLER"
+        ],
+        "album": null,
+        "durationMs": 198159,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Женщина, я не танцую",
+        "artists": [
+          "Костюшкин Стас Женщина, я не танцую"
+        ],
+        "album": "Женщина, я не танцую",
+        "durationMs": 204000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Женщина, я не танцую",
+        "artists": [
+          "Стас Костюшкин"
+        ],
+        "album": null,
+        "durationMs": 203128,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Мало тебя",
+        "artists": [
+          "SEREBRO СИЛА ТРЁХ"
+        ],
+        "album": "СИЛА ТРЁХ",
+        "durationMs": 226000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "SEREBRO - МАЛО ТЕБЯ",
+        "artists": [
+          "SEREBRO"
+        ],
+        "album": null,
+        "durationMs": 225796,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Моё промо",
+        "artists": [
+          "АК-47 Мегаpolice"
+        ],
+        "album": "Мегаpolice",
+        "durationMs": 233000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Моё промо",
+        "artists": [
+          "АК-47"
+        ],
+        "album": null,
+        "durationMs": 232935,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "На Титанике",
+        "artists": [
+          "Лолита Раневская"
+        ],
+        "album": "Раневская",
+        "durationMs": 233000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "На Титанике",
+        "artists": [
+          "Лолита"
+        ],
+        "album": null,
+        "durationMs": 232542,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Наше лето",
+        "artists": [
+          "Валентин Стрыкало Смирись и расслабься"
+        ],
+        "album": "Смирись и расслабься",
+        "durationMs": 209000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Наше лето",
+        "artists": [
+          "Валентин Стрыкало"
+        ],
+        "album": null,
+        "durationMs": 209713,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Не пара",
+        "artists": [
+          "Потап и Настя Не пара (Cut Version)"
+        ],
+        "album": "Не пара (Cut Version)",
+        "durationMs": 173000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Не пара",
+        "artists": [
+          "Потап и Настя"
+        ],
+        "album": null,
+        "durationMs": 172800,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Невеста",
+        "artists": [
+          "Глюк'oZa Глюк'oZa Nostra"
+        ],
+        "album": null,
+        "durationMs": 249000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Невеста",
+        "artists": [
+          "Глюк’oZa"
+        ],
+        "album": null,
+        "durationMs": null,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Никогда не сомневался",
+        "artists": [
+          "АК-47 Мегаpolice"
+        ],
+        "album": "Мегаpolice",
+        "durationMs": 137000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Никогда не сомневался",
+        "artists": [
+          "АК-47"
+        ],
+        "album": null,
+        "durationMs": 136811,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Оружие",
+        "artists": [
+          "PIZZA Кухня"
+        ],
+        "album": "Кухня",
+        "durationMs": 208000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Оружие",
+        "artists": [
+          "PIZZA"
+        ],
+        "album": null,
+        "durationMs": null,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Папин бродяга, мамин симпатяга (piedalās Jahmal TGK)",
+        "artists": [
+          "Каспийский Груз Сторона А сторона Б"
+        ],
+        "album": "Сторона А сторона Б",
+        "durationMs": 325000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Папин бродяга, мамин симпатяга (feat. Jahmal TGK)",
+        "artists": [
+          "Каспийский Груз"
+        ],
+        "album": null,
+        "durationMs": 324879,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Психушка",
+        "artists": [
+          "Karna.val Психушка"
+        ],
+        "album": "Психушка",
+        "durationMs": 132000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Психушка",
+        "artists": [
+          "Karna.val"
+        ],
+        "album": null,
+        "durationMs": 121709,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Родная улица",
+        "artists": [
+          "4К Матовый"
+        ],
+        "album": "Матовый",
+        "durationMs": 232000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Родная улица",
+        "artists": [
+          "4К"
+        ],
+        "album": null,
+        "durationMs": 231987,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Самая самая",
+        "artists": [
+          "Егор Крид Холостяк"
+        ],
+        "album": "Холостяк",
+        "durationMs": 231000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Самая самая",
+        "artists": [
+          "Егор Крид"
+        ],
+        "album": null,
+        "durationMs": 230667,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Самый лучший день",
+        "artists": [
+          "Кишлак Эскапист"
+        ],
+        "album": "Эскапист",
+        "durationMs": 94000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "самый лучший день (prod. bvbvbvbudvbv)",
+        "artists": [
+          "Кишлак☆"
+        ],
+        "album": null,
+        "durationMs": 93303,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Ты такой (piedalās Натали)",
+        "artists": [
+          "DONI Ты такой"
+        ],
+        "album": "Ты такой",
+        "durationMs": 206000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Ты такой (дуэт с MC DONI)",
+        "artists": [
+          "Натали"
+        ],
+        "album": null,
+        "durationMs": 207178,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Умамы",
+        "artists": [
+          "Потап и Настя Умамы"
+        ],
+        "album": "Умамы",
+        "durationMs": 170000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Умамы",
+        "artists": [
+          "Потап и Настя"
+        ],
+        "album": null,
+        "durationMs": 170039,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Утро",
+        "artists": [
+          "Дайте танк (!) Радио огонь"
+        ],
+        "album": "Радио огонь",
+        "durationMs": 147000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Утро",
+        "artists": [
+          "Дайте танк (!)"
+        ],
+        "album": null,
+        "durationMs": 147103,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Цунами",
+        "artists": [
+          "NYUSHA Объединение"
+        ],
+        "album": "Объединение",
+        "durationMs": 249000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Цунами",
+        "artists": [
+          "Nyusha"
+        ],
+        "album": null,
+        "durationMs": null,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Чёрный диплом",
+        "artists": [
+          "Vakho Brooklyn Чёрный диплом"
+        ],
+        "album": "Чёрный диплом",
+        "durationMs": 141000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Чёрный диплом",
+        "artists": [
+          "Vakho Brooklyn"
+        ],
+        "album": null,
+        "durationMs": null,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Чумачечая весна",
+        "artists": [
+          "Потап и Настя Все пучком"
+        ],
+        "album": "Все пучком",
+        "durationMs": 194000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "Чумачечая весна",
+        "artists": [
+          "Потап и Настя"
+        ],
+        "album": null,
+        "durationMs": 193776,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    },
+    {
+      "accepted": true,
+      "source": {
+        "title": "Я тебя не отдам",
+        "artists": [
+          "SEREBRO СИЛА ТРЁХ"
+        ],
+        "album": "СИЛА ТРЁХ",
+        "durationMs": 252000,
+        "isrc": null,
+        "sourceService": "youtube"
+      },
+      "candidate": {
+        "title": "SEREBRO-Я ТЕБЯ НЕ ОТДАМ",
+        "artists": [
+          "SEREBRO"
+        ],
+        "album": null,
+        "durationMs": 252128,
+        "isrc": null,
+        "sourceService": "soundcloud"
+      }
+    }
+  ]
+}

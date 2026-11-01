@@ -1,5 +1,8 @@
+import fs from "node:fs";
+import path from "node:path";
 import { prisma } from "@/lib/db/prisma";
 import { normalizedFromServiceTrack } from "@/lib/sync/serviceTrackToNormalized";
+import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import { AUTO_MATCH_THRESHOLD } from "@/lib/sync/matchThresholds";
 import { calculateSimilarityWithBreakdown } from "@/lib/utils/similarity";
 import { parseArtistsJson } from "@/lib/utils/parseArtists";
@@ -8,6 +11,17 @@ const thresholds = [0.65, 0.7, 0.72, 0.75, 0.78, 0.8, 0.82, 0.85, 0.88, 0.9, 0.9
 
 function pct(value: number) {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function fixtureTrack(track: NormalizedTrack) {
+  return {
+    title: track.title,
+    artists: track.artists,
+    album: track.album ?? null,
+    durationMs: track.durationMs ?? null,
+    isrc: track.isrc ?? null,
+    sourceService: track.sourceService,
+  };
 }
 
 async function main() {
@@ -26,10 +40,9 @@ async function main() {
     const source = trackById.get(row.sourceServiceTrackId);
     const candidate = trackById.get(row.candidateServiceTrackId);
     if (!source || !candidate) return [];
-    const breakdown = calculateSimilarityWithBreakdown(
-      normalizedFromServiceTrack(source),
-      normalizedFromServiceTrack(candidate),
-    );
+    const sourceTrack = normalizedFromServiceTrack(source);
+    const candidateTrack = normalizedFromServiceTrack(candidate);
+    const breakdown = calculateSimilarityWithBreakdown(sourceTrack, candidateTrack);
     return [{
       id: row.id,
       label: row.status === "ACCEPTED",
@@ -39,12 +52,28 @@ async function main() {
       candidate: `${candidate.title} - ${parseArtistsJson(candidate.artistsJson).join(", ")}`,
       targetService: row.targetService,
       breakdown,
+      sourceTrack,
+      candidateTrack,
     }];
   });
 
   if (!examples.length) {
     console.log("No accepted/rejected manual match candidates found.");
     return;
+  }
+
+  if (process.argv.includes("--write-fixture")) {
+    const fixturePath = path.resolve("tests", "fixtures", "match-regression.json");
+    const cases = examples
+      .map((item) => ({
+        accepted: item.label,
+        source: fixtureTrack(item.sourceTrack),
+        candidate: fixtureTrack(item.candidateTrack),
+      }))
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    fs.mkdirSync(path.dirname(fixturePath), { recursive: true });
+    fs.writeFileSync(fixturePath, `${JSON.stringify({ threshold: AUTO_MATCH_THRESHOLD, cases }, null, 2)}\n`);
+    console.log(`Wrote ${cases.length} anonymized cases to ${fixturePath}.`);
   }
 
   console.log(`Loaded ${examples.length} labeled examples (${examples.filter((item) => item.label).length} accepted, ${examples.filter((item) => !item.label).length} rejected).`);

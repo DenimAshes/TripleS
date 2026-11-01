@@ -26,6 +26,7 @@
     "cooldown:clear": "tsx scripts/clear-service-cooldown.ts",
     "lint:migrations": "tsx scripts/lint-migrations.ts",
     "match:calibrate": "node --env-file=.env --import tsx scripts/match-calibration.ts",
+    "match:fixture": "node --env-file=.env --import tsx scripts/match-calibration.ts --write-fixture",
     "match:cleanup-smoke": "node --env-file=.env --import tsx scripts/cleanup-accidental-smoke-decisions.ts",
     "match:requeue": "node --env-file=.env --import tsx scripts/match-requeue.ts",
     "ui:shots": "node scripts/ui-check.mjs",
