@@ -269,3 +269,18 @@ export function transliterateCyrillic(value: string) {
       .trim(),
   );
 }
+
+export function transliterateCyrillicForms(value: string) {
+  const standard = transliterateCyrillic(value);
+  if (!/ц/i.test(value)) return [standard];
+
+  // Russian releases commonly spell ц as either "ts" or "c" (Сердцеедка
+  // -> Serdtseedka / Serdceedka), so compare both without changing search keys.
+  const compact = value
+    .toLowerCase()
+    .replace(/[а-яёіїєґьъ]/g, (char) => (char === "ц" ? "c" : translit[char] ?? char))
+    .replace(PUNCT_RE, " ")
+    .replace(WS_RE, " ")
+    .trim();
+  return compact === standard ? [standard] : [standard, compact];
+}

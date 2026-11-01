@@ -131,6 +131,27 @@ describe("track similarity", () => {
     expect(score).toBeGreaterThanOrEqual(0.85);
   });
 
+  it("auto-matches a title written with a common Cyrillic transliteration", () => {
+    const score = calculateSimilarity(
+      {
+        title: "Serdceedka",
+        artists: ["EGOR KREED Serdceedka"],
+        durationMs: 185000,
+        sourceService: "youtube",
+        sourceTrackId: "yt_serdceedka",
+      },
+      {
+        title: "Сердцеедка",
+        artists: ["Егор Крид"],
+        durationMs: 174178,
+        sourceService: "soundcloud",
+        sourceTrackId: "sc_serdceedka",
+      },
+    );
+
+    expect(score).toBeGreaterThanOrEqual(0.85);
+  });
+
   it("removes an album or title appended to the YouTube artist byline", () => {
     const score = calculateSimilarity(
       {

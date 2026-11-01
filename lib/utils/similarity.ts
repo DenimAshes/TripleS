@@ -5,7 +5,7 @@ import {
   normalizeTitle,
   normalizedArtistSet,
   stripLeadingArtist,
-  transliterateCyrillic,
+  transliterateCyrillicForms,
 } from "./normalizeTrack";
 
 function bigramCounts(value: string): Map<string, number> {
@@ -75,13 +75,21 @@ function tokenScore(a: string, b: string) {
   return hits / Math.max(left.size, right.size);
 }
 
+function bestPairScore(left: string[], right: string[], score: (a: string, b: string) => number) {
+  let best = 0;
+  for (const a of left) {
+    for (const b of right) best = Math.max(best, score(a, b));
+  }
+  return best;
+}
+
 function textScore(a: string, b: string) {
   if (!a || !b) return 0;
-  const translitA = transliterateCyrillic(a);
-  const translitB = transliterateCyrillic(b);
-  const diceScore = Math.max(dice(a, b), dice(translitA, translitB));
-  const tokScore = Math.max(tokenScore(a, b), tokenScore(translitA, translitB));
-  const levScore = Math.max(levenshteinScore(a, b), levenshteinScore(translitA, translitB));
+  const formsA = Array.from(new Set([a, ...transliterateCyrillicForms(a)]));
+  const formsB = Array.from(new Set([b, ...transliterateCyrillicForms(b)]));
+  const diceScore = bestPairScore(formsA, formsB, dice);
+  const tokScore = bestPairScore(formsA, formsB, tokenScore);
+  const levScore = bestPairScore(formsA, formsB, levenshteinScore);
   const levAllowed = diceScore >= 0.3 || tokScore >= 0.5;
   return Math.max(diceScore, tokScore, levAllowed ? levScore : 0);
 }
