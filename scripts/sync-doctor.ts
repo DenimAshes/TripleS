@@ -3,8 +3,14 @@ import { prisma } from "@/lib/db/prisma";
 import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
 import { getServicesInCooldown } from "@/lib/sync/serviceCooldown";
 import { shouldRefreshSourceCache } from "@/lib/sync/sourceCachePolicy";
+import { classifyRecentJobStatuses } from "@/lib/sync/syncDoctorHealth";
 import type { ServiceKey } from "@/lib/sync/syncTypes";
-import { decodeStorageState, isSessionService, sessionCookiesPresent } from "@/lib/services/workerSessionState";
+import {
+  decodeStorageState,
+  isSessionService,
+  normalizeStorageState,
+  usableSessionCookies,
+} from "@/lib/services/workerSessionState";
 import { stateFilePath } from "@/worker/config";
 
 const PARTIAL_TOLERANCE = Math.max(
@@ -91,8 +97,9 @@ async function diagnoseRule(syncRuleId: string, liveMode: boolean): Promise<Chec
     take: 3,
     select: { id: true, status: true, startedAt: true, finishedAt: true, errorMessage: true, statsJson: true },
   });
+  const recentJobStatus = classifyRecentJobStatuses(recentJobs.map((job) => job.status));
   checks.push({
-    status: recentJobs[0]?.status === "FAILED" ? "WARN" : "OK",
+    status: recentJobStatus,
     name: "recent jobs",
     detail: recentJobs.length
       ? recentJobs
@@ -124,21 +131,28 @@ async function diagnoseRule(syncRuleId: string, liveMode: boolean): Promise<Chec
     const localExists = fs.existsSync(path);
     const sessionService = isSessionService(serviceKey) ? serviceKey : null;
     const stored = sessionService ? storedStateByService.get(sessionService) : undefined;
+    let localCookies: string[] = [];
     let storedCookies: string[] = [];
+    if (localExists && sessionService) {
+      try {
+        const state = normalizeStorageState(JSON.parse(fs.readFileSync(path, "utf8")));
+        if (state) localCookies = usableSessionCookies(sessionService, state);
+      } catch {}
+    }
     if (stored && sessionService) {
       try {
         const state = decodeStorageState(stored.stateGzipBase64);
-        if (state) storedCookies = sessionCookiesPresent(sessionService, state);
+        if (state) storedCookies = usableSessionCookies(sessionService, state);
       } catch {}
     }
     checks.push({
-      status: localExists || storedCookies.length ? "OK" : "FAIL",
+      status: localCookies.length || storedCookies.length ? "OK" : "FAIL",
       name: `${service} browser state`,
-      detail: localExists
-        ? path
+      detail: localCookies.length
+        ? `${path} (${localCookies.join(", ")})`
         : storedCookies.length
           ? `DB state updated ${stored!.updatedAt.toISOString()} (${storedCookies.join(", ")})`
-          : `${path}; no usable DB fallback`,
+          : `${path}; no unexpired authentication cookies in local or DB state`,
     });
   }
 

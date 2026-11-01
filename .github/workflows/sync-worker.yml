@@ -86,8 +86,27 @@ jobs:
         run: npm run state:restore
 
       - name: Run due sync rules
+        id: sync_worker
         timeout-minutes: 30
         run: npm run sync-worker
+
+      - name: Post-run health gate
+        if: ${{ always() && steps.sync_worker.outcome != 'skipped' }}
+        run: |
+          set +e
+          npx tsx scripts/sync-doctor.ts 2>&1 | tee sync-doctor.log
+          DOCTOR_STATUS=${PIPESTATUS[0]}
+          set -e
+
+          {
+            echo "## TripleS post-run health"
+            echo
+            echo '```text'
+            cat sync-doctor.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit "$DOCTOR_STATUS"
 
       - name: Upload debug artifacts on failure
         if: failure()
@@ -100,6 +119,7 @@ jobs:
             worker/state/*.log
             worker/state/yt-*.json
             worker/state/soundcloud-*.json
+            sync-doctor.log
             !worker/state/youtube.json
             !worker/state/spotify.json
             !worker/state/soundcloud.json

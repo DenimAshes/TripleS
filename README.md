@@ -232,13 +232,14 @@ Worker diagnostics:
 ```bash
 npm run worker:check
 npm run worker:check:live
+npm run sync:doctor
 npm run browser:health
 npm run browser:recover -- all
 npm run worker:check -- --json   # machine-readable for monitoring
 npm run stealth:test             # one-shot stealth verification (bot.sannysoft, BrowserScan, deviceandbrowserinfo)
 ```
 
-`worker:check` is fast and does not open browser sessions. `worker:check:live` opens YouTube Music and SoundCloud to verify playlist reads. `browser:health` checks a running CDP browser service via `/json/version`. `browser:recover -- all --restart` restarts failed VM browser services through Docker Compose. None of these commands perform account write actions, so they will not create playlists or modify accounts.
+`worker:check` is fast and does not open browser sessions. `worker:check:live` opens YouTube Music and SoundCloud to verify playlist reads. `sync:doctor` checks enabled rules, unexpired browser authentication cookies, cooldowns and recent job failures. The scheduled GitHub Action runs it after every worker tick, writes the report to the Actions Summary and fails after two consecutive `FAILED` jobs for a rule; `PARTIAL_SUCCESS` and manual-review warnings remain non-fatal. `browser:health` checks a running CDP browser service via `/json/version`. `browser:recover -- all --restart` restarts failed VM browser services through Docker Compose. None of these diagnostic commands perform account write actions, so they will not create playlists or modify accounts.
 
 There is no `while(true)` loop inside Next.js route handlers.
 

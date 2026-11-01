@@ -17,6 +17,12 @@ export const SESSION_COOKIE_HINTS: Record<SessionService, string[]> = {
   soundcloud: ["oauth_token", "sc_anonymous_id"],
 };
 
+const SESSION_AUTH_COOKIE_HINTS: Record<SessionService, string[]> = {
+  youtube: ["SID", "__Secure-1PSID", "__Secure-3PSID", "SAPISID", "LOGIN_INFO"],
+  spotify: ["sp_dc"],
+  soundcloud: ["oauth_token"],
+};
+
 export type PlaywrightCookie = {
   name: string;
   value: string;
@@ -113,6 +119,19 @@ export function decodeStorageState(stateGzipBase64: string): StorageState | null
 export function sessionCookiesPresent(service: SessionService, state: StorageState): string[] {
   const names = new Set(state.cookies.map((cookie) => cookie.name));
   return SESSION_COOKIE_HINTS[service].filter((name) => names.has(name));
+}
+
+export function usableSessionCookies(service: SessionService, state: StorageState, nowMs = Date.now()): string[] {
+  const names = new Set(
+    state.cookies
+      .filter(
+        (cookie) =>
+          cookie.value.length > 0 &&
+          (cookie.expires == null || cookie.expires <= 0 || cookie.expires * 1000 > nowMs),
+      )
+      .map((cookie) => cookie.name),
+  );
+  return SESSION_AUTH_COOKIE_HINTS[service].filter((name) => names.has(name));
 }
 
 export type StoredSessionSummary = {

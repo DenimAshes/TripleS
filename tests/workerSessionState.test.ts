@@ -18,6 +18,7 @@ import {
   isSessionService,
   normalizeStorageState,
   sessionCookiesPresent,
+  usableSessionCookies,
   upsertWorkerSessionState,
 } from "../lib/services/workerSessionState";
 
@@ -94,6 +95,24 @@ describe("sessionCookiesPresent", () => {
 
   test("returns nothing for a state without the service session cookies", () => {
     expect(sessionCookiesPresent("youtube", { cookies: [{ name: "PREF", value: "1" }], origins: [] })).toEqual([]);
+  });
+
+  test("only treats unexpired authentication cookies as usable", () => {
+    const now = Date.parse("2026-11-01T12:00:00.000Z");
+    const state = {
+      cookies: [
+        { name: "oauth_token", value: "expired", expires: now / 1000 - 1 },
+        { name: "sc_anonymous_id", value: "anonymous", expires: now / 1000 + 60 },
+      ],
+      origins: [],
+    };
+
+    expect(sessionCookiesPresent("soundcloud", state)).toEqual(["oauth_token", "sc_anonymous_id"]);
+    expect(usableSessionCookies("soundcloud", state, now)).toEqual([]);
+    expect(usableSessionCookies("soundcloud", {
+      ...state,
+      cookies: [{ name: "oauth_token", value: "valid", expires: now / 1000 + 60 }],
+    }, now)).toEqual(["oauth_token"]);
   });
 });
 

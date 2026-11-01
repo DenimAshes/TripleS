@@ -245,9 +245,12 @@ Local CLI:
 npm run db:health
 npm run worker:check
 npm run worker:check:live
+npm run sync:doctor
 npm run browser:health
 npm run browser:recover -- all
 ```
+
+The scheduled GitHub Action runs `sync:doctor` after each worker tick and publishes its output in the Actions Summary. Missing or expired authentication cookies, active service cooldowns and two consecutive `FAILED` jobs for one rule fail the workflow. `PARTIAL_SUCCESS` remains informational because manual review and not-found tracks are expected outcomes.
 
 ## Current Limitation
 
