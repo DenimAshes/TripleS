@@ -1,5 +1,9 @@
-import { describe, expect, test } from "vitest";
-import { normalizeConnectPlaylistsInput, PlaylistGroupError } from "../lib/services/playlistGroupActions";
+import { describe, expect, test, vi } from "vitest";
+import {
+  createOrReusePlaylist,
+  normalizeConnectPlaylistsInput,
+  PlaylistGroupError,
+} from "../lib/services/playlistGroupActions";
 
 describe("normalizeConnectPlaylistsInput", () => {
   test("normalizes a valid group request", () => {
@@ -54,5 +58,32 @@ describe("normalizeConnectPlaylistsInput", () => {
     expect(() => normalizeConnectPlaylistsInput({ sourcePlaylistId: "sp", destinationPlaylistIds: ["sp"] })).toThrow(
       PlaylistGroupError,
     );
+  });
+});
+
+describe("createOrReusePlaylist", () => {
+  const existing = { id: "PL_existing", name: "Mirror Mix", trackCount: 0, isWritable: true };
+
+  test("reuses a normalized duplicate without creating or later rolling it back", async () => {
+    const adapter = { getPlaylists: vi.fn().mockResolvedValue([existing]), createPlaylist: vi.fn() };
+
+    await expect(createOrReusePlaylist(adapter, "  mirror   MIX ")).resolves.toEqual({
+      playlist: existing,
+      createdRemotely: false,
+    });
+    expect(adapter.createPlaylist).not.toHaveBeenCalled();
+  });
+
+  test("marks a genuinely new remote playlist for rollback", async () => {
+    const created = { ...existing, id: "PL_new", name: "New Mix" };
+    const adapter = {
+      getPlaylists: vi.fn().mockResolvedValue([existing]),
+      createPlaylist: vi.fn().mockResolvedValue(created),
+    };
+
+    await expect(createOrReusePlaylist(adapter, "New Mix")).resolves.toEqual({
+      playlist: created,
+      createdRemotely: true,
+    });
   });
 });

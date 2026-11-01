@@ -38,6 +38,13 @@ function parseJsonArray<T>(stdout: string): T[] {
   return JSON.parse(stdout.slice(start, end + 1)) as T[];
 }
 
+function parseJsonObject<T>(stdout: string): T {
+  const start = stdout.indexOf("{");
+  const end = stdout.lastIndexOf("}");
+  if (start < 0 || end < start) throw new Error(`Could not parse YouTube runner output: ${stdout.slice(0, 500)}`);
+  return JSON.parse(stdout.slice(start, end + 1)) as T;
+}
+
 export async function listYouTubePlaylistsCli(): Promise<YtPlaylist[]> {
   return parseJsonArray<YtPlaylist>(await runYt(["list"]));
 }
@@ -48,6 +55,15 @@ export async function listYouTubePlaylistTracksCli(playlistId: string): Promise<
 
 export async function searchYouTubeTracksCli(query: string): Promise<NormalizedTrack[]> {
   return parseJsonArray<NormalizedTrack>(await runYt(["search", query]));
+}
+
+export async function createYouTubePlaylistCli(name: string, description?: string): Promise<YtPlaylist> {
+  const encoded = Buffer.from(JSON.stringify({ name, description }), "utf8").toString("base64");
+  return parseJsonObject<YtPlaylist>(await runYt(["create-b64", encoded]));
+}
+
+export async function deleteYouTubePlaylistCli(playlistId: string): Promise<{ deleted: boolean }> {
+  return parseJsonObject<{ deleted: boolean }>(await runYt(["delete", playlistId]));
 }
 
 function words(value: string) {

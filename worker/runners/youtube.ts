@@ -2,6 +2,7 @@ import "./_runnerGuard";
 import fs from "node:fs";
 import { type BrowserContext, type Locator, type Page } from "playwright";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
+import { findYouTubePlaylistByName } from "@/lib/services/youtube/youtubePlaylistName";
 import { normalizeArtist, normalizeTitle } from "@/lib/utils/normalizeTrack";
 import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
@@ -275,42 +276,44 @@ async function applyByYouFilter(page: Page): Promise<boolean> {
   });
 }
 
-export async function listYouTubePlaylists(): Promise<YtPlaylist[]> {
-  return withContext(async (_ctx, page) => {
-    trace("list:goto:start");
-    await page.goto(SERVICE_URLS.youtube.playlists!, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    trace("list:goto:done");
+async function loadYouTubePlaylists(page: Page): Promise<YtPlaylist[]> {
+  trace("list:goto:start");
+  await page.goto(SERVICE_URLS.youtube.playlists!, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  trace("list:goto:done");
+  await settle(page);
+  trace("list:settle:done");
+  await assertLoggedIn(page);
+  trace("list:auth:done");
+  await maybeDebug(page, "yt-playlists");
+
+  const filterApplied = await applyByYouFilter(page);
+  trace(`list:filter-by-you:${filterApplied ? "applied" : "not-found"}`);
+  if (filterApplied) {
+    await sleep(800);
     await settle(page);
-    trace("list:settle:done");
-    await assertLoggedIn(page);
-    trace("list:auth:done");
-    await maybeDebug(page, "yt-playlists");
+  }
 
-    const filterApplied = await applyByYouFilter(page);
-    trace(`list:filter-by-you:${filterApplied ? "applied" : "not-found"}`);
-    if (filterApplied) {
-      await sleep(800);
-      await settle(page);
-    }
+  const byId = new Map<string, YtPlaylist>();
+  await scrollToTop(page);
+  trace("list:scroll-top:done");
 
-    const byId = new Map<string, YtPlaylist>();
-    await scrollToTop(page);
-    trace("list:scroll-top:done");
+  for (let i = 0; i < 30; i++) {
+    trace(`list:loop:${i}:extract:start`);
+    const visible = await extractVisiblePlaylists(page);
+    trace(`list:loop:${i}:extract:done:${visible.length}`);
+    for (const item of visible) byId.set(item.id, item);
+    const moved = await scrollMainContent(page);
+    trace(`list:loop:${i}:scroll:${moved ? "moved" : "stopped"}`);
+    await sleep(700);
+    if (!moved) break;
+  }
 
-    for (let i = 0; i < 30; i++) {
-      trace(`list:loop:${i}:extract:start`);
-      const visible = await extractVisiblePlaylists(page);
-      trace(`list:loop:${i}:extract:done:${visible.length}`);
-      for (const item of visible) byId.set(item.id, item);
-      const moved = await scrollMainContent(page);
-      trace(`list:loop:${i}:scroll:${moved ? "moved" : "stopped"}`);
-      await sleep(700);
-      if (!moved) break;
-    }
+  trace(`list:done:${byId.size}`);
+  return Array.from(byId.values());
+}
 
-    trace(`list:done:${byId.size}`);
-    return Array.from(byId.values());
-  }, { humanize: false });
+export async function listYouTubePlaylists(): Promise<YtPlaylist[]> {
+  return withContext(async (_ctx, page) => loadYouTubePlaylists(page), { humanize: false });
 }
 
 async function extractVisiblePlaylists(page: Page): Promise<YtPlaylist[]> {
@@ -373,6 +376,91 @@ async function extractVisiblePlaylists(page: Page): Promise<YtPlaylist[]> {
     }
 
     return out;
+  });
+}
+
+async function openCreatePlaylistDialog(page: Page): Promise<Locator> {
+  const labeled = page
+    .getByRole("button", {
+      name: /new playlist|jauns.*atskaņošanas sarakst|новый плейлист|создать плейлист/i,
+    })
+    .first();
+  const artwork = page.locator('img[src*="create-playlist"]').first().locator("xpath=ancestor::a[1]");
+  const trigger = (await labeled.count()) > 0 ? labeled : artwork;
+  await runUiAction(page, "yt-create-open-dialog", () => trigger.click({ timeout: 10_000 }));
+
+  const dialog = page.locator("ytmusic-dialog:has(ytmusic-playlist-form)").first();
+  await runUiAction(page, "yt-create-dialog", () => dialog.waitFor({ state: "visible", timeout: 10_000 }));
+  return dialog;
+}
+
+export async function createYouTubePlaylist(name: string, description?: string): Promise<YtPlaylist> {
+  const playlistName = name.trim();
+  if (!playlistName) throw new Error("YouTube Music playlist name is required.");
+  if (playlistName.length > 150) throw new Error("YouTube Music playlist name must be 150 characters or fewer.");
+
+  return withContext(async (_ctx, page) => {
+    const existing = findYouTubePlaylistByName(await loadYouTubePlaylists(page), playlistName);
+    if (existing) return existing;
+
+    await page.goto(SERVICE_URLS.youtube.playlists!, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await settle(page);
+    await assertLoggedIn(page);
+
+    const dialog = await openCreatePlaylistDialog(page);
+    await runUiAction(page, "yt-create-title", () =>
+      dialog.locator("ytmusic-playlist-form #title-input input").first().fill(playlistName),
+    );
+    if (description?.trim()) {
+      await dialog.locator("ytmusic-playlist-form textarea").first().fill(description.trim().slice(0, 5000));
+    }
+
+    // YouTube defaults new playlists to public. The privacy options are always
+    // ordered Public, Unlisted, Private; choose the last one before creating.
+    await runUiAction(page, "yt-create-private", async () => {
+      await dialog.locator("ytmusic-dropdown-renderer").first().click({ timeout: 5_000 });
+      await dialog.locator("ytmusic-dropdown-item-renderer").last().click({ timeout: 5_000 });
+    });
+
+    await runUiAction(page, "yt-create-submit", () => dialog.locator("button:visible").last().click({ timeout: 10_000 }));
+    await dialog.waitFor({ state: "hidden", timeout: 20_000 });
+    await sleep(1000);
+
+    const created = findYouTubePlaylistByName(await loadYouTubePlaylists(page), playlistName);
+    if (!created) throw new Error(`YouTube Music created "${playlistName}" but it could not be read back.`);
+    return created;
+  });
+}
+
+export async function deleteYouTubePlaylist(playlistId: string): Promise<{ deleted: boolean }> {
+  return withContext(async (_ctx, page) => {
+    const existing = (await loadYouTubePlaylists(page)).find((playlist) => playlist.id === playlistId);
+    if (!existing) return { deleted: false };
+
+    await page.goto(`https://music.youtube.com/playlist?list=${encodeURIComponent(playlistId)}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 60_000,
+    });
+    await settle(page);
+    await assertLoggedIn(page);
+
+    const menu = page
+      .locator(
+        "ytmusic-editable-playlist-detail-header-renderer ytmusic-menu-renderer button, ytmusic-responsive-header-renderer ytmusic-menu-renderer button",
+      )
+      .first();
+    await runUiAction(page, "yt-delete-open-menu", () => menu.click({ timeout: 10_000 }));
+    await chooseMenuItem(page, /delete.*playlist|dzēst.*atskaņošanas sarakst|удалить.*плейлист/i);
+
+    const dialog = page.locator("yt-confirm-dialog-renderer").first();
+    await runUiAction(page, "yt-delete-confirm-dialog", () => dialog.waitFor({ state: "visible", timeout: 10_000 }));
+    await runUiAction(page, "yt-delete-confirm", () => dialog.locator("button").last().click({ timeout: 10_000 }));
+    await dialog.waitFor({ state: "hidden", timeout: 20_000 });
+    await sleep(1000);
+
+    const remains = (await loadYouTubePlaylists(page)).some((playlist) => playlist.id === playlistId);
+    if (remains) throw new Error(`YouTube Music did not delete playlist ${playlistId}.`);
+    return { deleted: true };
   });
 }
 
@@ -735,6 +823,27 @@ async function dispatchCommand(command: string, args: unknown[]): Promise<unknow
     if (!playlist || !query) throw new Error('"add" requires a playlist and a query');
     return addFirstSearchResultToPlaylistIfMissing(query, playlist);
   }
+  if (command === "create") {
+    const name = argStr(0);
+    const description = argStr(1);
+    if (!name) throw new Error('"create" requires a playlist name');
+    return createYouTubePlaylist(name, description || undefined);
+  }
+  if (command === "create-b64") {
+    const encoded = argStr(0);
+    if (!encoded) throw new Error('"create-b64" requires a base64 payload');
+    const input = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as {
+      name?: string;
+      description?: string;
+    };
+    if (!input.name) throw new Error('"create-b64" payload requires a playlist name');
+    return createYouTubePlaylist(input.name, input.description);
+  }
+  if (command === "delete") {
+    const playlistId = argStr(0);
+    if (!playlistId) throw new Error('"delete" requires a playlist id');
+    return deleteYouTubePlaylist(playlistId);
+  }
   if (command === "remove") {
     const playlistId = argStr(0);
     const trackText = args.slice(1).map((a) => (typeof a === "string" ? a : "")).filter(Boolean).join(" ");
@@ -767,6 +876,25 @@ async function main() {
     } else {
       console.log(`[yt:add] Already in playlist: ${result.duplicate?.title || query}`);
     }
+    return;
+  }
+
+  if (command === "create") {
+    const name = process.argv.slice(3).join(" ").trim();
+    if (!name) throw new Error('Usage: npm run yt -- create "<playlist name>"');
+    console.log(JSON.stringify(await createYouTubePlaylist(name), null, 2));
+    return;
+  }
+
+  if (command === "create-b64") {
+    const encoded = process.argv[3];
+    if (!encoded) throw new Error('Usage: npm run yt -- create-b64 "<base64 payload>"');
+    const input = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as {
+      name?: string;
+      description?: string;
+    };
+    if (!input.name) throw new Error('"create-b64" payload requires a playlist name');
+    console.log(JSON.stringify(await createYouTubePlaylist(input.name, input.description), null, 2));
     return;
   }
 
@@ -803,7 +931,14 @@ async function main() {
     return;
   }
 
-  throw new Error("Usage: npm run yt -- list | tracks | search | add | remove");
+  if (command === "delete") {
+    const playlistId = process.argv[3];
+    if (!playlistId) throw new Error('Usage: npm run yt -- delete "<playlist id>"');
+    console.log(JSON.stringify(await deleteYouTubePlaylist(playlistId), null, 2));
+    return;
+  }
+
+  throw new Error("Usage: npm run yt -- list | tracks | search | add | create | delete | remove");
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

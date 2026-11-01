@@ -140,7 +140,7 @@ export function AddPlaylistSyncButton({
       const target = targets[service];
       if (!target) return false;
       if (target.mode === "existing") return Boolean(target.playlistId);
-      return service !== "YOUTUBE" && target.newName.trim().length > 0;
+      return target.newName.trim().length > 0;
     });
 
   function setTarget(service: string, patch: Partial<TargetState>) {
@@ -227,14 +227,19 @@ export function AddPlaylistSyncButton({
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-3 backdrop-blur-sm">
-          <div className="panel max-h-[calc(100vh-1.5rem)] w-full max-w-4xl overflow-hidden shadow-[var(--shadow-overlay)]">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-sync-title"
+            className="panel max-h-[calc(100vh-1.5rem)] w-full max-w-4xl overflow-hidden shadow-[var(--shadow-overlay)]"
+          >
             <div className="flex items-center justify-between border-b border-[var(--border-soft)] p-4 sm:p-5">
               <div className="min-w-0">
                 <div className="eyebrow flex items-center gap-2">
                   <Wand2 size={14} />
                   Sync setup
                 </div>
-                <h2 className="heading-section mt-1">Choose where this playlist should mirror</h2>
+                <h2 id="add-sync-title" className="heading-section mt-1">Choose where this playlist should mirror</h2>
               </div>
               <button
                 type="button"
@@ -246,7 +251,7 @@ export function AddPlaylistSyncButton({
               </button>
             </div>
 
-            <div className="max-h-[calc(100vh-8rem)] overflow-auto p-4 sm:p-5">
+            <div className="max-h-[calc(100vh-8rem)] overscroll-contain overflow-auto p-4 sm:p-5">
               <div className="grid gap-2 sm:grid-cols-3">
                 <button type="button" onClick={() => applyPreset("youtube")} className="btn btn-ghost justify-center">
                   <ServiceIcon service="YOUTUBE" size="sm" className="h-5 w-5 rounded-[var(--radius-sm)]" />
@@ -269,7 +274,6 @@ export function AddPlaylistSyncButton({
                   const options = playlists.filter((playlist) => serviceKey(playlist.service) === service && playlist.id !== sourcePlaylistId);
                   const writableOptions = options.filter((playlist) => playlist.isWritable && !playlist.isConnected);
                   const selectedPlaylist = options.find((playlist) => playlist.id === target?.playlistId);
-                  const canCreate = service !== "YOUTUBE";
                   return (
                     <section
                       key={service}
@@ -308,6 +312,7 @@ export function AddPlaylistSyncButton({
                             <button
                               type="button"
                               onClick={() => setTarget(service, { mode: "existing" })}
+                              aria-pressed={target.mode === "existing"}
                               className={`rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition ${
                                 target.mode === "existing"
                                   ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]"
@@ -319,13 +324,12 @@ export function AddPlaylistSyncButton({
                             <button
                               type="button"
                               onClick={() => setTarget(service, { mode: "create" })}
-                              disabled={!canCreate}
-                              className={`rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${
+                              aria-pressed={target.mode === "create"}
+                              className={`rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition ${
                                 target.mode === "create"
                                   ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]"
                                   : "border-[var(--border-soft)] bg-[var(--surface)] text-muted-fg"
                               }`}
-                              title={!canCreate ? "Create the YouTube Music playlist there first, then choose it here." : undefined}
                             >
                               Create new
                             </button>
@@ -334,6 +338,8 @@ export function AddPlaylistSyncButton({
                           {target.mode === "existing" ? (
                             <div className="relative">
                               <select
+                                name={`existing-${service.toLowerCase()}-playlist`}
+                                aria-label={`Existing ${meta.label} playlist`}
                                 value={target.playlistId}
                                 onChange={(event) => setTarget(service, { playlistId: event.target.value })}
                                 className="w-full appearance-none rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] px-3 py-2.5 pr-9 text-sm text-[var(--text)]"
@@ -366,9 +372,13 @@ export function AddPlaylistSyncButton({
                             </div>
                           ) : (
                             <input
+                              name={`new-${service.toLowerCase()}-playlist-name`}
+                              aria-label={`New ${meta.label} playlist name`}
+                              autoComplete="off"
+                              maxLength={120}
                               value={target.newName}
                               onChange={(event) => setTarget(service, { newName: event.target.value })}
-                              placeholder={`New ${meta.label} playlist name`}
+                              placeholder={`New ${meta.label} playlist name…`}
                               className="w-full rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] px-3 py-2.5 text-sm"
                             />
                           )}

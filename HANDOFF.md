@@ -22,7 +22,7 @@ Browser-only flow:
 worker/chrome.ts              starts real Chrome with a dedicated profile
 worker/login.ts               verifies login and exports storage state
 worker/browserSession.ts      opens saved state in real Chrome/Chromium
-worker/runners/youtube.ts     list/search/add/remove through YouTube Music UI
+worker/runners/youtube.ts     list/search/add/remove/create/delete through YouTube Music UI
 lib/services/youtube/YouTubeBrowserAdapter.ts
 lib/services/youtube/youtubeBrowserCli.ts
 lib/services/adapterFactory.ts
@@ -44,6 +44,8 @@ npm run yt -- tracks "PL..."
 npm run yt -- search "Artist - Track"
 npm run yt -- add "Playlist name or PL..." "Artist - Track"
 npm run yt -- remove "PL..." "Track title or video id"
+npm run yt -- create "Playlist name"
+npm run yt -- delete "PL..."
 ```
 
 To make the main sync engine use YouTube browser automation:
@@ -133,6 +135,7 @@ Two Tailwind v4 traps this codebase already hit:
 - Added duplicate detection before YouTube add operations. It checks `videoId`, ISRC, normalized title/artist and normalized query/title overlap before clicking add.
 - `npm run yt -- add ...` now also skips duplicates and prints `Already in playlist`.
 - `YouTubeBrowserAdapter` now uses `youtubeBrowserCli.ts`, so the main sync path and web UI share the same browser-only runner path.
+- YouTube Music playlist creation is browser-backed end to end: the group builder can create a private destination, normalized duplicate names return the existing playlist, and `deletePlaylist` rolls remote creation back if DB setup fails.
 - Playlist refresh now allows real YouTube browser mode even if the existing seeded YouTube account was marked as mock. With `YOUTUBE_BROWSER_AUTOMATION=true`, refresh can upsert real YouTube playlists into the database.
 - Fixed PostgreSQL runtime bug in Spotify cookie storage by replacing raw SQL with Prisma Client API.
 - Added the SoundCloud browser-backed path: `worker/runners/soundcloud.ts`, `npm run sc -- list|tracks|search|add|remove|create`, `SoundCloudBrowserAdapter`, settings card, and `SOUNDCLOUD_BROWSER_AUTOMATION`.
@@ -208,6 +211,12 @@ npm run yt -- add "PLkEG3hafrR607OtRgPKwpOFniIvCp_4hc" "Rick Astley Never Gonna 
 npm run yt -- remove "PLkEG3hafrR607OtRgPKwpOFniIvCp_4hc" "dQw4w9WgXcQ"
 npm run yt -- add "PLkEG3hafrR607OtRgPKwpOFniIvCp_4hc" "Kai Angel quiet turn up"
 ```
+
+YouTube playlist create/delete verification:
+
+- Created private `TripleS verification 2026-11-01 1328` as `PLAhH7pVlMw7g`.
+- Repeating create with different casing and whitespace returned the same ID.
+- `npm run yt -- delete "PLAhH7pVlMw7g"` returned `{ "deleted": true }`; read-back confirmed it was gone.
 
 SoundCloud verification:
 

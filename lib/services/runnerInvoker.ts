@@ -1,6 +1,8 @@
 import type { NormalizedPlaylist, NormalizedTrack } from "@/lib/sync/syncTypes";
 import {
   addFirstSearchResultToPlaylistCli,
+  createYouTubePlaylistCli,
+  deleteYouTubePlaylistCli,
   listYouTubePlaylistTracksCli,
   listYouTubePlaylistsCli,
   removeTrackFromPlaylistCli,
@@ -51,13 +53,22 @@ export async function invokeYouTubeListPlaylists(): Promise<NormalizedPlaylist[]
     [],
   );
   const playlists = persistent ?? (await listYouTubePlaylistsCli());
-  return playlists.map((playlist) => ({
-    id: playlist.id,
-    name: playlist.name,
-    imageUrl: playlist.imageUrl,
-    trackCount: playlist.trackCount,
-    isWritable: true,
-  }));
+  return playlists.map(youtubePlaylistToNormalized);
+}
+
+export async function invokeYouTubeCreatePlaylist(name: string, description?: string): Promise<NormalizedPlaylist> {
+  browserRunnerMode("youtube");
+  const persistent = await viaPersistent<{ id: string; name: string; imageUrl?: string; trackCount: number }>(
+    "youtube",
+    "create",
+    [name, description ?? ""],
+  );
+  return youtubePlaylistToNormalized(persistent ?? (await createYouTubePlaylistCli(name, description)));
+}
+
+export async function invokeYouTubeDeletePlaylist(playlistId: string): Promise<{ deleted: boolean }> {
+  browserRunnerMode("youtube");
+  return (await viaPersistent<{ deleted: boolean }>("youtube", "delete", [playlistId])) ?? deleteYouTubePlaylistCli(playlistId);
 }
 
 export async function invokeYouTubeListPlaylistTracks(playlistId: string): Promise<NormalizedTrack[]> {
@@ -120,6 +131,16 @@ export async function invokeSoundCloudRemoveTrack(playlistId: string, trackId: s
 export async function invokeSoundCloudDeletePlaylist(playlistId: string): Promise<{ deleted: boolean }> {
   browserRunnerMode("soundcloud");
   return (await viaPersistent<{ deleted: boolean }>("soundcloud", "delete", [playlistId])) ?? deleteSoundCloudPlaylistCli(playlistId);
+}
+
+function youtubePlaylistToNormalized(playlist: { id: string; name: string; imageUrl?: string; trackCount: number }): NormalizedPlaylist {
+  return {
+    id: playlist.id,
+    name: playlist.name,
+    imageUrl: playlist.imageUrl,
+    trackCount: playlist.trackCount,
+    isWritable: true,
+  };
 }
 
 function soundCloudPlaylistToNormalized(playlist: SoundCloudPlaylist): NormalizedPlaylist {

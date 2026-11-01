@@ -3,11 +3,14 @@ import type { NormalizedPlaylist, NormalizedTrack, TokenPair, TrackSearchQuery }
 import { cachedSearchTracks } from "@/lib/services/searchCache";
 import {
   invokeYouTubeAddTrack,
+  invokeYouTubeCreatePlaylist,
+  invokeYouTubeDeletePlaylist,
   invokeYouTubeListPlaylistTracks,
   invokeYouTubeListPlaylists,
   invokeYouTubeRemoveTrack,
   invokeYouTubeSearchTracks,
 } from "@/lib/services/runnerInvoker";
+import { findYouTubePlaylistByName } from "./youtubePlaylistName";
 
 export class YouTubeBrowserAdapter implements MusicServiceAdapter {
   async getCurrentUser() {
@@ -18,8 +21,23 @@ export class YouTubeBrowserAdapter implements MusicServiceAdapter {
     return invokeYouTubeListPlaylists();
   }
 
-  async createPlaylist(): Promise<NormalizedPlaylist> {
-    throw new Error("Creating YouTube Music playlists from this app is not available yet.");
+  async createPlaylist(name: string, description?: string): Promise<NormalizedPlaylist> {
+    try {
+      return await invokeYouTubeCreatePlaylist(name, description);
+    } catch (createError) {
+      const existing = findYouTubePlaylistByName(await invokeYouTubeListPlaylists().catch(() => []), name);
+      if (existing) {
+        console.warn(
+          `[youtube-create] create call failed but playlist "${name}" exists on YouTube Music: ${createError instanceof Error ? createError.message : String(createError)}`,
+        );
+        return existing;
+      }
+      throw createError;
+    }
+  }
+
+  async deletePlaylist(playlistId: string): Promise<{ deleted: boolean }> {
+    return invokeYouTubeDeletePlaylist(playlistId);
   }
 
   async getPlaylistTracks(playlistId: string): Promise<NormalizedTrack[]> {

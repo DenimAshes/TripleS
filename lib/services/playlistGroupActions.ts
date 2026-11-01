@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { getAdapter, serviceEnum, serviceKey } from "@/lib/services/adapterFactory";
+import type { MusicServiceAdapter } from "@/lib/services/MusicServiceAdapter";
 import type { Prisma } from "@prisma/client";
 
 export class PlaylistGroupError extends Error {
@@ -72,6 +73,23 @@ function normalizeName(value: unknown, fallback?: string) {
   const name = String(value || "").trim();
   const normalized = name || fallback;
   return normalized ? normalized.slice(0, 120) : undefined;
+}
+
+function comparablePlaylistName(value: string) {
+  return value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export async function createOrReusePlaylist(
+  adapter: Pick<MusicServiceAdapter, "getPlaylists" | "createPlaylist">,
+  name: string,
+) {
+  const targetName = comparablePlaylistName(name);
+  const existing = (await adapter.getPlaylists()).find(
+    (playlist) => comparablePlaylistName(playlist.name) === targetName,
+  );
+  return existing
+    ? { playlist: existing, createdRemotely: false }
+    : { playlist: await adapter.createPlaylist(name), createdRemotely: true };
 }
 
 export function normalizeConnectPlaylistsInput(input: unknown): NormalizedConnectPlaylistsInput {
@@ -200,63 +218,17 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
   // Track playlists we create on the remote service so we can roll them back
   // if anything fails before the group/rule is fully committed. Without this,
   // a transient DB error after createPlaylist would leave an empty playlist
-  // orphaned on SoundCloud.
-  const rollbackCreated: Array<{ service: string; servicePlaylistId: string; dbId: string }> = [];
-
-  if (createDestination) {
-    const service = serviceEnum(serviceKey(createDestination.service));
-    if (service === source.service) {
-      throw new PlaylistGroupError(409, "Choose another platform for the new playlist.");
-    }
-    if (service === "YOUTUBE") {
-      throw new PlaylistGroupError(409, "Create the YouTube Music playlist there first, then choose it here.");
-    }
-    const adapter = getAdapter(service, userId);
-    const created = await adapter.createPlaylist(createDestination.name);
-    const playlist = await prisma.playlist.upsert({
-      where: { service_servicePlaylistId: { service, servicePlaylistId: created.id } },
-      update: {
-        userId,
-        name: created.name,
-        description: created.description,
-        imageUrl: created.imageUrl,
-        trackCount: created.trackCount,
-        isWritable: created.isWritable,
-        apiId: created.apiId ?? null,
-        permalink: created.permalink ?? null,
-        createdBySystem: true,
-        lastFetchedAt: new Date(),
-      },
-      create: {
-        userId,
-        service,
-        servicePlaylistId: created.id,
-        apiId: created.apiId ?? null,
-        permalink: created.permalink ?? null,
-        name: created.name,
-        description: created.description,
-        imageUrl: created.imageUrl,
-        trackCount: created.trackCount,
-        isWritable: created.isWritable,
-        createdBySystem: true,
-        lastFetchedAt: new Date(),
-      },
-    });
-    destinationPlaylistIds.push(playlist.id);
-    rollbackCreated.push({ service, servicePlaylistId: created.id, dbId: playlist.id });
-  }
+  // orphaned on the remote service.
+  const rollbackCreated: Array<{ service: string; servicePlaylistId: string; dbId?: string }> = [];
 
   const rollback = async (cause: unknown) => {
     // Two-phase rollback per created destination:
-    //   1) best-effort delete on the remote service (SC playlist)
+    //   1) best-effort delete on the remote service
     //   2) atomic DB cleanup that also removes any rows that would
     //      otherwise FK-block the Playlist delete (group members,
     //      track states). The DB step is wrapped in a transaction so
     //      we never end up with a half-cleaned destination — either
     //      the Playlist row and its dependents all go, or nothing does.
-    // If (1) fails the DB row is still removed and the orphan-cleanup
-    // script will pick the remote playlist up later (createdBySystem
-    // is still set on the row until this point).
     const causeMessage = cause instanceof Error ? cause.message : String(cause);
     for (const item of rollbackCreated) {
       try {
@@ -266,9 +238,10 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
         }
       } catch (deleteError) {
         console.warn(
-          `[playlistGroupActions] remote rollback failed for ${item.service}:${item.servicePlaylistId} (cause: ${causeMessage}): ${deleteError instanceof Error ? deleteError.message : String(deleteError)}. DB row will still be removed; run "npm run cleanup:orphans" to sweep the leftover.`,
+          `[playlistGroupActions] remote rollback failed for ${item.service}:${item.servicePlaylistId} (cause: ${causeMessage}): ${deleteError instanceof Error ? deleteError.message : String(deleteError)}. Manual remote cleanup may be required.`,
         );
       }
+      if (!item.dbId) continue;
       try {
         await prisma.$transaction([
           prisma.playlistGroupMember.deleteMany({ where: { playlistId: item.dbId } }),
@@ -284,6 +257,49 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
   };
 
   try {
+  if (createDestination) {
+    const service = serviceEnum(serviceKey(createDestination.service));
+    if (service === source.service) {
+      throw new PlaylistGroupError(409, "Choose another platform for the new playlist.");
+    }
+    const adapter = getAdapter(service, userId);
+    const { playlist: created, createdRemotely } = await createOrReusePlaylist(adapter, createDestination.name);
+    const rollbackItem: (typeof rollbackCreated)[number] | null = createdRemotely
+      ? { service, servicePlaylistId: created.id }
+      : null;
+    if (rollbackItem) rollbackCreated.push(rollbackItem);
+    const playlist = await prisma.playlist.upsert({
+      where: { service_servicePlaylistId: { service, servicePlaylistId: created.id } },
+      update: {
+        userId,
+        name: created.name,
+        description: created.description,
+        imageUrl: created.imageUrl,
+        trackCount: created.trackCount,
+        isWritable: created.isWritable,
+        apiId: created.apiId ?? null,
+        permalink: created.permalink ?? null,
+        ...(createdRemotely ? { createdBySystem: true } : {}),
+        lastFetchedAt: new Date(),
+      },
+      create: {
+        userId,
+        service,
+        servicePlaylistId: created.id,
+        apiId: created.apiId ?? null,
+        permalink: created.permalink ?? null,
+        name: created.name,
+        description: created.description,
+        imageUrl: created.imageUrl,
+        trackCount: created.trackCount,
+        isWritable: created.isWritable,
+        createdBySystem: createdRemotely,
+        lastFetchedAt: new Date(),
+      },
+    });
+    destinationPlaylistIds.push(playlist.id);
+    if (rollbackItem) rollbackItem.dbId = playlist.id;
+  }
 
   const playlistIds = [sourcePlaylistId, ...destinationPlaylistIds];
   const playlists = await prisma.playlist.findMany({

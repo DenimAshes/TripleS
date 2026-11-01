@@ -148,7 +148,11 @@ npm run yt -- tracks "PL..."
 npm run yt -- search "Artist - Track"
 npm run yt -- add "Playlist name or PL..." "Artist - Track"
 npm run yt -- remove "PL..." "Track title or video id"
+npm run yt -- create "Playlist name"
+npm run yt -- delete "PL..."
 ```
+
+Created YouTube Music playlists are private. Creating the same normalized name again returns the existing playlist instead of adding a duplicate; `delete` is used for rollback and verification.
 
 To let the app's sync engine use the YouTube Music browser runner instead of mock data, set:
 
