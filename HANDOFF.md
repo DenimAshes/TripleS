@@ -146,6 +146,7 @@ Two Tailwind v4 traps this codebase already hit:
 - SoundCloud's current layout (`/n/<track>?v2_layout=true`) writes through a same-origin server action instead: `POST /n/<track>` with `[{"trackUrns":[...],"playlistUrn":"..."}]`. That endpoint is not challenged, so `worker/runners/soundcloudUiWrite.ts` drives the "Add to playlist" dialog and the api-v2 write is only a fallback (`SOUNDCLOUD_WRITE_MODE=auto|ui|api`).
 - Verified headless on `Снимите тонер`: add moved it 3 -> 4 tracks and remove took it back to 3, both confirmed by the row label flipping between `Add to playlist` and `Added`, with the server action returning 200 each time.
 - The SoundCloud account handle is now `lightblesss`, not `drdyue`. Writable playlists: `lightblesss/sets/na-fontane` and `lightblesss/sets/kalvin-klyajn`.
+- Browser-tool playlist caches use canonical uppercase service keys. The unreferenced legacy lowercase `soundcloud` row for the old `drdyue/sets/na-fontane` handle was removed on 2026-11-01.
 - The dialog lists playlists that `api-v2` playlist listing omits (`Снимите тонер`, `несчастливый плейлист`), and its track counts can lag the API by a few entries.
 
 Design pass, second half — the sweep that finished the token migration:

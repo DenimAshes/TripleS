@@ -7,7 +7,7 @@ import {
   type SoundCloudPlaylist,
 } from "./soundCloudBrowserCli";
 
-const SERVICE = "soundcloud";
+const SERVICE = "SOUNDCLOUD";
 const HOUR_MS = 3600_000;
 const PLAYLISTS_TTL_MS = Number(process.env.SC_PLAYLISTS_TTL_HOURS || 24) * HOUR_MS;
 const TRACKS_TTL_MS = Number(process.env.SC_TRACKS_TTL_HOURS || 24) * HOUR_MS;
