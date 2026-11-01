@@ -13,6 +13,11 @@ export class PlaylistGroupError extends Error {
 export type ConnectPlaylistsInput = {
   sourcePlaylistId: string;
   destinationPlaylistIds?: string[];
+  createDestinations?: Array<{
+    service: string;
+    name: string;
+  }>;
+  /** Backward-compatible shape used by older clients and scripts. */
   createDestination?: {
     service: string;
     name: string;
@@ -38,7 +43,7 @@ type GroupRulePlaylist = {
 export type NormalizedConnectPlaylistsInput = {
   sourcePlaylistId: string;
   destinationPlaylistIds: string[];
-  createDestination: { service: string; name: string } | null;
+  createDestinations: Array<{ service: string; name: string }>;
   name?: string;
   mode: string;
   intervalMinutes: number;
@@ -98,34 +103,42 @@ export function normalizeConnectPlaylistsInput(input: unknown): NormalizedConnec
   const destinationPlaylistIds = Array.isArray(raw.destinationPlaylistIds)
     ? Array.from(new Set(raw.destinationPlaylistIds.map((value) => String(value || "").trim()).filter(Boolean)))
     : [];
-  const createDestinationRaw =
-    raw.createDestination && typeof raw.createDestination === "object"
-      ? (raw.createDestination as Record<string, unknown>)
-      : null;
-  const createDestination = createDestinationRaw
-    ? {
-        service: normalizeService(createDestinationRaw.service),
-        name: normalizeName(createDestinationRaw.name) || "",
-      }
-    : null;
+  if (raw.createDestinations != null && !Array.isArray(raw.createDestinations)) {
+    throw new PlaylistGroupError(400, "New playlist destinations must be a list.");
+  }
+  const createDestinationItems = Array.isArray(raw.createDestinations)
+    ? raw.createDestinations
+    : raw.createDestination && typeof raw.createDestination === "object"
+      ? [raw.createDestination]
+      : [];
+  const createDestinations = createDestinationItems.map((value) => {
+    const item = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    return {
+      service: normalizeService(item.service),
+      name: normalizeName(item.name) || "",
+    };
+  });
 
-  if (!sourcePlaylistId || (destinationPlaylistIds.length === 0 && !createDestination)) {
+  if (!sourcePlaylistId || (destinationPlaylistIds.length === 0 && createDestinations.length === 0)) {
     throw new PlaylistGroupError(400, "Choose playlists to connect.");
   }
   if (destinationPlaylistIds.includes(sourcePlaylistId)) {
     throw new PlaylistGroupError(400, "Source playlist cannot also be a destination.");
   }
-  if (destinationPlaylistIds.length > 2) {
+  if (destinationPlaylistIds.length + createDestinations.length > 2) {
     throw new PlaylistGroupError(400, "Choose no more than one playlist per other platform.");
   }
-  if (createDestination && !createDestination.name) {
+  if (createDestinations.some((destination) => !destination.name)) {
     throw new PlaylistGroupError(400, "Name the new playlist.");
+  }
+  if (new Set(createDestinations.map((destination) => destination.service)).size !== createDestinations.length) {
+    throw new PlaylistGroupError(400, "Create no more than one playlist per platform.");
   }
 
   return {
     sourcePlaylistId,
     destinationPlaylistIds,
-    createDestination,
+    createDestinations,
     name: normalizeName(raw.name),
     mode: normalizeMode(raw.mode),
     intervalMinutes: normalizeInterval(raw.intervalMinutes),
@@ -208,7 +221,7 @@ async function upsertGroupSyncRules(
 export async function connectPlaylistGroup(userId: string, input: ConnectPlaylistsInput) {
   const normalized = normalizeConnectPlaylistsInput(input);
   const destinationPlaylistIds = [...normalized.destinationPlaylistIds];
-  const { sourcePlaylistId, createDestination, intervalMinutes } = normalized;
+  const { sourcePlaylistId, createDestinations, intervalMinutes } = normalized;
 
   const source = await prisma.playlist.findUnique({ where: { id: sourcePlaylistId } });
   if (!source || source.userId !== userId) {
@@ -230,7 +243,7 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
     //      we never end up with a half-cleaned destination — either
     //      the Playlist row and its dependents all go, or nothing does.
     const causeMessage = cause instanceof Error ? cause.message : String(cause);
-    for (const item of rollbackCreated) {
+    for (const item of [...rollbackCreated].reverse()) {
       try {
         const adapter = getAdapter(item.service, userId);
         if (typeof adapter.deletePlaylist === "function") {
@@ -257,11 +270,28 @@ export async function connectPlaylistGroup(userId: string, input: ConnectPlaylis
   };
 
   try {
-  if (createDestination) {
-    const service = serviceEnum(serviceKey(createDestination.service));
-    if (service === source.service) {
-      throw new PlaylistGroupError(409, "Choose another platform for the new playlist.");
+  const existingDestinations = destinationPlaylistIds.length
+    ? await prisma.playlist.findMany({ where: { id: { in: destinationPlaylistIds }, userId } })
+    : [];
+  if (existingDestinations.length !== destinationPlaylistIds.length) {
+    throw new PlaylistGroupError(404, "Playlist not found.");
+  }
+  const requestedServices = new Set([source.service]);
+  for (const destination of existingDestinations) {
+    if (requestedServices.has(destination.service)) {
+      throw new PlaylistGroupError(400, "Choose only one playlist from each platform.");
     }
+    if (!destination.isWritable) {
+      throw new PlaylistGroupError(409, `${destination.name} cannot be changed from this app.`);
+    }
+    requestedServices.add(destination.service);
+  }
+  for (const createDestination of createDestinations) {
+    const service = serviceEnum(serviceKey(createDestination.service));
+    if (requestedServices.has(service)) {
+      throw new PlaylistGroupError(400, "Choose only one playlist from each platform.");
+    }
+    requestedServices.add(service);
     const adapter = getAdapter(service, userId);
     const { playlist: created, createdRemotely } = await createOrReusePlaylist(adapter, createDestination.name);
     const rollbackItem: (typeof rollbackCreated)[number] | null = createdRemotely

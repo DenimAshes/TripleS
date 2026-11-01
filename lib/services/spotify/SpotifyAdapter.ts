@@ -191,6 +191,12 @@ export class SpotifyAdapter implements MusicServiceAdapter {
     };
   }
 
+  async deletePlaylist(playlistId: string): Promise<{ deleted: boolean }> {
+    await this.ensureWriteAuth();
+    await this.request(`/playlists/${encodeURIComponent(playlistId)}/followers`, { method: "DELETE" });
+    return { deleted: true };
+  }
+
   async getPlaylistTracks(playlistId: string): Promise<NormalizedTrack[]> {
     const cookie = await this.getWebCookie();
     if (cookie) {

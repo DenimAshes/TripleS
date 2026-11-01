@@ -154,6 +154,8 @@ npm run yt -- delete "PL..."
 
 Created YouTube Music playlists are private. Creating the same normalized name again returns the existing playlist instead of adding a duplicate; `delete` is used for rollback and verification.
 
+Add sync accepts any mix of existing and new destinations: one missing platform can be created on its own, or missing YouTube Music and SoundCloud playlists can be created together. Remote creates run sequentially and only playlists created by that request are removed if setup fails.
+
 To let the app's sync engine use the YouTube Music browser runner instead of mock data, set:
 
 ```env

@@ -288,7 +288,7 @@ async function runAction(job: BrowserActionJob) {
   try {
     await runInActiveJob({ jobId: job.id, abortController }, async () => {
       if (job.type === "playlistGroup.connect") {
-        await setJob(job.id, { currentStep: "Creating or connecting playlist" });
+        await setJob(job.id, { currentStep: "Creating or connecting playlists" });
         const input = job.input as ConnectPlaylistsInput;
         const group = await connectPlaylistGroup(job.userId, input);
         if (await isTerminalJob(job.id)) return;

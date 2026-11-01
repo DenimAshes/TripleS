@@ -19,7 +19,7 @@ describe("normalizeConnectPlaylistsInput", () => {
     ).toEqual({
       sourcePlaylistId: "source",
       destinationPlaylistIds: ["yt", "sc"],
-      createDestination: null,
+      createDestinations: [],
       name: "My group",
       mode: "ADD_ONLY",
       intervalMinutes: 60,
@@ -27,7 +27,7 @@ describe("normalizeConnectPlaylistsInput", () => {
     });
   });
 
-  test("normalizes create destination service and name", () => {
+  test("keeps the legacy single-create shape working", () => {
     expect(
       normalizeConnectPlaylistsInput({
         sourcePlaylistId: "sp",
@@ -35,10 +35,46 @@ describe("normalizeConnectPlaylistsInput", () => {
       }),
     ).toMatchObject({
       sourcePlaylistId: "sp",
-      createDestination: { service: "SOUNDCLOUD", name: "Mirror" },
+      createDestinations: [{ service: "SOUNDCLOUD", name: "Mirror" }],
       mode: "ADD_ONLY",
       intervalMinutes: 5,
       isEnabled: true,
+    });
+  });
+
+  test("normalizes one or two new destination playlists", () => {
+    expect(
+      normalizeConnectPlaylistsInput({
+        sourcePlaylistId: "sp",
+        createDestinations: [
+          { service: "youtube", name: "  YouTube mirror  " },
+          { service: "soundcloud", name: "SoundCloud mirror" },
+        ],
+      }),
+    ).toMatchObject({
+      createDestinations: [
+        { service: "YOUTUBE", name: "YouTube mirror" },
+        { service: "SOUNDCLOUD", name: "SoundCloud mirror" },
+      ],
+    });
+    expect(
+      normalizeConnectPlaylistsInput({
+        sourcePlaylistId: "sp",
+        createDestinations: [{ service: "youtube", name: "Only one" }],
+      }).createDestinations,
+    ).toEqual([{ service: "YOUTUBE", name: "Only one" }]);
+  });
+
+  test("allows one existing destination alongside one new destination", () => {
+    expect(
+      normalizeConnectPlaylistsInput({
+        sourcePlaylistId: "sp",
+        destinationPlaylistIds: ["existing-soundcloud"],
+        createDestinations: [{ service: "youtube", name: "YouTube mirror" }],
+      }),
+    ).toMatchObject({
+      destinationPlaylistIds: ["existing-soundcloud"],
+      createDestinations: [{ service: "YOUTUBE", name: "YouTube mirror" }],
     });
   });
 
@@ -58,6 +94,28 @@ describe("normalizeConnectPlaylistsInput", () => {
     expect(() => normalizeConnectPlaylistsInput({ sourcePlaylistId: "sp", destinationPlaylistIds: ["sp"] })).toThrow(
       PlaylistGroupError,
     );
+    expect(() => normalizeConnectPlaylistsInput({ sourcePlaylistId: "sp", createDestinations: "youtube" })).toThrow(
+      PlaylistGroupError,
+    );
+    expect(() =>
+      normalizeConnectPlaylistsInput({
+        sourcePlaylistId: "sp",
+        createDestinations: [
+          { service: "youtube", name: "One" },
+          { service: "youtube", name: "Two" },
+        ],
+      }),
+    ).toThrow(PlaylistGroupError);
+    expect(() =>
+      normalizeConnectPlaylistsInput({
+        sourcePlaylistId: "sp",
+        destinationPlaylistIds: ["existing"],
+        createDestinations: [
+          { service: "youtube", name: "One" },
+          { service: "soundcloud", name: "Two" },
+        ],
+      }),
+    ).toThrow(PlaylistGroupError);
   });
 });
 

@@ -136,6 +136,7 @@ Two Tailwind v4 traps this codebase already hit:
 - `npm run yt -- add ...` now also skips duplicates and prints `Already in playlist`.
 - `YouTubeBrowserAdapter` now uses `youtubeBrowserCli.ts`, so the main sync path and web UI share the same browser-only runner path.
 - YouTube Music playlist creation is browser-backed end to end: the group builder can create a private destination, normalized duplicate names return the existing playlist, and `deletePlaylist` rolls remote creation back if DB setup fails.
+- Add sync can now create one missing destination or both YouTube Music and SoundCloud destinations in the same job, while still supporting any mix with existing playlists. Creates run sequentially; rollback runs in reverse and never deletes a same-name playlist that existed before the request.
 - Playlist refresh now allows real YouTube browser mode even if the existing seeded YouTube account was marked as mock. With `YOUTUBE_BROWSER_AUTOMATION=true`, refresh can upsert real YouTube playlists into the database.
 - Fixed PostgreSQL runtime bug in Spotify cookie storage by replacing raw SQL with Prisma Client API.
 - Added the SoundCloud browser-backed path: `worker/runners/soundcloud.ts`, `npm run sc -- list|tracks|search|add|remove|create`, `SoundCloudBrowserAdapter`, settings card, and `SOUNDCLOUD_BROWSER_AUTOMATION`.

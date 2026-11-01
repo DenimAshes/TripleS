@@ -68,7 +68,7 @@ function Artwork({ playlist }: { playlist: SyncPlaylistOption }) {
 
 function humanStatus(status: string | null) {
   if (!status) return null;
-  if (/creating|connecting/i.test(status)) return "Preparing playlist connection";
+  if (/creating|connecting/i.test(status)) return "Preparing playlist connections";
   if (/loading source/i.test(status)) return "Loading source playlist";
   if (/reading .* source tracks|opening service playlist|still reading|read \d+ tracks|caching|cached/i.test(status)) {
     return `Reading source tracks - ${status}`;
@@ -135,7 +135,6 @@ export function AddPlaylistSyncButton({
     .filter(({ target }) => target?.mode === "create");
   const canSave =
     enabledServices.length > 0 &&
-    createTargets.length <= 1 &&
     enabledServices.every((service) => {
       const target = targets[service];
       if (!target) return false;
@@ -151,15 +150,11 @@ export function AddPlaylistSyncButton({
     setTargets((current) => ({ ...current, [service]: { ...current[service], ...patch } }));
   }
 
-  function applyPreset(kind: "youtube" | "soundcloud" | "all") {
+  function applyPreset(services: string[]) {
     setTargets((current) => {
       const next = { ...current };
       for (const service of targetServices) {
-        const shouldEnable =
-          kind === "all" ||
-          (kind === "youtube" && service === "YOUTUBE") ||
-          (kind === "soundcloud" && service === "SOUNDCLOUD");
-        next[service] = { ...next[service], enabled: shouldEnable };
+        next[service] = { ...next[service], enabled: services.includes(service) };
       }
       return next;
     });
@@ -177,16 +172,13 @@ export function AddPlaylistSyncButton({
     setSyncSummary(null);
     setInitialWarnings([]);
     try {
-      const createDestination = createTargets[0];
       const started = await startBrowserJob("playlistGroup.connect", {
         sourcePlaylistId,
         destinationPlaylistIds: enabledExistingIds,
-        createDestination: createDestination
-          ? {
-              service: createDestination.service,
-              name: createDestination.target.newName.trim(),
-            }
-          : null,
+        createDestinations: createTargets.map(({ service, target }) => ({
+          service,
+          name: target.newName.trim(),
+        })),
         mode: "ADD_ONLY",
         intervalMinutes: 5,
         isEnabled: true,
@@ -253,15 +245,24 @@ export function AddPlaylistSyncButton({
 
             <div className="max-h-[calc(100vh-8rem)] overscroll-contain overflow-auto p-4 sm:p-5">
               <div className="grid gap-2 sm:grid-cols-3">
-                <button type="button" onClick={() => applyPreset("youtube")} className="btn btn-ghost justify-center">
-                  <ServiceIcon service="YOUTUBE" size="sm" className="h-5 w-5 rounded-[var(--radius-sm)]" />
-                  YouTube only
-                </button>
-                <button type="button" onClick={() => applyPreset("soundcloud")} className="btn btn-ghost justify-center">
-                  <ServiceIcon service="SOUNDCLOUD" size="sm" className="h-5 w-5 rounded-[var(--radius-sm)]" />
-                  SoundCloud only
-                </button>
-                <button type="button" onClick={() => applyPreset("all")} className="btn btn-primary justify-center">
+                {targetServices.map((service) => (
+                  <button
+                    key={service}
+                    type="button"
+                    onClick={() => applyPreset([service])}
+                    aria-pressed={enabledServices.length === 1 && enabledServices[0] === service}
+                    className="btn btn-ghost justify-center"
+                  >
+                    <ServiceIcon service={service} size="sm" className="h-5 w-5 rounded-[var(--radius-sm)]" />
+                    {serviceMeta(service).label} only
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => applyPreset(targetServices)}
+                  aria-pressed={enabledServices.length === targetServices.length}
+                  className="btn btn-primary justify-center"
+                >
                   <Link2 size={16} />
                   Both
                 </button>
@@ -389,11 +390,6 @@ export function AddPlaylistSyncButton({
                 })}
               </div>
 
-              {createTargets.length > 1 ? (
-                <div className="mt-4 rounded-[var(--radius-sm)] border border-warning/25 bg-warning/10 px-3 py-2 text-sm text-warning-fg">
-                  Create one new destination at a time. Choose existing playlists for the other service.
-                </div>
-              ) : null}
               {status ? (
                 <div role="status" aria-live="polite" className="mt-4 panel-inset px-3 py-2 text-sm text-muted-fg">
                   <span className="pill pill-accent mr-2">
