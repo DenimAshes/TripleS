@@ -12,8 +12,7 @@ import { getSession } from "@/lib/auth/session";
 import { hasSpotifyCredentials, validateSpotifyRedirectUri } from "@/lib/services/spotify/spotifyAuth";
 import { getSpotifyWebCookie } from "@/lib/services/spotify/spotifyCookieStore";
 import {
-  decodeStorageState,
-  usableSessionCookies,
+  hasUsableStoredSession,
   type SessionService,
 } from "@/lib/services/workerSessionState";
 
@@ -22,16 +21,6 @@ const BROWSER_SERVICES = ["youtube", "soundcloud"] as const satisfies readonly S
 function browserSessionStatus(exists: boolean, isUsable: boolean) {
   if (!exists) return { label: "Missing", tone: "muted" };
   return isUsable ? { label: "Ready", tone: "success" } : { label: "Invalid", tone: "danger" };
-}
-
-function hasUsableBrowserSession(service: SessionService, encoded?: string) {
-  if (!encoded) return false;
-  try {
-    const state = decodeStorageState(encoded);
-    return Boolean(state && usableSessionCookies(service, state).length);
-  } catch {
-    return false;
-  }
 }
 
 function browserRoute(service: string): string {
@@ -64,7 +53,7 @@ export default async function ConnectionsPage() {
     return {
       service,
       exists: !!row,
-      isUsable: hasUsableBrowserSession(service, row?.stateGzipBase64),
+      isUsable: hasUsableStoredSession(service, row?.stateGzipBase64),
       updatedAt: row?.updatedAt?.toISOString() ?? null,
     };
   });

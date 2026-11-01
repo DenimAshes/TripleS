@@ -132,6 +132,20 @@ export function usableSessionCookies(service: SessionService, state: StorageStat
   return SESSION_AUTH_COOKIE_HINTS[service].filter((name) => names.has(name));
 }
 
+export function hasUsableStoredSession(
+  service: SessionService,
+  stateGzipBase64: string | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  if (!stateGzipBase64) return false;
+  try {
+    const state = decodeStorageState(stateGzipBase64);
+    return Boolean(state && usableSessionCookies(service, state, nowMs).length);
+  } catch {
+    return false;
+  }
+}
+
 export type StoredSessionSummary = {
   service: string;
   bytes: number;

@@ -7,7 +7,6 @@ import { ServiceIcon, ServicePill, serviceMeta } from "@/components/ServiceBrand
 import { PlaylistsAutoRefresh } from "@/components/PlaylistsAutoRefresh";
 import { RunningJobsAutoRefresh } from "@/components/RunningJobsAutoRefresh";
 import { RunDueSyncQueueButton } from "@/components/RunDueSyncQueueButton";
-import { classifySession, type SessionStaleness } from "@/components/SessionStalenessBanner";
 import { SyncRuleCard } from "@/components/SyncRuleCard";
 import { SyncRuleGroupCard } from "@/components/SyncRuleGroupCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -15,8 +14,9 @@ import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { Prisma } from "@prisma/client";
 import { buildSourcePlaylistGroupMap, ruleBatchKey } from "@/lib/sync/groupAwareRuleLimit";
+import { hasUsableStoredSession, type SessionService } from "@/lib/services/workerSessionState";
 
-const WORKER_SERVICES = ["youtube", "spotify", "soundcloud"];
+const BROWSER_SERVICES = ["youtube", "soundcloud"] as const satisfies readonly SessionService[];
 const WORKER_STALE_WHILE_QUEUED_MS = 30 * 60_000;
 const WORKER_RUNNING_STALE_MS = 60 * 60_000;
 const DATE_TIME = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
@@ -48,6 +48,8 @@ type WorkerWarning = {
   title: string;
   detail: string;
 };
+
+type ConnectionIssue = { service: string; reason: "missing" | "invalid" };
 
 async function computeRuleProgress(
   userId: string,
@@ -139,11 +141,15 @@ async function computeRuleProgress(
 
 export default async function DashboardPage() {
   const session = await getSession();
-  const [rules, lastJob, playlists, sessionRows, pendingReviewCount, runningJobs, recentJobs, groupMembers, lastWorkerRun] = await Promise.all([
+  const [rules, lastJob, playlists, sessionRows, spotifyAccount, pendingReviewCount, runningJobs, recentJobs, groupMembers, lastWorkerRun] = await Promise.all([
     prisma.syncRule.findMany({ where: { userId: session!.userId }, include: { destinations: true }, orderBy: { createdAt: "asc" } }),
     prisma.syncJob.findFirst({ where: { syncRule: { userId: session!.userId } }, orderBy: { startedAt: "desc" } }),
     prisma.playlist.findMany({ where: { userId: session!.userId }, select: { updatedAt: true } }),
-    prisma.workerSessionState.findMany({ where: { service: { in: WORKER_SERVICES } } }),
+    prisma.workerSessionState.findMany({ where: { service: { in: [...BROWSER_SERVICES] } } }),
+    prisma.connectedAccount.findUnique({
+      where: { userId_service: { userId: session!.userId, service: "SPOTIFY" } },
+      select: { connectionStatus: true, isMock: true },
+    }),
     prisma.manualMatchCandidate.count({ where: { userId: session!.userId, status: "PENDING" } }),
     prisma.syncJob.findMany({
       where: { status: "RUNNING", syncRule: { userId: session!.userId } },
@@ -190,14 +196,20 @@ export default async function DashboardPage() {
   // without this number on the card the user can't tell whether sync is
   // still working through it or finished.
   const ruleProgress = await computeRuleProgress(session!.userId, rules);
-  const sessionByService = new Map(sessionRows.map((row) => [row.service, row]));
   // eslint-disable-next-line react-hooks/purity
   const now = Date.now();
-  const staleSessions: SessionStaleness[] = WORKER_SERVICES.flatMap((service) => {
+  const sessionByService = new Map(sessionRows.map((row) => [row.service, row]));
+  const connectionIssues: ConnectionIssue[] = [];
+  if (!spotifyAccount || spotifyAccount.isMock || spotifyAccount.connectionStatus !== "CONNECTED") {
+    connectionIssues.push({ service: "SPOTIFY", reason: "missing" });
+  }
+  for (const service of BROWSER_SERVICES) {
     const row = sessionByService.get(service);
-    const classified = classifySession({ service, exists: !!row, updatedAt: row?.updatedAt ?? null }, now);
-    return classified ? [classified] : [];
-  });
+    if (!row) connectionIssues.push({ service, reason: "missing" });
+    else if (!hasUsableStoredSession(service, row.stateGzipBase64, now)) {
+      connectionIssues.push({ service, reason: "invalid" });
+    }
+  }
   const stats = lastJob ? JSON.parse(lastJob.statsJson) : { synced: 0, alreadySynced: 0, notFound: 0, manualRequired: 0 };
   const bySource: Record<string, number> = stats.bySource && typeof stats.bySource === "object" ? stats.bySource : {};
   const bySourceEntries = Object.entries(bySource).sort((a, b) => b[1] - a[1]);
@@ -272,7 +284,7 @@ export default async function DashboardPage() {
     const status = latestJobByRule.get(rule.id)?.status;
     return status === "FAILED" || status === "PARTIAL_SUCCESS";
   }).length;
-  const attentionCount = Number(pendingReviewCount > 0) + Number(staleSessions.length > 0) + Number(workerWarnings.length > 0 || failedRuleCount > 0);
+  const attentionCount = Number(pendingReviewCount > 0) + Number(connectionIssues.length > 0) + Number(workerWarnings.length > 0 || failedRuleCount > 0);
 
   return (
     <AppShell
@@ -304,11 +316,11 @@ export default async function DashboardPage() {
             />
             <DashboardActionRow
               icon={<PlugZap size={17} />}
-              title={staleSessions.length ? `${staleSessions.length} connections need a refresh` : "Connections are ready"}
-              detail={staleSessions.length ? staleSessions.map(sessionIssueLabel).join(" · ") : "Spotify, YouTube Music and SoundCloud can be reached."}
+              title={connectionIssues.length ? `${connectionIssues.length} connections need attention` : "Connections are ready"}
+              detail={connectionIssues.length ? connectionIssues.map(connectionIssueLabel).join(" · ") : "Spotify, YouTube Music and SoundCloud can be reached."}
               href="/connections"
               action="Manage"
-              tone={staleSessions.length ? "danger" : "success"}
+              tone={connectionIssues.length ? "danger" : "success"}
             />
             <DashboardActionRow
               icon={failedRuleCount || workerWarnings.length ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}
@@ -518,11 +530,9 @@ function DashboardActionRow({
   );
 }
 
-function sessionIssueLabel(item: SessionStaleness): string {
+function connectionIssueLabel(item: ConnectionIssue): string {
   const name = serviceMeta(item.service).shortLabel;
-  if (item.severity === "missing") return `${name} missing`;
-  if (item.severity === "stale") return `${name} ${item.daysOld}d old`;
-  return `${name} ageing`;
+  return item.reason === "missing" ? `${name} missing` : `${name} session invalid`;
 }
 
 function SyncQueueRuleRow({ rule, running }: { rule: RuleWithDestinations; running: boolean }) {

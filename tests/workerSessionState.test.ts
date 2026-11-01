@@ -15,6 +15,7 @@ vi.mock("@/lib/db/prisma", () => ({
 import {
   decodeStorageState,
   encodeStorageState,
+  hasUsableStoredSession,
   isSessionService,
   normalizeStorageState,
   sessionCookiesPresent,
@@ -113,6 +114,28 @@ describe("sessionCookiesPresent", () => {
       ...state,
       cookies: [{ name: "oauth_token", value: "valid", expires: now / 1000 + 60 }],
     }, now)).toEqual(["oauth_token"]);
+  });
+});
+
+describe("hasUsableStoredSession", () => {
+  test("rejects unreadable and unauthenticated stored states", () => {
+    const now = Date.parse("2026-11-01T12:00:00.000Z");
+    expect(hasUsableStoredSession("youtube", "broken", now)).toBe(false);
+    expect(
+      hasUsableStoredSession(
+        "youtube",
+        encodeStorageState({ cookies: [{ name: "PREF", value: "x" }], origins: [] }).stateGzipBase64,
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      hasUsableStoredSession(
+        "youtube",
+        encodeStorageState({ cookies: [{ name: "SID", value: "x", expires: now / 1000 + 60 }], origins: [] })
+          .stateGzipBase64,
+        now,
+      ),
+    ).toBe(true);
   });
 });
 
