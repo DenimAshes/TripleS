@@ -19,6 +19,8 @@ jobs:
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
       ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+      SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
       YOUTUBE_BROWSER_AUTOMATION: "true"
       SOUNDCLOUD_BROWSER_AUTOMATION: "true"
       WORKER_BROWSER: "state"
