@@ -2,11 +2,17 @@ import crypto from "crypto";
 
 const DEFAULT_KEY = "0000000000000000000000000000000000000000000000000000000000000000";
 
+export function getEncryptionKeyError(value = process.env.ENCRYPTION_KEY): string | null {
+  if (!value) return "ENCRYPTION_KEY is not configured.";
+  if (!/^[0-9a-fA-F]{64}$/.test(value)) return "ENCRYPTION_KEY must be exactly 64 hexadecimal characters.";
+  return null;
+}
+
 function getKey() {
-  const hex = process.env.ENCRYPTION_KEY || DEFAULT_KEY;
-  if (!process.env.ENCRYPTION_KEY && process.env.NODE_ENV !== "test") {
-    console.warn("Using default encryption key. Set ENCRYPTION_KEY in prod.");
-  }
+  if (!process.env.ENCRYPTION_KEY && process.env.NODE_ENV === "test") return Buffer.from(DEFAULT_KEY, "hex");
+  const error = getEncryptionKeyError();
+  if (error) throw new Error(error);
+  const hex = process.env.ENCRYPTION_KEY!;
   return Buffer.from(hex, "hex");
 }
 

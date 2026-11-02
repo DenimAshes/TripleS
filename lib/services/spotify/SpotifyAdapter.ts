@@ -295,6 +295,7 @@ export class SpotifyAdapter implements MusicServiceAdapter {
         grant_type: "refresh_token",
         refresh_token: decryptToken(account.refreshTokenEncrypted),
       }),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
@@ -305,6 +306,7 @@ export class SpotifyAdapter implements MusicServiceAdapter {
       access_token: string;
       refresh_token?: string;
       expires_in: number;
+      scope?: string;
     };
     const expiresAt = new Date(Date.now() + token.expires_in * 1000);
     const refreshToken = token.refresh_token || decryptToken(account.refreshTokenEncrypted);
@@ -322,6 +324,7 @@ export class SpotifyAdapter implements MusicServiceAdapter {
       accessToken: token.access_token,
       refreshToken,
       expiresAt,
+      scopes: token.scope?.split(/\s+/).filter(Boolean),
     };
   }
 

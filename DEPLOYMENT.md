@@ -38,9 +38,16 @@ ADMIN_PASSWORD
 JWT_SECRET
 ENCRYPTION_KEY
 CRON_SECRET
+SPOTIFY_CLIENT_ID
+SPOTIFY_CLIENT_SECRET
+SPOTIFY_REDIRECT_URI=https://your-domain.example/api/oauth/spotify/callback
+SPOTIFY_ENABLE_PLAYLIST_SCOPES=true
+SPOTIFY_ENABLE_WRITE_SCOPES=true
 YOUTUBE_BROWSER_AUTOMATION=true
 SOUNDCLOUD_BROWSER_AUTOMATION=true
 ```
+
+Register the exact `SPOTIFY_REDIRECT_URI` in the Spotify app. Keep one stable, 64-character hexadecimal `ENCRYPTION_KEY` in your password manager and copy that same value to Vercel, GitHub Actions, and each worker. Generating separate keys makes stored tokens unreadable.
 
 ## GitHub Actions Secrets
 
@@ -52,6 +59,8 @@ DIRECT_URL
 JWT_SECRET
 ENCRYPTION_KEY
 CRON_SECRET
+SPOTIFY_CLIENT_ID
+SPOTIFY_CLIENT_SECRET
 YOUTUBE_STATE_GZIP_BASE64
 SOUNDCLOUD_STATE_GZIP_BASE64
 ```
@@ -102,12 +111,13 @@ PRISMA_TRANSIENT_RETRIES=2
 
 ## Scheduled Sync
 
-The workflow at `.github/workflows/sync-worker.yml` runs every 6 hours and can also be started manually from GitHub Actions. It:
+The workflow at `.github/workflows/sync-worker.yml` runs every 2 hours and can also be started manually from GitHub Actions. It:
 
 1. Installs dependencies.
 2. Installs Playwright Chromium.
 3. Restores YouTube/SoundCloud session state from secrets.
-4. Runs `npm run sync-worker`.
+4. Runs `npm run sync:preflight`, which refreshes Spotify, verifies its granted scopes, and checks live profile/playlist access without changing playlists.
+5. Runs `npm run sync-worker`.
 
 GitHub Actions is good for scheduled read-heavy sync. If a service asks for captcha or blocks write requests, refresh the browser session locally or use the VM profile mode below.
 

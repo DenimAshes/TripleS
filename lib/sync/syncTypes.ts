@@ -39,6 +39,7 @@ export type TokenPair = {
   accessToken: string;
   refreshToken: string;
   expiresAt?: Date;
+  scopes?: string[];
 };
 
 export enum SyncMode {

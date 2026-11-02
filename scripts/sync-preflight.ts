@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import { binaryInfo } from "cloakbrowser";
 import { prisma } from "@/lib/db/prisma";
+import { getEncryptionKeyError } from "@/lib/crypto/tokenEncryption";
+import { SpotifyAdapter } from "@/lib/services/spotify/SpotifyAdapter";
+import { getMissingSpotifyScopes, hasSpotifyCredentials } from "@/lib/services/spotify/spotifyAuth";
 import { stateFilePath } from "@/worker/config";
 import { shouldRefreshSourceCache } from "@/lib/sync/sourceCachePolicy";
 
@@ -22,6 +25,70 @@ function print(checks: Check[]) {
   process.exitCode = fail ? 1 : 0;
 }
 
+async function checkSpotify(): Promise<Check> {
+  let account: Awaited<ReturnType<typeof prisma.connectedAccount.findFirst>> = null;
+  try {
+    const [storedAccount, spotifyRule] = await Promise.all([
+      prisma.connectedAccount.findFirst({ where: { service: "SPOTIFY", isMock: false } }),
+      prisma.syncRule.findFirst({
+        where: {
+          isEnabled: true,
+          OR: [
+            { sourceService: "SPOTIFY" },
+            { destinations: { some: { service: "SPOTIFY", isEnabled: true } } },
+          ],
+        },
+        select: { id: true },
+      }),
+    ]);
+    account = storedAccount;
+    if (!account) {
+      return {
+        status: spotifyRule ? "FAIL" : "WARN",
+        name: "spotify access",
+        detail: spotifyRule ? "an enabled rule uses Spotify, but no live account is connected" : "no live Spotify account; skipped",
+      };
+    }
+
+    if (!hasSpotifyCredentials()) throw new Error("SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are required");
+    const keyError = getEncryptionKeyError();
+    if (keyError) throw new Error(keyError);
+
+    const token = await new SpotifyAdapter(account.userId).refreshAccessToken();
+    if (!token.scopes?.length) throw new Error("Spotify refresh response did not include granted scopes");
+    const missingScopes = getMissingSpotifyScopes(token.scopes);
+    if (missingScopes.length) throw new Error(`Spotify token is missing required scopes: ${missingScopes.join(", ")}`);
+
+    const headers = { Authorization: `Bearer ${token.accessToken}` };
+    const [profile, playlists] = await Promise.all([
+      fetch("https://api.spotify.com/v1/me", { headers, signal: AbortSignal.timeout(15_000) }),
+      fetch("https://api.spotify.com/v1/me/playlists?limit=1", { headers, signal: AbortSignal.timeout(15_000) }),
+    ]);
+    if (!profile.ok || !playlists.ok) {
+      throw new Error(`Spotify live read failed (profile=${profile.status}, playlists=${playlists.status})`);
+    }
+
+    await prisma.connectedAccount.update({
+      where: { id: account.id },
+      data: { connectionStatus: "CONNECTED", lastError: null },
+    });
+    return {
+      status: "OK",
+      name: "spotify access",
+      detail: `profile and playlists readable; ${token.scopes.length} granted scopes verified`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (account) {
+      await prisma.connectedAccount.update({
+        where: { id: account.id },
+        data: { connectionStatus: "LIMITED", lastError: message.slice(0, 1000) },
+      }).catch(() => undefined);
+    }
+    return { status: "FAIL", name: "spotify access", detail: message };
+  }
+}
+
 async function main() {
   const checks: Check[] = [];
 
@@ -35,6 +102,8 @@ async function main() {
   } catch (error) {
     checks.push({ status: "FAIL", name: "CloakBrowser", detail: error instanceof Error ? error.message : String(error) });
   }
+
+  checks.push(await checkSpotify());
 
   try {
     const [users, playlists, rules] = await Promise.all([
@@ -131,4 +200,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

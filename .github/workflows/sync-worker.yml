@@ -21,6 +21,8 @@ jobs:
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
       SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
       SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+      SPOTIFY_ENABLE_PLAYLIST_SCOPES: "true"
+      SPOTIFY_ENABLE_WRITE_SCOPES: "true"
       YOUTUBE_BROWSER_AUTOMATION: "true"
       SOUNDCLOUD_BROWSER_AUTOMATION: "true"
       WORKER_BROWSER: "state"
@@ -86,6 +88,10 @@ jobs:
       - name: Restore browser sessions from secrets
         timeout-minutes: 5
         run: npm run state:restore
+
+      - name: Verify service access
+        timeout-minutes: 3
+        run: npm run sync:preflight
 
       - name: Run due sync rules
         id: sync_worker

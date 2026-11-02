@@ -31,8 +31,13 @@ export function getSpotifyScopes() {
   return scopes.join(" ");
 }
 
+export function getMissingSpotifyScopes(grantedScopes: readonly string[], requiredScopes = getSpotifyScopes()) {
+  const granted = new Set(grantedScopes);
+  return requiredScopes.split(/\s+/).filter(Boolean).filter((scope) => !granted.has(scope));
+}
+
 export function hasSpotifyCredentials() {
-  return Boolean(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET);
+  return Boolean(process.env.SPOTIFY_CLIENT_ID?.trim() && process.env.SPOTIFY_CLIENT_SECRET?.trim());
 }
 
 export function getSpotifyRedirectUri() {
