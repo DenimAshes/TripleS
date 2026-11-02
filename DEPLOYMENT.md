@@ -120,6 +120,8 @@ The workflow at `.github/workflows/sync-worker.yml` runs every 2 hours and can a
 5. Runs `npm run sync:preflight`, which refreshes Spotify, verifies its granted scopes, and checks live profile/playlist access without changing playlists.
 6. Runs `npm run sync-worker`.
 
+`SAVE_STATE_AFTER_RUN=true` keeps browser-session cookie rotations made by one runner command available to later commands in the same worker run. The database remains the source restored at the start of the next run.
+
 GitHub Actions is good for scheduled read-heavy sync. If a service asks for captcha or blocks write requests, refresh the browser session locally or use the VM profile mode below.
 
 ## VM Worker Without GitHub Actions

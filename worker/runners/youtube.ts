@@ -682,20 +682,31 @@ async function chooseMenuItem(page: Page, label: RegExp): Promise<void> {
   await runUiAction(page, "yt-menu-item-click", () => item.click({ timeout: 10_000 }));
 }
 
+export function exactPlaylistOptionIndexes(
+  titles: readonly (string | null | undefined)[],
+  target: string,
+): number[] {
+  return titles
+    .map((title, index) => ({ index, title: title?.trim() }))
+    .filter((item) => item.title === target)
+    .map((item) => item.index);
+}
+
 async function choosePlaylistInDialog(page: Page, playlistNameOrId: string): Promise<void> {
   const dialog = page.locator("ytmusic-add-to-playlist-renderer").first();
   await runUiAction(page, "yt-add-playlist-dialog", () => dialog.waitFor({ state: "visible", timeout: 15_000 }));
 
-  const option = dialog
-    .locator("ytmusic-playlist-add-to-option-renderer")
-    .filter({ hasText: playlistNameOrId })
-    .first();
-  await humanDwell(300, 1200);
-  if ((await option.count()) > 0) {
-    await runUiAction(page, "yt-playlist-option-click", () => option.click({ timeout: 15_000 }));
-  } else {
-    await runUiAction(page, "yt-playlist-text-click", () => dialog.getByText(playlistNameOrId, { exact: false }).first().click({ timeout: 15_000 }));
+  const options = dialog.locator("ytmusic-playlist-add-to-option-renderer");
+  const titles = await options.evaluateAll((nodes) => nodes.map((node) => node.querySelector("#title")?.textContent));
+  const matchingIndexes = exactPlaylistOptionIndexes(titles, playlistNameOrId);
+  if (matchingIndexes.length !== 1) {
+    throw new Error(matchingIndexes.length
+      ? `More than one playlist is named "${playlistNameOrId}" in the YouTube Music dialog.`
+      : `Could not find playlist "${playlistNameOrId}" in the YouTube Music dialog.`);
   }
+  const option = options.nth(matchingIndexes[0]).locator("button").first();
+  await humanDwell(300, 1200);
+  await runUiAction(page, "yt-playlist-option-click", () => option.click({ timeout: 15_000 }));
 
   const doneButton = page.getByRole("button", { name: /done|save/i }).first();
   if ((await doneButton.count()) > 0) {
