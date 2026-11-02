@@ -89,6 +89,12 @@ jobs:
         timeout-minutes: 5
         run: npm run state:restore
 
+      - name: Verify browser sessions
+        timeout-minutes: 5
+        run: |
+          npx tsx scripts/worker-check.ts --live
+          npx tsx scripts/clear-service-cooldown.ts youtube soundcloud
+
       - name: Verify service access
         timeout-minutes: 3
         run: npm run sync:preflight

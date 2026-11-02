@@ -116,8 +116,9 @@ The workflow at `.github/workflows/sync-worker.yml` runs every 2 hours and can a
 1. Installs dependencies.
 2. Installs Playwright Chromium.
 3. Restores YouTube/SoundCloud session state from secrets.
-4. Runs `npm run sync:preflight`, which refreshes Spotify, verifies its granted scopes, and checks live profile/playlist access without changing playlists.
-5. Runs `npm run sync-worker`.
+4. Opens YouTube Music and SoundCloud to verify the saved sessions can read playlists, then clears stale cooldowns only after both checks pass.
+5. Runs `npm run sync:preflight`, which refreshes Spotify, verifies its granted scopes, and checks live profile/playlist access without changing playlists.
+6. Runs `npm run sync-worker`.
 
 GitHub Actions is good for scheduled read-heavy sync. If a service asks for captcha or blocks write requests, refresh the browser session locally or use the VM profile mode below.
 
