@@ -170,9 +170,7 @@ export class SpotifyAdapter implements MusicServiceAdapter {
 
   async createPlaylist(name: string, description?: string): Promise<NormalizedPlaylist> {
     await this.ensureWriteAuth();
-    const account = await this.getAccount();
-    const userId = account?.serviceUserId || (await this.request<SpotifyUser>("/me")).id;
-    const playlist = await this.request<SpotifyPlaylist>(`/users/${encodeURIComponent(userId)}/playlists`, {
+    const playlist = await this.request<SpotifyPlaylist>("/me/playlists", {
       method: "POST",
       body: JSON.stringify({
         name,
@@ -267,7 +265,7 @@ export class SpotifyAdapter implements MusicServiceAdapter {
       return;
     }
 
-    await this.request(`/playlists/${encodeURIComponent(playlistId)}/tracks`, {
+    await this.request(`/playlists/${encodeURIComponent(playlistId)}/items`, {
       method: "POST",
       body: JSON.stringify({ uris: [`spotify:track:${spotifyTrackId}`] }),
     });
@@ -275,9 +273,9 @@ export class SpotifyAdapter implements MusicServiceAdapter {
 
   async removeTrackFromPlaylist(playlistId: string, trackId: string): Promise<void> {
     await this.ensureWriteAuth();
-    await this.request(`/playlists/${encodeURIComponent(playlistId)}/tracks`, {
+    await this.request(`/playlists/${encodeURIComponent(playlistId)}/items`, {
       method: "DELETE",
-      body: JSON.stringify({ tracks: [{ uri: `spotify:track:${trackId}` }] }),
+      body: JSON.stringify({ items: [{ uri: `spotify:track:${trackId}` }] }),
     });
   }
 
