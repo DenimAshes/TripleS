@@ -183,7 +183,7 @@ The SoundCloud browser path supports playlist listing, playlist track reading, s
 Add and remove drive SoundCloud's own "Add to playlist" dialog, which writes through a same-origin server action. The older `api-v2` `PUT /playlists/{id}` route is behind a DataDome challenge that rejects automated writes, so it is kept only as a fallback. Override the choice with:
 
 ```env
-SOUNDCLOUD_WRITE_MODE="auto"   # auto (UI first, api-v2 fallback) | ui | api
+SOUNDCLOUD_WRITE_MODE="ui"     # ui (recommended) | auto (api-v2 fallback) | api
 ```
 
 Playlist creation goes through the same dialog for the same reason. Its create form only exists on a track page, so creation opens the dialog from a track the account already owns and removes that seed track once the playlist exists. Deleting a playlist still uses `api-v2`, which is not challenged.

@@ -581,8 +581,8 @@ function assertCompleteTrackIds(playlist: SoundCloudApiPlaylist, ids: number[]) 
 type SoundCloudWriteMode = "auto" | "ui" | "api";
 
 function soundCloudWriteMode(): SoundCloudWriteMode {
-  const value = (process.env.SOUNDCLOUD_WRITE_MODE ?? "auto").toLowerCase();
-  return value === "ui" || value === "api" ? value : "auto";
+  const value = (process.env.SOUNDCLOUD_WRITE_MODE ?? "ui").toLowerCase();
+  return value === "auto" || value === "api" ? value : "ui";
 }
 
 /**

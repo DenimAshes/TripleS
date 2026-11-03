@@ -81,10 +81,9 @@ async function openPickerDialog(page: Page): Promise<string> {
  * disagree about which row belongs to the playlist.
  */
 async function inspectRow(page: Page, playlistTitle: string, click: boolean): Promise<RowState> {
+  const normalizedTitle = playlistTitle.toLocaleLowerCase().replace(/\s+/g, " ").trim();
   return page.evaluate(
-    ({ title, shouldClick }) => {
-      const normalize = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, " ").trim();
-      const normalizedTitle = normalize(title);
+    ({ normalizedTitle, shouldClick }) => {
       const dialog =
         Array.from(document.querySelectorAll("[role='dialog'], .MuiDialog-container, .MuiModal-root")).find((node) =>
           /Create playlist/i.test(node.textContent || ""),
@@ -100,8 +99,8 @@ async function inspectRow(page: Page, playlistTitle: string, click: boolean): Pr
           const text = (node.textContent || "").replace(/\s+/g, " ").trim();
           if (text.length > 90) break;
           const exactTitle = Array.from(node.querySelectorAll("a, span, p, h1, h2, h3, h4"))
-            .some((element) => normalize(element.textContent || "") === normalizedTitle);
-          const rowWithoutAction = normalize(text.replace(label, ""));
+            .some((element) => (element.textContent || "").toLocaleLowerCase().replace(/\s+/g, " ").trim() === normalizedTitle);
+          const rowWithoutAction = text.replace(label, "").toLocaleLowerCase().replace(/\s+/g, " ").trim();
           if (exactTitle || rowWithoutAction === normalizedTitle) {
             if (shouldClick) (button as HTMLElement).click();
             return { found: true, label, text: text.slice(0, 90), clicked: shouldClick };
@@ -110,7 +109,7 @@ async function inspectRow(page: Page, playlistTitle: string, click: boolean): Pr
       }
       return { found: false };
     },
-    { title: playlistTitle, shouldClick: click },
+    { normalizedTitle, shouldClick: click },
   );
 }
 
