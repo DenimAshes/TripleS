@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 
 const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
@@ -156,6 +157,45 @@ describe("browser action job queue", () => {
     expect(first.id).toBe(second.id);
     expect(mocks.findFirst).toHaveBeenCalledTimes(1);
     expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns the active job when another instance wins the create race", async () => {
+    mocks.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(row({ id: "job-raced" }));
+    mocks.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+      code: "P2002",
+      clientVersion: "test",
+    }));
+
+    const job = await startBrowserActionJob("user-1", "sync.run", { syncRuleId: "rule-1" });
+
+    expect(job.id).toBe("job-raced");
+    expect(mocks.findFirst).toHaveBeenCalledTimes(2);
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+
+  test("inline execution claims a queued job before running it", async () => {
+    delete process.env.BROWSER_JOB_EXECUTION_MODE;
+    mocks.findFirst.mockResolvedValue(row());
+    mocks.updateMany.mockResolvedValue({ count: 0 });
+
+    await startBrowserActionJob("user-1", "sync.run", { syncRuleId: "rule-1" });
+
+    await vi.waitFor(() => {
+      expect(mocks.updateMany).toHaveBeenCalledWith({
+        where: { id: "job-1", status: "queued" },
+        data: {
+          status: "running",
+          currentStep: "Claimed by worker",
+          claimedAt: expect.any(Date),
+          workerId: null,
+          attempts: { increment: 1 },
+        },
+      });
+    });
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(syncMocks.runSync).not.toHaveBeenCalled();
   });
 
   test("claimQueuedBrowserActionJob atomically claims the oldest queued job", async () => {

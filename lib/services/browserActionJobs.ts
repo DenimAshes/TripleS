@@ -1,4 +1,4 @@
-import type { BrowserJob as PrismaBrowserJob } from "@prisma/client";
+import { Prisma, type BrowserJob as PrismaBrowserJob } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { serviceKey } from "@/lib/services/adapterFactory";
 import { syncPlaylistTracksToDb, type PlaylistTrackSyncProgress } from "@/lib/services/playlistTracksStore";
@@ -78,10 +78,18 @@ const startsInFlight = new Map<string, Promise<BrowserActionJob>>();
 
 function enqueueInlineRun(job: BrowserActionJob) {
   inlineRunQueue = inlineRunQueue
-    .then(() => runAction(job))
+    .then(async () => {
+      const claimed = await claimBrowserActionJob(job.id, null);
+      if (claimed) await runAction(claimed);
+    })
     .catch((error) => {
       console.error(`[browser-job] inline execution failed: ${error instanceof Error ? error.message : String(error)}`);
     });
+}
+
+function queueInlineRunIfNeeded(job: BrowserActionJob): BrowserActionJob {
+  if (shouldRunInline() && job.status === "queued") enqueueInlineRun(job);
+  return job;
 }
 
 function dedupeWhere(userId: string, type: BrowserActionType, input: unknown) {
@@ -386,27 +394,29 @@ async function startBrowserActionJobOnce(userId: string, type: BrowserActionType
     orderBy: { createdAt: "desc" },
   });
   if (running) {
-    const job = toBrowserActionJob(running);
-    if (shouldRunInline() && job.status === "queued") {
-      enqueueInlineRun(job);
-    }
-    return job;
+    return queueInlineRunIfNeeded(toBrowserActionJob(running));
   }
 
-  const row = await prisma.browserJob.create({
-    data: {
-      userId,
-      type,
-      status: "queued",
-      inputJson: JSON.stringify(normalizedInput),
-      currentStep: "Queued",
-    },
-  });
-  const job = toBrowserActionJob(row);
-  if (shouldRunInline()) {
-    enqueueInlineRun(job);
+  try {
+    const row = await prisma.browserJob.create({
+      data: {
+        userId,
+        type,
+        status: "queued",
+        inputJson: JSON.stringify(normalizedInput),
+        currentStep: "Queued",
+      },
+    });
+    return queueInlineRunIfNeeded(toBrowserActionJob(row));
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") throw error;
+    const raced = await prisma.browserJob.findFirst({
+      where: dedupeWhere(userId, type, normalizedInput),
+      orderBy: { createdAt: "desc" },
+    });
+    if (!raced) throw error;
+    return queueInlineRunIfNeeded(toBrowserActionJob(raced));
   }
-  return job;
 }
 
 export function startBrowserActionJob(userId: string, type: BrowserActionType, input: unknown): Promise<BrowserActionJob> {
@@ -422,16 +432,10 @@ export function startBrowserActionJob(userId: string, type: BrowserActionType, i
   return started;
 }
 
-export async function claimQueuedBrowserActionJob(workerId: string | null = null): Promise<BrowserActionJob | null> {
-  const row = await prisma.browserJob.findFirst({
-    where: { status: "queued" },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!row) return null;
-
+async function claimBrowserActionJob(id: string, workerId: string | null): Promise<BrowserActionJob | null> {
   const claimedAt = new Date();
   const claimed = await prisma.browserJob.updateMany({
-    where: { id: row.id, status: "queued" },
+    where: { id, status: "queued" },
     data: {
       status: "running",
       currentStep: workerId ? `Claimed by ${workerId}` : "Claimed by worker",
@@ -442,8 +446,16 @@ export async function claimQueuedBrowserActionJob(workerId: string | null = null
   });
   if (claimed.count !== 1) return null;
 
-  const fresh = await prisma.browserJob.findUnique({ where: { id: row.id } });
+  const fresh = await prisma.browserJob.findUnique({ where: { id } });
   return fresh ? toBrowserActionJob(fresh) : null;
+}
+
+export async function claimQueuedBrowserActionJob(workerId: string | null = null): Promise<BrowserActionJob | null> {
+  const row = await prisma.browserJob.findFirst({
+    where: { status: "queued" },
+    orderBy: { createdAt: "asc" },
+  });
+  return row ? claimBrowserActionJob(row.id, workerId) : null;
 }
 
 export async function runClaimedBrowserActionJob(job: BrowserActionJob): Promise<void> {
