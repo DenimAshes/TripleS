@@ -143,7 +143,7 @@ async function screenshots(browser) {
   watch(np, () => `${current} (320)`);
   for (const [, url] of mobileRoutes) {
     current = url;
-    await np.goto(BASE + url, { waitUntil: "domcontentloaded", timeout: 90_000 });
+    await np.goto(BASE + url, { waitUntil: "networkidle", timeout: 90_000 });
     await np.waitForTimeout(600);
     await np.evaluate(() => document.querySelectorAll("details").forEach((details) => { details.open = true; }));
     const overflow = await np.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -236,7 +236,7 @@ async function smoke(browser) {
   }
 
   current = "/dashboard (history disclosure)";
-  await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "networkidle", timeout: 90_000 });
   await page.waitForTimeout(500);
   const ruleDetails = page.locator("summary").filter({ hasText: "Details and run history" }).first();
   if (await ruleDetails.count()) {
@@ -254,7 +254,7 @@ async function smoke(browser) {
   // Stateful overlays need more than a page-load check: focus must enter,
   // keyboard navigation must work, and Escape must restore the trigger.
   current = "/playlists (keyboard)";
-  await page.goto(`${BASE}/playlists`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+  await page.goto(`${BASE}/playlists`, { waitUntil: "networkidle", timeout: 90_000 });
   await page.waitForTimeout(500);
   const serviceTabs = page.getByRole("tab");
   if ((await serviceTabs.count()) >= 2) {
@@ -293,7 +293,7 @@ async function smoke(browser) {
     });
   };
   await page.route("**/api/manual-match/**", blockManualAction);
-  await page.goto(`${BASE}/manual-match`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+  await page.goto(`${BASE}/manual-match`, { waitUntil: "networkidle", timeout: 90_000 });
   await page.waitForTimeout(500);
   const otherChoices = page.locator("summary").filter({ hasText: "Other choices" });
   if (await otherChoices.count()) {
@@ -313,7 +313,7 @@ async function smoke(browser) {
   const playlistDetail = pages.find(([name]) => name === "playlist-detail");
   if (playlistDetail) {
     current = `${playlistDetail[1]} (dialog)`;
-    await page.goto(BASE + playlistDetail[1], { waitUntil: "domcontentloaded", timeout: 90_000 });
+    await page.goto(BASE + playlistDetail[1], { waitUntil: "networkidle", timeout: 90_000 });
     await page.waitForTimeout(500);
     const addSync = page.getByRole("button", { name: "Add sync" });
     if (await addSync.count()) {
@@ -341,7 +341,7 @@ async function smoke(browser) {
   });
   const mp = await mobile.newPage();
   watch(mp, () => "mobile nav");
-  await mp.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+  await mp.goto(`${BASE}/dashboard`, { waitUntil: "networkidle", timeout: 90_000 });
   await mp.waitForTimeout(500);
   const moreButton = mp.getByRole("button", { name: "More" });
   await moreButton.click();
