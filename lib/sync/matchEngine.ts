@@ -195,8 +195,10 @@ const AMBIGUITY_GAP = 0.04;
 const AMBIGUITY_ZONE_MAX = 0.88;
 const AMBIGUITY_CONFIDENCE_CAP = Number(process.env.MATCH_AMBIGUITY_CAP ?? 0.81);
 const MAX_QUERY_LENGTH = 120;
-const SEARCH_TIMEOUT_MS = Number(process.env.MATCH_SEARCH_TIMEOUT_MS ?? 18_000);
-const SEARCH_PARALLELISM = Math.max(1, Number(process.env.MATCH_SEARCH_PARALLELISM ?? 2));
+// Browser-backed searches take ~20s to start and each parallel call launches
+// another browser process, so conservative defaults keep remote workers stable.
+const SEARCH_TIMEOUT_MS = Number(process.env.MATCH_SEARCH_TIMEOUT_MS ?? 60_000);
+const SEARCH_PARALLELISM = Math.max(1, Number(process.env.MATCH_SEARCH_PARALLELISM ?? 1));
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   if (!ms || ms <= 0) return promise;

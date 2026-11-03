@@ -43,7 +43,7 @@ const MAX_TRACKS_PER_RUN = Number(process.env.WORKER_MAX_TRACKS_PER_RUN ?? 10);
 const SKIP_PREVIOUSLY_LOGGED = process.env.WORKER_SKIP_PREVIOUSLY_LOGGED !== "false";
 const REFRESH_SOURCE_TRACKS = process.env.WORKER_REFRESH_SOURCE_TRACKS === "true";
 const SOURCE_CACHE_MAX_AGE_MS = sourceCacheMaxAgeMs();
-const MATCH_CONCURRENCY = Math.max(1, Number(process.env.WORKER_MATCH_CONCURRENCY ?? 4));
+const MATCH_CONCURRENCY = Math.max(1, Number(process.env.WORKER_MATCH_CONCURRENCY ?? 1));
 const RUNNING_JOB_TIMEOUT_MINUTES = Math.max(1, Number(process.env.WORKER_RUNNING_JOB_TIMEOUT_MINUTES ?? 60));
 const REQUIRE_PREFLIGHT = process.env.WORKER_REQUIRE_PREFLIGHT !== "false";
 const SYNC_JOB_TIMEOUT_MS = Math.max(60_000, Number(process.env.WORKER_SYNC_JOB_TIMEOUT_MS ?? 30 * 60_000));
