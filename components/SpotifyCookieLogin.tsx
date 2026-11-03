@@ -26,6 +26,7 @@ export function SpotifyCookieLogin({ hasCookie }: { hasCookie: boolean }) {
   const [saved, setSaved] = useState<SaveResult | null>(null);
   const [diagnosis, setDiagnosis] = useState<DiagnoseResult | null>(null);
   const [stored, setStored] = useState(hasCookie);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   async function post(path: string, init?: RequestInit) {
     const response = await fetch(path, {
@@ -73,10 +74,15 @@ export function SpotifyCookieLogin({ hasCookie }: { hasCookie: boolean }) {
     setBusy("delete");
     setError(null);
     try {
-      await fetch("/api/connections/spotify/cookie", { method: "DELETE" });
+      const response = await fetch("/api/connections/spotify/cookie", { method: "DELETE" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Could not remove cookie (${response.status})`);
       setStored(false);
       setSaved(null);
       setDiagnosis(null);
+      setConfirmingRemove(false);
+    } catch (err) {
+      setError({ message: err instanceof Error ? err.message : "Could not remove cookie" });
     } finally {
       setBusy(null);
     }
@@ -128,18 +134,31 @@ export function SpotifyCookieLogin({ hasCookie }: { hasCookie: boolean }) {
           {busy === "test" ? <Loader2 size={15} className="animate-spin" /> : <Stethoscope size={15} />}
           Diagnose
         </button>
-        {stored ? (
+        {stored && !confirmingRemove ? (
+          <button type="button" onClick={() => setConfirmingRemove(true)} disabled={busy !== null} className="btn btn-danger">
+            <Trash2 size={15} /> Remove
+          </button>
+        ) : null}
+        {stored && confirmingRemove ? (
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-danger-fg">Remove the saved fallback cookie?</span>
           <button type="button" onClick={remove} disabled={busy !== null} className="btn btn-danger">
             {busy === "delete" ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-            Remove
+            Confirm remove
           </button>
+            <button type="button" onClick={() => setConfirmingRemove(false)} disabled={busy !== null} className="btn btn-ghost">
+              Keep
+            </button>
+          </span>
         ) : null}
       </div>
 
       {saved ? (
         <Callout tone="success">
           Connected as <strong className="font-semibold">{saved.profile?.username || saved.profile?.id}</strong>
-          {typeof saved.playlistCount === "number" ? <> · {saved.playlistCount} playlists refreshed</> : null}
+          {typeof saved.playlistCount === "number" ? (
+            <> · {saved.playlistCount} {saved.playlistCount === 1 ? "playlist" : "playlists"} refreshed</>
+          ) : null}
           {saved.refreshError ? <div className="mt-1 text-warning-fg">Playlist refresh failed: {saved.refreshError}</div> : null}
         </Callout>
       ) : null}
@@ -168,7 +187,7 @@ export function SpotifyCookieLogin({ hasCookie }: { hasCookie: boolean }) {
             </div>
           ))}
           <details className="pt-1">
-            <summary className="cursor-pointer text-muted-fg">Raw response</summary>
+            <summary className="inline-flex min-h-8 cursor-pointer items-center text-muted-fg">Raw response</summary>
             <pre className="mt-1 max-h-64 overflow-auto rounded-[var(--radius-sm)] bg-[var(--surface)] p-2 text-xs leading-5 text-muted-fg">
               {JSON.stringify(diagnosis.results, null, 2)}
             </pre>

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
-import { writePlaylistSnapshot } from "@/lib/sync/snapshot";
+import { isReadComplete, writePlaylistSnapshot } from "@/lib/sync/snapshot";
 import { listYouTubePlaylistsCli, listYouTubePlaylistTracksCli, type YtPlaylist } from "./youtubeBrowserCli";
 
 const SERVICE = "YOUTUBE";
@@ -64,12 +64,17 @@ export async function getCachedYouTubePlaylists(userId: string, options: { force
 export async function refreshYouTubePlaylists(userId: string): Promise<CachedPlaylists> {
   const live = await listYouTubePlaylistsCli();
   const now = new Date();
+  const owners = new Map((await prisma.playlist.findMany({
+    where: { service: SERVICE, servicePlaylistId: { in: live.map((item) => item.id) } },
+    select: { servicePlaylistId: true, userId: true },
+  })).map((playlist) => [playlist.servicePlaylistId, playlist.userId]));
 
   for (const item of live) {
+    const owner = owners.get(item.id);
+    if (owner && owner !== userId) throw new Error(`YouTube playlist ${item.id} is already owned by another app user.`);
     await prisma.playlist.upsert({
       where: { service_servicePlaylistId: { service: SERVICE, servicePlaylistId: item.id } },
       update: {
-        userId,
         name: item.name,
         imageUrl: item.imageUrl,
         trackCount: item.trackCount,
@@ -87,14 +92,8 @@ export async function refreshYouTubePlaylists(userId: string): Promise<CachedPla
     });
   }
 
-  const liveIds = new Set(live.map((p) => p.id));
-  const stalePlaylists = await prisma.playlist.findMany({
-    where: { userId, service: SERVICE, servicePlaylistId: { notIn: [...liveIds] } },
-    select: { id: true },
-  });
-  if (stalePlaylists.length > 0) {
-    await prisma.playlist.deleteMany({ where: { id: { in: stalePlaylists.map((p) => p.id) } } });
-  }
+  // shortcut: the browser runner cannot yet prove enumeration completeness;
+  // retain absent cached rows until a verified remote-deletion path exists.
 
   const rows = await prisma.playlist.findMany({
     where: { userId, service: SERVICE },
@@ -213,8 +212,15 @@ export async function refreshYouTubePlaylistTracks(userId: string, servicePlayli
 
   const live = await listYouTubePlaylistTracksCli(servicePlaylistId);
   const now = new Date();
+  const activeStateCount = await prisma.playlistTrackState.count({
+    where: { playlistId: playlist.id, removedAt: null },
+  });
+  const expected = Math.max(playlist.trackCount ?? 0, activeStateCount);
+  if (!isReadComplete(live.length, expected)) {
+    throw new Error(`YouTube playlist read was incomplete (${live.length}/${expected}); keeping the previous snapshot.`);
+  }
 
-  await writePlaylistSnapshot(playlist.id, live, { allowPartial: true });
+  await writePlaylistSnapshot(playlist.id, live, { expectedCount: expected, allowPartial: true });
 
   const value = { tracks: live, lastFetchedAt: now, fromCache: false, isStale: false };
   tracksMemoryCache.set(`${userId}:${servicePlaylistId}`, { value, expiresAt: Date.now() + TRACKS_MEMORY_TTL_MS });

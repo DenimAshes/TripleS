@@ -4,6 +4,7 @@ import { ManualMatchActions } from "./ManualMatchActions";
 import { ServiceIcon, ServicePill } from "./ServiceBrand";
 import { TrackPreviewButton } from "./TrackPreviewButton";
 import { parseArtistsJson } from "@/lib/utils/parseArtists";
+import { ArtworkImage } from "./ArtworkImage";
 
 export type ManualCandidateView = ManualMatchCandidate & {
   source?: ServiceTrack | null;
@@ -33,16 +34,14 @@ function confidenceTone(score: number): string {
 function Artwork({ track, size = "lg" }: { track?: ServiceTrack | null; size?: "md" | "lg" }) {
   const cls = size === "lg" ? "h-16 w-16" : "h-12 w-12";
   const pixels = size === "lg" ? 64 : 48;
-  if (track?.imageUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={track.imageUrl} alt="" width={pixels} height={pixels} className={`${cls} shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]`} />
-    );
-  }
   return (
-    <div className={`${cls} grid shrink-0 place-items-center rounded-[var(--radius-sm)] bg-[var(--surface-2)] text-dim-fg ring-1 ring-[var(--border-soft)]`}>
-      <Disc3 size={size === "lg" ? 24 : 18} strokeWidth={1.6} />
-    </div>
+    <ArtworkImage
+      src={track?.imageUrl}
+      width={pixels}
+      height={pixels}
+      className={`${cls} rounded-[var(--radius-sm)] bg-[var(--surface-2)] text-dim-fg ring-1 ring-[var(--border-soft)]`}
+      fallback={<Disc3 size={size === "lg" ? 24 : 18} strokeWidth={1.6} />}
+    />
   );
 }
 
@@ -91,7 +90,7 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {sourceDuration ? <span className="pill">{sourceDuration}</span> : null}
                 {item.source?.url ? (
-                  <TrackPreviewButton service={item.source.service} serviceTrackId={item.source.serviceTrackId} url={item.source.url} />
+                  <TrackPreviewButton service={item.source.service} serviceTrackId={item.source.serviceTrackId} trackTitle={item.source.title} url={item.source.url} />
                 ) : null}
               </div>
             </div>
@@ -99,13 +98,13 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
           <div className="mt-4 border-t border-[var(--border-soft)] pt-4">
             <div className="flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
               <ListMusic size={15} />
-              Your choice is saved
+              Choose once, reuse later
             </div>
             <p className="mt-1 text-xs leading-5 text-muted-fg">
               Future copies reuse it for the same song.
             </p>
             <div className="mt-3">
-              <ManualMatchActions id={item.id} targetService={item.targetService} />
+              <ManualMatchActions id={item.id} targetService={item.targetService} showBestMatch={false} />
             </div>
           </div>
         </div>
@@ -113,7 +112,9 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
         <div className="min-w-0 p-3 sm:p-4 lg:p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="eyebrow">Choose match</div>
-            <div className="text-xs text-muted-fg">{candidates.length} candidates</div>
+            <div className="text-xs text-muted-fg">
+              {candidates.length} {candidates.length === 1 ? "candidate" : "candidates"}
+            </div>
           </div>
           {/* Divided rows, not five framed cards. Each candidate already ends
               in its own Use/Skip pair, so the frame was not the affordance -
@@ -144,9 +145,9 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
                               {index + 1}
                             </span>
                             {best ? <CheckCircle2 size={15} className="shrink-0 text-success-fg" /> : null}
-                            <h4 className="heading-row truncate">{candidate.track.title}</h4>
+                            <h4 className="heading-row truncate" title={candidate.track.title}>{candidate.track.title}</h4>
                           </div>
-                          <p className="mt-0.5 truncate text-xs text-muted-fg">{artists(candidate.track) || "Unknown artist"}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-fg" title={artists(candidate.track) || "Unknown artist"}>{artists(candidate.track) || "Unknown artist"}</p>
                         </div>
                         <span className={`shrink-0 rounded-[var(--radius-sm)] border px-2 py-1 text-xs font-semibold tabular-nums ${confidenceTone(candidate.confidence)}`}>
                           {Math.round(candidate.confidence * 100)}%
@@ -157,12 +158,13 @@ export function ManualMatchDialog({ item }: { item: ManualCandidateView }) {
                         <div className="flex flex-wrap items-center gap-2">
                           {duration ? <span className="pill">{duration}</span> : null}
                           <TrackPreviewButton
-                            service={candidate.track.service}
-                            serviceTrackId={candidate.track.serviceTrackId}
-                            url={candidate.track.url}
+                             service={candidate.track.service}
+                             serviceTrackId={candidate.track.serviceTrackId}
+                             trackTitle={candidate.track.title}
+                             url={candidate.track.url}
                           />
                         </div>
-                        <ManualMatchActions id={item.id} serviceTrackId={candidate.track.id} compact />
+                        <ManualMatchActions id={item.id} serviceTrackId={candidate.track.id} trackTitle={candidate.track.title} compact />
                       </div>
                     </div>
                   </div>

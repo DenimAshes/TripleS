@@ -29,7 +29,7 @@ function browserRoute(service: string): string | null {
   return null;
 }
 
-export function SessionUploader({ initial, cardId }: { initial: SessionInfo; cardId?: string }) {
+export function SessionUploader({ initial, cardId, nowMs }: { initial: SessionInfo; cardId?: string; nowMs: number }) {
   const router = useRouter();
   const [info, setInfo] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -39,7 +39,6 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [pasted, setPasted] = useState("");
   const [showEditor, setShowEditor] = useState(!initial.isUsable);
-  const [nowMs] = useState(() => Date.now());
   const meta = serviceMeta(info.service);
   const badge = !info.exists
     ? { label: "Missing", classes: "" }
@@ -81,8 +80,12 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
   }
 
   async function upload(file: File) {
-    const text = await file.text();
-    await uploadText(text, file.name || "selected file");
+    try {
+      const text = await file.text();
+      await uploadText(text, file.name || "selected file");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not read this file");
+    }
   }
 
   async function submitPasted() {
@@ -110,6 +113,8 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
         setShowEditor(true);
         router.refresh();
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete the saved session");
     } finally {
       setBusy(false);
     }
@@ -220,21 +225,23 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="heading-row">{info.exists ? "Replace session" : "Upload session"}</div>
                 {info.isUsable ? (
-                  <button type="button" onClick={() => setShowEditor(false)} className="text-xs text-muted-fg hover:text-[var(--text)]">
+                  <button type="button" onClick={() => setShowEditor(false)} className="min-h-8 text-xs text-muted-fg hover:text-[var(--text)]">
                     Hide
                   </button>
                 ) : null}
               </div>
               <label
-                className={`surface-lift group relative flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-[var(--radius)] border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)] ${
+                className={`surface-lift group relative flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-[var(--radius)] border-2 border-dashed border-[var(--border)] bg-[var(--surface-2)] p-5 text-center text-sm text-muted-fg hover:border-[var(--accent)] hover:bg-[var(--surface-hover)] hover:text-[var(--text)] focus-within:border-[var(--accent)] focus-within:shadow-[0_0_0_3px_var(--accent-ring)] ${
                   dragOver ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]" : ""
                 }`}
               >
                 <span className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)] to-transparent opacity-0 transition duration-300 group-hover:opacity-70" />
                 <input
+                  name={`${info.service.toLowerCase()}SessionFile`}
                   type="file"
+                  aria-label={`Upload ${meta.label} session JSON`}
                   accept="application/json,.json"
-                  className="hidden"
+                  className="sr-only"
                   disabled={busy}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
@@ -255,7 +262,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
               </label>
 
               <details className="mt-3 text-xs text-muted-fg">
-                <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-[var(--radius-sm)] px-1 py-1 transition duration-200 hover:translate-x-0.5 hover:text-[var(--text)]">
+                <summary className="inline-flex min-h-11 cursor-pointer select-none items-center gap-1.5 rounded-[var(--radius-sm)] px-2 py-1 transition duration-200 hover:translate-x-0.5 hover:text-[var(--text)]">
                   <Clipboard size={13} />
                   Paste JSON instead
                 </summary>
@@ -275,7 +282,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
                   <button type="button" onClick={submitPasted} disabled={busy || pasted.trim().length === 0} className="btn btn-primary text-xs">
                     {busy ? "Uploading…" : "Upload pasted JSON"}
                   </button>
-                  {pasted ? <button type="button" onClick={() => setPasted("")} disabled={busy} className="text-xs text-muted-fg hover:text-[var(--text)] disabled:opacity-50">Clear</button> : null}
+                  {pasted ? <button type="button" onClick={() => setPasted("")} disabled={busy} className="min-h-8 text-xs text-muted-fg hover:text-[var(--text)] disabled:opacity-50">Clear</button> : null}
                 </div>
               </details>
 
@@ -290,7 +297,7 @@ export function SessionUploader({ initial, cardId }: { initial: SessionInfo; car
                       </div>
                     </div>
                   ) : (
-                    <button type="button" onClick={() => setDeleteConfirm(true)} disabled={busy} className="inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-sm)] py-1.5 text-xs text-muted-fg transition hover:bg-danger/10 hover:text-danger-fg disabled:opacity-50">
+                    <button type="button" onClick={() => setDeleteConfirm(true)} disabled={busy} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[var(--radius-sm)] py-1.5 text-xs text-muted-fg transition hover:bg-danger/10 hover:text-danger-fg disabled:opacity-50">
                       <Trash2 size={13} /> Delete saved session
                     </button>
                   )

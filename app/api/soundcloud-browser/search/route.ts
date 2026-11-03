@@ -9,8 +9,9 @@ export const maxDuration = 60;
 
 export async function GET(request: Request) {
   await requireAuth(request);
-  const query = new URL(request.url).searchParams.get("q");
+  const query = (new URL(request.url).searchParams.get("q") || "").trim();
   if (!query) return NextResponse.json({ error: "q is required" }, { status: 400 });
+  if (query.length > 200) return NextResponse.json({ error: "q is too long" }, { status: 400 });
 
   try {
     return NextResponse.json({ tracks: await cachedSearchTracks("soundcloud", query, () => searchSoundCloudTracksCli(query)) });

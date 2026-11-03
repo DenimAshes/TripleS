@@ -53,35 +53,20 @@ scripts/              SQLite bootstrap and sync worker
 
 ## Environment
 
-Copy `.env.example` to `.env` when you want to override defaults. All external API variables are optional. If Spotify, Google or SoundCloud credentials are empty, the app logs messages like `[spotify] Running in MOCK mode` and uses realistic mock playlists/tracks.
+Copy `.env.example` to `.env`, then set PostgreSQL and authentication secrets. Spotify uses OAuth (or the advanced `sp_dc` fallback); YouTube Music and SoundCloud use browser sessions when their `*_BROWSER_AUTOMATION` flags are enabled and mock adapters otherwise.
 
 Required only for production-hardening:
 
 ```env
-JWT_SECRET="replace-me"
+JWT_SECRET="replace-with-at-least-32-random-characters"
 ENCRYPTION_KEY="32-byte-hex-key"
 CRON_SECRET="optional-cron-secret"
+APP_URL="https://your-app.example.com"
 ```
 
-## SQLite to PostgreSQL or Supabase
+## PostgreSQL
 
-Local development uses SQLite:
-
-```prisma
-provider = "sqlite"
-url      = "file:./dev.db"
-```
-
-For PostgreSQL/Supabase, change the datasource to:
-
-```prisma
-provider = "postgresql"
-url      = env("DATABASE_URL")
-```
-
-Then set `DATABASE_URL` to the Supabase pooled or direct connection string and run a new migration. PostgreSQL also supports native Prisma enums, so the string enum-like fields can be converted back to Prisma `enum` blocks during that migration.
-
-For hosted Postgres, `DATABASE_URL` is the runtime connection string. `DIRECT_URL` is optional but recommended for migrations when the provider offers a direct non-pooled URL. The build script uses `DIRECT_URL` for `prisma migrate deploy` when it is present and falls back to `DATABASE_URL` otherwise.
+TripleS uses PostgreSQL in development and production. `DATABASE_URL` is the runtime connection string. `DIRECT_URL` is optional but recommended for migrations when the provider offers a direct non-pooled URL. The build script uses `DIRECT_URL` for `prisma migrate deploy` when present and otherwise skips automatic deploy migrations on pooled connections.
 
 ## Spotify API
 
@@ -102,7 +87,7 @@ SPOTIFY_ENABLE_PLAYLIST_SCOPES="false"
 SPOTIFY_ENABLE_WRITE_SCOPES="false"
 ```
 
-The Spotify integration already includes the Authorization Code flow, encrypted token storage, refresh-token handling and real Web API calls for profile, playlists, playlist tracks, search, add and remove. The dashboard `Connect` button starts OAuth when credentials are present and falls back to mock mode when they are empty.
+The Spotify integration includes the Authorization Code flow, encrypted token storage, refresh-token handling and real Web API calls for profile, playlists, playlist tracks, search, add and remove. The Connections page starts OAuth when credentials are present and explains the missing configuration otherwise.
 
 For local Spotify OAuth, use `127.0.0.1` instead of `localhost`. Spotify rejects `localhost` redirect URIs in the dashboard, while `http://127.0.0.1:3000/api/oauth/spotify/callback` is accepted for local development.
 
@@ -166,13 +151,9 @@ YOUTUBE_BROWSER_AUTOMATION="true"
 
 For remote scheduled runs, store the exported `worker/state/youtube.json` as a secret and restore it before starting the worker. GitHub Actions cron is the most practical free target; Vercel-style serverless functions are a poor fit for long-lived browser automation.
 
-## SoundCloud API
-
-Set `SOUNDCLOUD_CLIENT_ID`, `SOUNDCLOUD_CLIENT_SECRET` and `SOUNDCLOUD_REDIRECT_URI`, then implement `lib/services/soundcloud/SoundCloudAdapter.ts`. SoundCloud API access may be limited depending on app approval and account status, so keep mock mode available for local development.
-
 ## SoundCloud Browser Automation
 
-SoundCloud can also run without API credentials through the browser worker. Log in once and save the session:
+SoundCloud runs without API credentials through the browser worker. Log in once and save the session:
 
 ```bash
 npm run chrome -- soundcloud

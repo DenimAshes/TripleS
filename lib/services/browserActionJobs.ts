@@ -73,6 +73,17 @@ function shouldRunInline(): boolean {
   return process.env.BROWSER_JOB_EXECUTION_MODE !== "worker";
 }
 
+let inlineRunQueue: Promise<void> = Promise.resolve();
+const startsInFlight = new Map<string, Promise<BrowserActionJob>>();
+
+function enqueueInlineRun(job: BrowserActionJob) {
+  inlineRunQueue = inlineRunQueue
+    .then(() => runAction(job))
+    .catch((error) => {
+      console.error(`[browser-job] inline execution failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+}
+
 function dedupeWhere(userId: string, type: BrowserActionType, input: unknown) {
   return {
     userId,
@@ -218,7 +229,17 @@ async function runInitialPlaylistGroupSync(job: BrowserActionJob, input: Connect
         member.playlist.servicePlaylistId,
         (progress) => setJob(job.id, { currentStep: playlistTrackProgressStep(progress) }),
       );
-      sourceRefreshes.push({ playlistId: member.playlist.id, service: member.playlist.service, result: refresh });
+      if ("skipped" in refresh && refresh.skipped) {
+        refreshFailedPlaylistIds.add(member.playlist.id);
+        sourceErrors.push({
+          playlistId: member.playlist.id,
+          service: member.playlist.service,
+          phase: "refresh",
+          error: refresh.reason,
+        });
+      } else {
+        sourceRefreshes.push({ playlistId: member.playlist.id, service: member.playlist.service, result: refresh });
+      }
     } catch (error) {
       refreshFailedPlaylistIds.add(member.playlist.id);
       sourceErrors.push({
@@ -229,6 +250,10 @@ async function runInitialPlaylistGroupSync(job: BrowserActionJob, input: Connect
       });
     }
     if (await isTerminalJob(job.id)) return null;
+  }
+
+  if (!sourceRefreshes.length) {
+    throw new Error(`Initial sync could not refresh any source: ${sourceErrors.map((item) => `${item.service}: ${item.error}`).join("; ")}`);
   }
 
   await setJob(job.id, { currentStep: "Starting first sync" });
@@ -354,7 +379,7 @@ async function runAction(job: BrowserActionJob) {
   }
 }
 
-export async function startBrowserActionJob(userId: string, type: BrowserActionType, input: unknown): Promise<BrowserActionJob> {
+async function startBrowserActionJobOnce(userId: string, type: BrowserActionType, input: unknown): Promise<BrowserActionJob> {
   const normalizedInput = input ?? {};
   const running = await prisma.browserJob.findFirst({
     where: dedupeWhere(userId, type, normalizedInput),
@@ -363,7 +388,7 @@ export async function startBrowserActionJob(userId: string, type: BrowserActionT
   if (running) {
     const job = toBrowserActionJob(running);
     if (shouldRunInline() && job.status === "queued") {
-      void runAction(job);
+      enqueueInlineRun(job);
     }
     return job;
   }
@@ -379,9 +404,22 @@ export async function startBrowserActionJob(userId: string, type: BrowserActionT
   });
   const job = toBrowserActionJob(row);
   if (shouldRunInline()) {
-    void runAction(job);
+    enqueueInlineRun(job);
   }
   return job;
+}
+
+export function startBrowserActionJob(userId: string, type: BrowserActionType, input: unknown): Promise<BrowserActionJob> {
+  const normalizedInput = input ?? {};
+  const key = `${userId}:${type}:${JSON.stringify(normalizedInput)}`;
+  const existing = startsInFlight.get(key);
+  if (existing) return existing;
+  const started = startBrowserActionJobOnce(userId, type, normalizedInput);
+  startsInFlight.set(key, started);
+  void started.finally(() => {
+    if (startsInFlight.get(key) === started) startsInFlight.delete(key);
+  }).catch(() => {});
+  return started;
 }
 
 export async function claimQueuedBrowserActionJob(workerId: string | null = null): Promise<BrowserActionJob | null> {

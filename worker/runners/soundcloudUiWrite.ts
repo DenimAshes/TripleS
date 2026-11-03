@@ -83,6 +83,8 @@ async function openPickerDialog(page: Page): Promise<string> {
 async function inspectRow(page: Page, playlistTitle: string, click: boolean): Promise<RowState> {
   return page.evaluate(
     ({ title, shouldClick }) => {
+      const normalize = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, " ").trim();
+      const normalizedTitle = normalize(title);
       const dialog =
         Array.from(document.querySelectorAll("[role='dialog'], .MuiDialog-container, .MuiModal-root")).find((node) =>
           /Create playlist/i.test(node.textContent || ""),
@@ -95,9 +97,12 @@ async function inspectRow(page: Page, playlistTitle: string, click: boolean): Pr
         for (let depth = 0; depth < 5 && node; depth += 1) {
           node = node.parentElement;
           if (!node) break;
-          const text = (node.textContent || "").replace(/s+/g, " ").trim();
+          const text = (node.textContent || "").replace(/\s+/g, " ").trim();
           if (text.length > 90) break;
-          if (text.includes(title)) {
+          const exactTitle = Array.from(node.querySelectorAll("a, span, p, h1, h2, h3, h4"))
+            .some((element) => normalize(element.textContent || "") === normalizedTitle);
+          const rowWithoutAction = normalize(text.replace(label, ""));
+          if (exactTitle || rowWithoutAction === normalizedTitle) {
             if (shouldClick) (button as HTMLElement).click();
             return { found: true, label, text: text.slice(0, 90), clicked: shouldClick };
           }

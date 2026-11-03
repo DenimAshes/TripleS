@@ -73,14 +73,15 @@ async function withContext<T>(
 ): Promise<T> {
   let abortCleanup: (() => Promise<void>) | null = null;
   let timedOut = false;
+  let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
   const timeoutPromise = new Promise<never>((_, reject) => {
-    const timer = setTimeout(async () => {
+    timeoutTimer = setTimeout(() => {
       timedOut = true;
-      if (abortCleanup) await abortCleanup().catch(() => {});
       reject(new Error(`SoundCloud runner timed out after ${RUNNER_TIMEOUT_MS}ms`));
+      if (abortCleanup) void abortCleanup().catch(() => {});
     }, RUNNER_TIMEOUT_MS);
-    (timer as { unref?: () => void }).unref?.();
+    (timeoutTimer as { unref?: () => void }).unref?.();
   });
 
   const run = async () => {
@@ -114,7 +115,11 @@ async function withContext<T>(
     }
   };
 
-  return Promise.race([run(), timeoutPromise]);
+  try {
+    return await Promise.race([run(), timeoutPromise]);
+  } finally {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+  }
 }
 
 async function settle(page: Page): Promise<void> {
@@ -191,6 +196,15 @@ async function apiGet<T>(page: Page, runtime: SoundCloudRuntime, url: string): P
     }
     return JSON.parse(text);
   }, { requestUrl, timeoutMs: API_TIMEOUT_MS });
+}
+
+async function optionalApiGet<T>(page: Page, runtime: SoundCloudRuntime, url: string): Promise<T | undefined> {
+  try {
+    return await apiGet<T>(page, runtime, url);
+  } catch (error) {
+    if (/SoundCloud API 404:/i.test(error instanceof Error ? error.message : String(error))) return undefined;
+    throw error;
+  }
 }
 
 async function apiPut<T>(page: Page, runtime: SoundCloudRuntime, url: string, body: unknown): Promise<T> {
@@ -295,6 +309,8 @@ async function apiGetCollection<T>(page: Page, runtime: SoundCloudRuntime, url: 
     out.push(...(data.collection || []));
     nextUrl = data.next_href || null;
   }
+
+  if (nextUrl) throw new Error(`SoundCloud collection remained paginated after ${maxPages} pages.`);
 
   return out;
 }
@@ -489,7 +505,7 @@ async function listOwnedPlaylistApiItems(page: Page, runtime: SoundCloudRuntime)
     page,
     runtime,
     `/users/${runtime.userId}/playlists_without_albums?limit=50&linked_partitioning=1`,
-  ).catch(() => []);
+  );
   return owned.filter((playlist) => {
     const ownerId = (playlist as { user_id?: unknown }).user_id;
     return typeof ownerId !== "number" || ownerId === runtime.userId;
@@ -500,11 +516,11 @@ async function resolvePlaylistViaApi(page: Page, runtime: SoundCloudRuntime, pla
   // Numeric ids hit /playlists/{id} directly. The /resolve endpoint only
   // understands canonical soundcloud.com URLs and silently 404s on bare ids.
   if (/^\d+$/.test(playlistIdOrUrl)) {
-    const direct = await apiGet<SoundCloudApiPlaylist>(page, runtime, `/playlists/${playlistIdOrUrl}`).catch(() => undefined);
+    const direct = await optionalApiGet<SoundCloudApiPlaylist>(page, runtime, `/playlists/${playlistIdOrUrl}`);
     if (direct) return direct;
   } else {
     const url = playlistIdOrUrl.startsWith("http") ? playlistIdOrUrl : `https://soundcloud.com/${playlistIdOrUrl}`;
-    const resolved = await apiGet<SoundCloudApiPlaylist>(page, runtime, `/resolve?url=${encodeURIComponent(url)}`).catch(() => undefined);
+    const resolved = await optionalApiGet<SoundCloudApiPlaylist>(page, runtime, `/resolve?url=${encodeURIComponent(url)}`);
     if (resolved) return resolved;
   }
 
@@ -539,10 +555,10 @@ async function resolvePlaylistViaApi(page: Page, runtime: SoundCloudRuntime, pla
 
 async function resolveTrackViaApi(page: Page, runtime: SoundCloudRuntime, trackIdOrUrl: string): Promise<SoundCloudApiTrack | undefined> {
   if (/^\d+$/.test(trackIdOrUrl)) {
-    return apiGet<SoundCloudApiTrack>(page, runtime, `/tracks/${trackIdOrUrl}`).catch(() => undefined);
+    return optionalApiGet<SoundCloudApiTrack>(page, runtime, `/tracks/${trackIdOrUrl}`);
   }
   const url = trackIdOrUrl.startsWith("http") ? trackIdOrUrl : `https://soundcloud.com/${trackIdOrUrl}`;
-  return apiGet<SoundCloudApiTrack>(page, runtime, `/resolve?url=${encodeURIComponent(url)}`).catch(() => undefined);
+  return optionalApiGet<SoundCloudApiTrack>(page, runtime, `/resolve?url=${encodeURIComponent(url)}`);
 }
 
 function playlistTrackIds(playlist: SoundCloudApiPlaylist): number[] {
@@ -552,6 +568,14 @@ function playlistTrackIds(playlist: SoundCloudApiPlaylist): number[] {
     if (Number.isFinite(id)) ids.push(id);
   }
   return ids;
+}
+
+function assertCompleteTrackIds(playlist: SoundCloudApiPlaylist, ids: number[]) {
+  const listedCount = playlist.tracks?.length ?? 0;
+  const declaredCount = playlist.track_count;
+  if (ids.length !== listedCount || (typeof declaredCount === "number" && listedCount !== declaredCount)) {
+    throw new Error(`SoundCloud refused a whole-playlist write from an incomplete track list (${ids.length}/${declaredCount ?? listedCount}).`);
+  }
 }
 
 type SoundCloudWriteMode = "auto" | "ui" | "api";
@@ -624,6 +648,7 @@ export async function addSoundCloudTrackToPlaylist(playlistIdOrUrl: string, trac
     const track = await resolveTrackViaApi(page, runtime, trackIdOrUrl);
     if (!playlist) throw new Error("SoundCloud playlist not found.");
     if (!track?.id) throw new Error("SoundCloud track not found.");
+    if (playlist.user_id !== runtime.userId) throw new Error("This SoundCloud playlist is not owned by the current user.");
 
     const trackId = Number(track.id);
     const ids = playlistTrackIds(playlist);
@@ -632,6 +657,7 @@ export async function addSoundCloudTrackToPlaylist(playlistIdOrUrl: string, trac
     const viaUi = await tryUiToggle(page, playlist, track, "add");
     if (viaUi) return { added: viaUi.changed };
 
+    assertCompleteTrackIds(playlist, ids);
     await updatePlaylistTrackIds(page, runtime, playlist, [...ids, trackId]);
     return { added: true };
   });
@@ -647,10 +673,10 @@ async function resolveSeedTrackPermalink(page: Page, runtime: SoundCloudRuntime)
   for (const item of owned) {
     const id = item.id != null ? String(item.id) : soundCloudPathFromUrl(item.permalink_url);
     if (!id) continue;
-    const resolved = await resolvePlaylistViaApi(page, runtime, id).catch(() => undefined);
+    const resolved = await resolvePlaylistViaApi(page, runtime, id);
     const firstTrackId = resolved?.tracks?.find((track) => track.id != null)?.id;
     if (firstTrackId == null) continue;
-    const track = await resolveTrackViaApi(page, runtime, String(firstTrackId)).catch(() => undefined);
+    const track = await resolveTrackViaApi(page, runtime, String(firstTrackId));
     if (track?.permalink_url) return track.permalink_url;
   }
   return undefined;
@@ -677,16 +703,14 @@ export async function createSoundCloudPlaylist(name: string): Promise<SoundCloud
         throw new Error("SoundCloud UI create needs a track to open the dialog from, and none was found in this account's playlists.");
       }
       if (seed) {
+        let uiCreationConfirmed = false;
         try {
           const result = await createPlaylistViaUi(page, { name, seedTrackPermalinkUrl: seed });
+          uiCreationConfirmed = true;
           if (result.seedTrackAdded) {
             // The dialog creates the playlist with the opened track inside it;
             // callers expect an empty playlist, so take the seed back out.
-            await toggleTrackInPlaylistViaUi(page, { trackPermalinkUrl: seed, playlistTitle: name, intent: "remove" }).catch((error) => {
-              console.error(
-                `[soundcloud] created "${name}" but could not remove the seed track: ${error instanceof Error ? error.message : String(error)}`,
-              );
-            });
+            await toggleTrackInPlaylistViaUi(page, { trackPermalinkUrl: seed, playlistTitle: name, intent: "remove" });
           }
           const created = await findOwnedPlaylistByTitle(page, runtime, name);
           const normalizedUi = created ? normalizePlaylist(created, runtime) : undefined;
@@ -696,6 +720,9 @@ export async function createSoundCloudPlaylist(name: string): Promise<SoundCloud
           }
           throw new Error(`SoundCloud created "${name}" but it could not be read back.`);
         } catch (error) {
+          if (uiCreationConfirmed) {
+            throw new Error(`SoundCloud created "${name}" through the UI but post-create verification failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
           if (mode === "ui") throw error;
           console.error(
             `[soundcloud] UI create failed, falling back to the api-v2 write: ${error instanceof Error ? error.message : String(error)}`,
@@ -737,6 +764,7 @@ export async function removeSoundCloudTrackFromPlaylist(playlistIdOrUrl: string,
     const track = await resolveTrackViaApi(page, runtime, trackIdOrUrl);
     if (!playlist) throw new Error("SoundCloud playlist not found.");
     if (!track?.id) throw new Error("SoundCloud track not found.");
+    if (playlist.user_id !== runtime.userId) throw new Error("This SoundCloud playlist is not owned by the current user.");
 
     const trackId = Number(track.id);
     const ids = playlistTrackIds(playlist);
@@ -745,14 +773,14 @@ export async function removeSoundCloudTrackFromPlaylist(playlistIdOrUrl: string,
     const viaUi = await tryUiToggle(page, playlist, track, "remove");
     if (viaUi) return { removed: viaUi.changed };
 
+    assertCompleteTrackIds(playlist, ids);
     await updatePlaylistTrackIds(page, runtime, playlist, ids.filter((id) => id !== trackId));
     return { removed: true };
   });
 }
 
-async function listTracksViaApi(page: Page, runtime: SoundCloudRuntime, playlistIdOrUrl: string): Promise<NormalizedTrack[]> {
-  const playlist = await resolvePlaylistViaApi(page, runtime, playlistIdOrUrl);
-  const tracks = playlist?.tracks || [];
+async function listTracksViaApi(page: Page, runtime: SoundCloudRuntime, playlist: SoundCloudApiPlaylist): Promise<NormalizedTrack[]> {
+  const tracks = playlist.tracks || [];
   const missingIds = tracks
     .filter((track) => !track.title && track.id != null)
     .map((track) => String(track.id));
@@ -760,7 +788,7 @@ async function listTracksViaApi(page: Page, runtime: SoundCloudRuntime, playlist
   const hydratedById = new Map<string, SoundCloudApiTrack>();
   for (let i = 0; i < missingIds.length; i += 50) {
     const batchIds = missingIds.slice(i, i + 50);
-    const batch = await apiGet<SoundCloudApiTrack[]>(page, runtime, `/tracks?ids=${batchIds.join(",")}`).catch(() => []);
+    const batch = await apiGet<SoundCloudApiTrack[]>(page, runtime, `/tracks?ids=${batchIds.join(",")}`);
     for (const track of batch) {
       if (track.id != null) hydratedById.set(String(track.id), track);
     }
@@ -813,7 +841,7 @@ export async function listSoundCloudPlaylistTracks(playlistIdOrUrl: string): Pro
     // fall back to DOM scraping — extractVisibleTracks otherwise grabs
     // unrelated profile/navigation links from the page chrome.
     const playlist = await resolvePlaylistViaApi(page, runtime, playlistIdOrUrl);
-    if (playlist) return listTracksViaApi(page, runtime, playlistIdOrUrl);
+    if (playlist) return listTracksViaApi(page, runtime, playlist);
 
     const url = playlistIdOrUrl.startsWith("http") ? playlistIdOrUrl : `https://soundcloud.com/${playlistIdOrUrl}`;
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });

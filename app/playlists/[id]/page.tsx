@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Clock3, Link2, Lock, ListMusic, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { AddPlaylistSyncButton, type SyncPlaylistOption } from "@/components/AddPlaylistSyncButton";
+import { ArtworkImage } from "@/components/ArtworkImage";
 import { PlaylistDiagnosticsCard } from "@/components/PlaylistDiagnosticsCard";
 import { PlaylistTracksAutoRefresh } from "@/components/PlaylistTracksAutoRefresh";
 import { PlaylistTracksTable, type PlaylistTrackRow } from "@/components/PlaylistTracksTable";
@@ -133,7 +134,7 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
   return (
     <AppShell
       title={playlist.name}
-      description={playlist.description || `${meta.label} playlist with ${playlist.trackCount} songs.`}
+      description={playlist.description || `${meta.label} playlist with ${playlist.trackCount} ${playlist.trackCount === 1 ? "song" : "songs"}.`}
       backHref="/playlists"
       backLabel="All playlists"
       actions={
@@ -148,23 +149,17 @@ export default async function PlaylistDetailPage({ params }: { params: Promise<{
         hasTracks={states.length > 0}
         activeTracks={states.length}
         expectedTracks={playlist.trackCount}
-        lastFetchedAt={lastFetchedIso}
       />
 
       <section className={`${meta.tint} workbench relative mb-7 overflow-hidden`}>
         <div className="relative flex min-w-0 items-center gap-4 p-4 sm:p-5">
-            {playlist.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={playlist.imageUrl}
-                alt=""
-                width={80}
-                height={80}
-                className="h-20 w-20 shrink-0 rounded-[var(--radius)] object-cover ring-1 ring-[var(--border-soft)]"
-              />
-            ) : (
-              <ServiceIcon service={playlist.service} size="lg" className="h-20 w-20 rounded-[var(--radius)]" />
-            )}
+            <ArtworkImage
+              src={playlist.imageUrl}
+              width={80}
+              height={80}
+              className="h-20 w-20 rounded-[var(--radius)] bg-[var(--surface-2)] ring-1 ring-[var(--border-soft)]"
+              fallback={<ServiceIcon service={playlist.service} size="lg" className="h-20 w-20 rounded-[var(--radius)]" />}
+            />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <ServicePill service={playlist.service} />

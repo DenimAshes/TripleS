@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { ArtworkImage } from "./ArtworkImage";
 
 export type PlaylistTrackRow = {
   id: string;
@@ -114,7 +115,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
     function handler(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       const isTyping =
-        target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+        target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
       if (event.key === "/" && !isTyping) {
         event.preventDefault();
         searchRef.current?.focus();
@@ -339,10 +340,9 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
       const candidates = missingInOrder
         .map((track) => document.querySelector<HTMLElement>(`[data-track-row='${track.id}']`))
         .filter((node): node is HTMLElement => Boolean(node));
-      const viewportTop = window.scrollY + 120;
-      const next = candidates.find((node) => node.offsetTop > viewportTop) ?? candidates[0];
+      const next = candidates.find((node) => node.getBoundingClientRect().top > 120) ?? candidates[0];
       if (!next) return;
-      next.scrollIntoView({ behavior: "smooth", block: "center" });
+      next.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
       next.setAttribute("data-pulse", "1");
       window.setTimeout(() => next.removeAttribute("data-pulse"), 1400);
     });
@@ -355,7 +355,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <span className="pill">
               <Hash size={12} />
-              <span className="tabular-nums">{tracks.length}</span> songs
+              <span className="tabular-nums">{tracks.length}</span> {tracks.length === 1 ? "song" : "songs"}
             </span>
             <span className="pill">
               <Clock3 size={12} />
@@ -387,8 +387,8 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <div className="group/search relative min-w-0 flex-1 sm:max-w-xs lg:flex-none">
+          <div className="w-full lg:flex lg:justify-end">
+            <div className="group/search relative w-full sm:max-w-xs">
               <Search
                 size={15}
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-dim-fg transition group-focus-within/search:text-[var(--accent)]"
@@ -403,7 +403,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Filter songs…"
                 aria-label="Filter songs"
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] py-1.5 pl-9 pr-12 text-sm text-[var(--text)] placeholder:text-dim-fg focus:border-[var(--accent)]"
+                className="min-h-11 w-full rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] py-1.5 pl-9 pr-12 text-sm text-[var(--text)] placeholder:text-dim-fg focus:border-[var(--accent)]"
               />
               {query ? (
                 <button
@@ -413,7 +413,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                     searchRef.current?.focus();
                   }}
                   aria-label="Clear search"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-[var(--radius-sm)] p-1 text-dim-fg transition hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
+                  className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-[var(--radius-sm)] text-dim-fg transition hover:bg-[var(--surface-hover)] hover:text-[var(--text)]"
                 >
                   <X size={13} />
                 </button>
@@ -439,7 +439,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                 onClick={() => setStatusFilter(filter.key)}
                 aria-pressed={active}
                 disabled={filter.count === 0 && filter.key !== "all"}
-                className={`surface-lift inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border px-2.5 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                className={`surface-lift inline-flex min-h-11 items-center gap-1.5 rounded-[var(--radius-sm)] border px-2.5 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
                   active
                     ? "border-[color-mix(in_srgb,var(--accent)_35%,var(--border))] bg-[var(--accent-soft)] text-[var(--text)]"
                     : "border-[var(--border-soft)] bg-[var(--surface-2)] text-muted-fg hover:border-[var(--border)] hover:text-[var(--text)]"
@@ -478,7 +478,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
         // overflow-hidden would create a non-scrolling ancestor and break the
         // sticky thead — sort headers must follow the viewport, not the panel.
         <div>
-          <table className="w-full table-fixed text-sm sm:table-auto">
+          <table className="w-full table-fixed text-sm xl:table-auto">
             <thead className="sticky top-0 z-10 border-b border-[var(--border-soft)] bg-[var(--bg)]/95 text-left text-xs font-semibold text-muted-fg backdrop-blur">
               <tr>
                 <th
@@ -488,7 +488,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                   <button
                     type="button"
                     onClick={() => handleSort("position")}
-                    className="inline-flex items-center gap-1.5 font-semibold transition hover:text-[var(--text)]"
+                    className="inline-flex min-h-11 items-center gap-1.5 font-semibold transition hover:text-[var(--text)]"
                   >
                     # {renderSortIcon("position", sortKey, sortDir)}
                   </button>
@@ -500,20 +500,20 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                   <button
                     type="button"
                     onClick={() => handleSort("title")}
-                    className="inline-flex items-center gap-1.5 font-semibold transition hover:text-[var(--text)]"
+                    className="inline-flex min-h-11 items-center gap-1.5 font-semibold transition hover:text-[var(--text)]"
                   >
                     Song {renderSortIcon("title", sortKey, sortDir)}
                   </button>
                 </th>
-                <th className="hidden px-4 py-3.5 font-semibold lg:table-cell">Matched on</th>
+                <th className="hidden px-4 py-3.5 font-semibold xl:table-cell">Matched on</th>
                 <th
-                  className="hidden px-4 py-3.5 md:table-cell"
+                  className="hidden px-4 py-3.5 xl:table-cell"
                   aria-sort={sortKey === "album" ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                 >
                   <button
                     type="button"
                     onClick={() => handleSort("album")}
-                    className="inline-flex items-center gap-1.5 font-semibold transition hover:text-[var(--text)]"
+                    className="inline-flex min-h-11 items-center gap-1.5 font-semibold transition hover:text-[var(--text)]"
                   >
                     Album {renderSortIcon("album", sortKey, sortDir)}
                   </button>
@@ -525,12 +525,12 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                   <button
                     type="button"
                     onClick={() => handleSort("duration")}
-                    className="inline-flex items-center gap-1.5 font-semibold transition hover:text-[var(--text)]"
+                    className="inline-flex min-h-11 items-center gap-1.5 font-semibold transition hover:text-[var(--text)]"
                   >
                     Time {renderSortIcon("duration", sortKey, sortDir)}
                   </button>
                 </th>
-                <th className="hidden w-10 px-4 py-3.5 sm:table-cell"></th>
+                <th className="hidden w-10 px-4 py-3.5 xl:table-cell"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-soft)]">
@@ -559,43 +559,32 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                     </td>
                     <td className="px-2 py-3.5 sm:px-4">
                       <div className="flex min-w-0 items-center gap-3">
-                        {track.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={track.imageUrl}
-                            alt=""
-                            width={40}
-                            height={40}
-                            loading={index < 20 ? "eager" : "lazy"}
-                            decoding="async"
-                            className="h-10 w-10 shrink-0 rounded-[var(--radius-sm)] border border-[var(--border-soft)] object-cover transition duration-200 group-hover/row:scale-[1.05]"
-                          />
-                        ) : (
-                          <div
-                            className="playlist-art-fallback grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-sm)] border border-[var(--border-soft)]"
-                            aria-hidden="true"
-                          >
-                            <Music size={14} strokeWidth={1.5} className="relative z-10" />
-                          </div>
-                        )}
+                        <ArtworkImage
+                          src={track.imageUrl}
+                          width={40}
+                          height={40}
+                          loading={index < 20 ? "eager" : "lazy"}
+                          className="playlist-art-fallback h-10 w-10 rounded-[var(--radius-sm)] border border-[var(--border-soft)] transition duration-200 group-hover/row:scale-[1.05]"
+                          fallback={<Music size={14} strokeWidth={1.5} className="relative z-10" />}
+                        />
                         <div className="min-w-0 flex-1">
                           <div className="flex min-w-0 items-center gap-2">
-                            <div className="min-w-0 flex-1 truncate font-medium text-[var(--text)]">{renderHighlight(track.title, trimmedQuery)}</div>
+                            <div className="min-w-0 flex-1 truncate font-medium text-[var(--text)]" title={track.title}>{renderHighlight(track.title, trimmedQuery)}</div>
                             {track.url ? (
                               <a
                                 href={track.url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="shrink-0 text-dim-fg hover:text-[var(--accent)] sm:hidden"
+                                className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-sm)] text-dim-fg hover:bg-[var(--surface-hover)] hover:text-[var(--accent)] xl:hidden"
                                 aria-label={`Open on ${service}`}
                               >
                                 <ExternalLink size={15} />
                               </a>
                             ) : null}
                           </div>
-                          <div className="text-muted-fg truncate text-xs">{renderHighlight(track.artists, trimmedQuery)}</div>
+                          <div className="text-muted-fg truncate text-xs" title={track.artists}>{renderHighlight(track.artists, trimmedQuery)}</div>
                           {(track.linkedServices?.length || track.missingServices?.length) ? (
-                            <div className="mt-1 flex items-center gap-1 lg:hidden" aria-label="Match status">
+                            <div className="mt-1 flex items-center gap-1 xl:hidden" aria-label="Match status">
                               {(track.linkedServices || []).map((linkedService) => (
                                 <span
                                   key={`m-${linkedService}`}
@@ -617,13 +606,49 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                               </span>
                             </div>
                           ) : null}
+                          {track.groupId ? (
+                            <details className="mt-1 xl:hidden">
+                              <summary className="inline-flex min-h-11 cursor-pointer list-none items-center text-xs font-semibold text-[var(--accent)] marker:content-none">
+                                Song actions
+                              </summary>
+                              <div className="flex flex-wrap gap-2 pb-1">
+                                <button
+                                  type="button"
+                                  onClick={() => openMatchEditor(track)}
+                                  disabled={Boolean(rowBusy[track.id])}
+                                  className="btn btn-ghost h-8 px-2.5 text-xs"
+                                >
+                                  {rowBusy[track.id] ? "…" : "Change match"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExcluded(track)}
+                                  disabled={Boolean(rowBusy[track.id])}
+                                  className="btn btn-ghost h-8 px-2.5 text-xs"
+                                >
+                                  {rowBusy[track.id] ? "…" : isExcluded(track) ? "Sync this song" : "Keep source only"}
+                                </button>
+                              </div>
+                            </details>
+                          ) : null}
+                          {rowError[track.id] ? (
+                            <button
+                              type="button"
+                              onClick={() => setError(track.id, null)}
+                              className="mt-2 inline-flex min-h-8 max-w-full items-center gap-1 rounded-[var(--radius-sm)] bg-danger/10 px-2 text-left text-xs font-semibold text-danger-fg xl:hidden"
+                            >
+                              <AlertTriangle size={11} className="shrink-0" />
+                              <span className="min-w-0 break-words">{rowError[track.id]}</span>
+                              <X size={11} className="shrink-0" />
+                            </button>
+                          ) : null}
                           {isExcluded(track) ? (
                             <div className="mt-1 text-xs font-medium text-warning-fg">Only in this playlist</div>
                           ) : null}
                         </div>
                       </div>
                     </td>
-                    <td className="hidden px-4 py-3.5 lg:table-cell">
+                    <td className="hidden px-4 py-3.5 xl:table-cell">
                       <div className="flex max-w-xs flex-wrap gap-1.5">
                         {(track.linkedServices || []).map((linkedService) => (
                           <span key={linkedService} className="pill pill-success">
@@ -674,17 +699,17 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                         ) : null}
                       </div>
                     </td>
-                    <td className="text-muted-fg hidden truncate px-4 py-3.5 md:table-cell">
+                    <td className="text-muted-fg hidden truncate px-4 py-3.5 xl:table-cell" title={track.album || undefined}>
                       {track.album ? renderHighlight(track.album, trimmedQuery) : "-"}
                     </td>
                     <td className="hidden px-4 py-3.5 tabular-nums text-muted-fg sm:table-cell">{formatDuration(track.durationMs)}</td>
-                    <td className="hidden px-4 py-3.5 sm:table-cell">
+                    <td className="hidden px-4 py-3.5 xl:table-cell">
                       {track.url ? (
                         <a
                           href={track.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-dim-fg opacity-60 transition duration-200 hover:text-[var(--accent)] group-hover/row:opacity-100"
+                          className="grid size-8 place-items-center rounded-[var(--radius-sm)] text-dim-fg opacity-60 transition duration-200 hover:bg-[var(--surface-hover)] hover:text-[var(--accent)] group-hover/row:opacity-100"
                           aria-label={`Open on ${service}`}
                         >
                           <ExternalLink size={16} />
@@ -711,7 +736,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                               )
                             }
                             aria-label="Target service"
-                            className="h-9 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-2 text-sm"
+                            className="h-11 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-2 text-sm"
                           >
                             {matchServices.map((matchService) => (
                               <option key={matchService} value={matchService}>
@@ -732,13 +757,13 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                             }
                             placeholder="Paste song link…"
                             aria-label="Song link"
-                            className="h-9 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 text-sm"
+                            className="h-11 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 text-sm"
                           />
                           <div className="flex gap-2">
                             <button
                               type="submit"
                               disabled={Boolean(rowBusy[track.id]) || !editor.targetService}
-                              className="btn btn-primary h-9 text-xs"
+                              className="btn btn-primary h-11 text-xs"
                             >
                               <CheckCircle2 size={14} />
                               Save
@@ -747,7 +772,7 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                               type="button"
                               onClick={() => setMatchEditor(null)}
                               aria-label="Cancel editing"
-                              className="btn btn-ghost h-9 text-xs"
+                              className="btn btn-ghost h-11 text-xs"
                             >
                               <X size={14} />
                             </button>
@@ -771,10 +796,10 @@ export function PlaylistTracksTable({ tracks, service }: { tracks: PlaylistTrack
                     count: (current.key === visibleKey ? current.count : INITIAL_VISIBLE_TRACKS) + LOAD_MORE_TRACKS,
                   }))
                 }
-                className="surface-lift rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] transition hover:border-[var(--border-accent)]"
+                className="surface-lift min-h-11 rounded-[var(--radius)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text)] transition hover:border-[var(--border-accent)]"
               >
                 Load {Math.min(LOAD_MORE_TRACKS, remainingCount)} more
-                <span className="ml-2 text-xs font-normal text-muted-fg">{remainingCount} hidden</span>
+                {" "}<span className="ml-2 text-xs font-normal text-muted-fg">· {remainingCount} hidden</span>
               </button>
             </div>
           ) : null}

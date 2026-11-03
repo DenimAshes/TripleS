@@ -247,7 +247,7 @@ export function SyncRuleForm({ playlists, rule }: { playlists: Playlist[]; rule?
       ) : null}
 
       <div className="mt-8 flex justify-end border-t border-line-soft pt-5">
-        <button type="submit" disabled={saving} className="btn btn-primary w-full sm:w-auto sm:min-w-48">
+        <button type="submit" disabled={saving || !selectedSource || selectedDestinationCount === 0} className="btn btn-primary w-full sm:w-auto sm:min-w-48">
           {saving ? "Saving…" : rule ? "Save changes" : "Create source"}
         </button>
       </div>

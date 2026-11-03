@@ -59,7 +59,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </label>
           {params.error ? (
             <p role="alert" className="text-sm text-danger-fg">
-              That email and password do not match.
+              {params.error === "rate_limited"
+                ? "Too many sign-in attempts. Wait a few minutes and try again."
+                : "That email and password do not match."}
             </p>
           ) : null}
           <button type="submit" className="btn btn-primary w-full">

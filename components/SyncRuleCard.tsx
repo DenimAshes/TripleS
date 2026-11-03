@@ -35,7 +35,7 @@ function formatRelative(target: Date | null | undefined): string | null {
 // A scheduled run whose time has passed is not "next" — it is late. Rendering it
 // as `Next 12h ago` (which is what a plain relative format produced) hid exactly
 // the case worth noticing: the worker is not keeping up with this rule.
-export function formatNextRun(target: Date | null | undefined): { label: string; late: boolean } | null {
+function formatNextRun(target: Date | null | undefined): { label: string; late: boolean } | null {
   if (!target) return null;
   const diff = target.getTime() - Date.now();
   if (diff > 0) return { label: `next in ${humanizeMs(diff)}`, late: false };

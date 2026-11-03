@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useManualMatchLock } from "./ManualMatchLock";
 
 type ShortcutNotice = {
   tone: "success" | "error";
@@ -11,8 +12,9 @@ type ShortcutNotice = {
 
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+  return Boolean(
+    target.closest('button, a[href], summary, input, textarea, select, [role="button"], [role="link"], [contenteditable="true"]'),
+  );
 }
 
 export function ManualReviewShortcuts({
@@ -23,6 +25,7 @@ export function ManualReviewShortcuts({
   candidateTrackIds: string[];
 }) {
   const router = useRouter();
+  const decisionLock = useManualMatchLock();
   const busyRef = useRef(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<ShortcutNotice | null>(null);
@@ -31,7 +34,7 @@ export function ManualReviewShortcuts({
     if (!reviewId) return;
 
     async function post(endpoint: string, successMessage: string, body?: unknown) {
-      if (busyRef.current) return;
+      if (busyRef.current || !decisionLock.acquire()) return;
       busyRef.current = true;
       setBusy(true);
       setNotice(null);
@@ -56,11 +59,12 @@ export function ManualReviewShortcuts({
       } finally {
         busyRef.current = false;
         setBusy(false);
+        decisionLock.release();
       }
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (busy || event.ctrlKey || event.metaKey || event.altKey || isTypingTarget(event.target)) return;
+      if (busy || decisionLock.locked || event.ctrlKey || event.metaKey || event.altKey || isTypingTarget(event.target)) return;
 
       const key = event.key.toLowerCase();
       const numericPick = /^[1-5]$/.test(key) ? Number(key) - 1 : -1;
@@ -86,11 +90,11 @@ export function ManualReviewShortcuts({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [busy, candidateTrackIds, reviewId, router]);
+  }, [busy, candidateTrackIds, decisionLock, reviewId, router]);
 
   async function undo() {
     const undoId = notice?.undoId;
-    if (!undoId || busyRef.current) return;
+    if (!undoId || busyRef.current || !decisionLock.acquire()) return;
     busyRef.current = true;
     setBusy(true);
     try {
@@ -108,6 +112,7 @@ export function ManualReviewShortcuts({
     } finally {
       busyRef.current = false;
       setBusy(false);
+      decisionLock.release();
     }
   }
 
@@ -120,15 +125,15 @@ export function ManualReviewShortcuts({
           ? "border-[color-mix(in_srgb,var(--danger)_35%,var(--border))] bg-[var(--danger-soft)] text-danger-fg"
           : "border-[color-mix(in_srgb,var(--success)_35%,var(--border))] bg-[var(--success-soft)] text-success-fg"
       }`}
-      role="status"
-      aria-live="polite"
+      role={notice?.tone === "error" ? "alert" : "status"}
+      aria-live={notice?.tone === "error" ? "assertive" : "polite"}
     >
       <span>{busy ? "Saving…" : notice?.message}</span>
       {!busy && notice?.undoId ? (
         <button
           type="button"
           onClick={undo}
-          className="ml-3 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] px-2 py-1 text-xs font-semibold text-[var(--text)] transition hover:border-[var(--border)]"
+          className="ml-3 min-h-8 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface)] px-2 py-1 text-xs font-semibold text-[var(--text)] transition hover:border-[var(--border)]"
         >
           Undo
         </button>

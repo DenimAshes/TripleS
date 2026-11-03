@@ -8,14 +8,14 @@ export async function POST(request: Request) {
   const acceptsHtml = request.headers.get("accept")?.includes("text/html");
   if (!hasSpotifyCredentials()) {
     if (acceptsHtml) {
-      return NextResponse.redirect(sameOriginUrl(request, "/settings?mock=spotify"), 303);
+      return NextResponse.redirect(sameOriginUrl(request, "/connections?spotify_error=Spotify%20OAuth%20is%20not%20configured#connection-spotify"), 303);
     }
-    return NextResponse.json({ url: "/settings?mock=spotify", mode: "mock" });
+    return NextResponse.json({ url: "/connections?spotify_error=Spotify%20OAuth%20is%20not%20configured#connection-spotify", mode: "unconfigured" });
   }
   const redirectValidation = validateSpotifyRedirectUri();
   if (!redirectValidation.ok) {
     if (acceptsHtml) {
-      return NextResponse.redirect(sameOriginUrl(request, `/settings?spotify_error=${encodeURIComponent(redirectValidation.error || "invalid_redirect")}`), 303);
+      return NextResponse.redirect(sameOriginUrl(request, `/connections?spotify_error=${encodeURIComponent(redirectValidation.error || "invalid_redirect")}#connection-spotify`), 303);
     }
     return NextResponse.json({ error: redirectValidation.error }, { status: 400 });
   }

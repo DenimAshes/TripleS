@@ -23,20 +23,29 @@ export function PlaylistsAutoRefresh({
     const lastAttempt = Number(sessionStorage.getItem(key) || 0);
     if (Date.now() - lastAttempt < RETRY_AFTER_MS) return;
 
-    sessionStorage.setItem(key, String(Date.now()));
-    const controller = new AbortController();
+    let controller: AbortController | null = null;
+    let startTimer: number | null = null;
+    const timers: number[] = [];
 
-    void fetch("/api/playlists/refresh", {
-      method: "POST",
-      signal: controller.signal,
-    }).then((response) => {
-      if (!response.ok) return;
-      window.setTimeout(() => router.refresh(), 2000);
-      window.setTimeout(() => router.refresh(), 10000);
-      window.setTimeout(() => router.refresh(), 30000);
-    }).catch(() => {});
+    startTimer = window.setTimeout(() => {
+      sessionStorage.setItem(key, String(Date.now()));
+      controller = new AbortController();
+      void fetch("/api/playlists/refresh", {
+        method: "POST",
+        signal: controller.signal,
+      }).then((response) => {
+        if (!response.ok) return;
+        timers.push(window.setTimeout(() => router.refresh(), 2000));
+        timers.push(window.setTimeout(() => router.refresh(), 10000));
+        timers.push(window.setTimeout(() => router.refresh(), 30000));
+      }).catch(() => {});
+    }, 0);
 
-    return () => controller.abort();
+    return () => {
+      if (startTimer !== null) window.clearTimeout(startTimer);
+      controller?.abort();
+      for (const timer of timers) window.clearTimeout(timer);
+    };
   }, [hasPlaylists, lastChangedAt, router]);
 
   return null;

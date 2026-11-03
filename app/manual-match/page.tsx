@@ -3,6 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { BulkAcceptControls } from "@/components/BulkAcceptControls";
 import { ManualMatchDialog, type ManualCandidateView } from "@/components/ManualMatchDialog";
 import { ManualReviewShortcuts } from "@/components/ManualReviewShortcuts";
+import { ManualMatchLockProvider } from "@/components/ManualMatchLock";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { parseManualMatchAlternatives } from "@/lib/services/manualMatchRequest";
@@ -65,9 +66,10 @@ export default async function ManualMatchPage() {
         </span>
       }
     >
-      <ManualReviewShortcuts reviewId={firstItem?.id} candidateTrackIds={firstItemCandidateIds} />
+      <ManualMatchLockProvider>
+        <ManualReviewShortcuts reviewId={firstItem?.id} candidateTrackIds={firstItemCandidateIds} />
 
-      {empty ? (
+        {empty ? (
         <div className="py-14 text-center">
           <CheckCircle2 size={32} className="mx-auto text-success" />
           <div className="heading-panel mt-3">Nothing needs review</div>
@@ -77,7 +79,9 @@ export default async function ManualMatchPage() {
         <>
           <section className="mb-5 flex flex-col gap-3 border-y border-line-soft py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="heading-row">One decision now, {enriched.length - 1} after this</div>
+              <div className="heading-row">
+                {enriched.length === 1 ? "Last decision in this queue" : `One decision now, ${enriched.length - 1} after this`}
+              </div>
               <div className="mt-0.5 text-xs text-muted-fg">Compare the source with the suggested versions before choosing.</div>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -98,7 +102,8 @@ export default async function ManualMatchPage() {
             </div>
           </section>
         </>
-      )}
+        )}
+      </ManualMatchLockProvider>
     </AppShell>
   );
 }

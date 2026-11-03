@@ -191,6 +191,23 @@ Design pass, fifth half — dense mobile data:
 - `/playlists/[id]` no longer overflows by 158px at 390px. Mobile rows keep artwork, match state and the external link while moving duration and secondary columns to wider layouts.
 - The track list renders 50 rows at a time instead of 100, and the screenshot harness now checks mobile History plus the discovered playlist-detail route.
 
+Design pass, sixth half — hidden states and interaction hardening:
+
+- Add-sync and mobile More now trap and restore focus; tabs support arrow/Home/End keys, command search exposes combobox semantics, and track previews stay inside a 320px viewport.
+- Review decisions share one atomic page lock across candidate buttons, bulk actions and keyboard shortcuts; browser searches distinguish typed text from the last submitted query and ignore stale responses.
+- Browser playlist tools ignore stale out-of-order track responses, retain the selected playlist after refresh, load a replacement after deletion, and cap long track lists at 50 rows.
+- Fixed hydration drift from reading pinned playlists during render, a cache-progress effect that could cancel itself and remain stuck, and review shortcuts firing a second action when Enter was pressed on a focused control.
+- Long browser-job listeners now abort when their component unmounts, and remote artwork lazy-loads with a real fallback instead of leaving broken thumbnails.
+- Deleted the unused `ServiceCard`/`ServiceStatusRow`, mock-in-disguise YouTube/SoundCloud adapter shells, and the SoundCloud OAuth routes that reported success without persisting credentials. SoundCloud now resolves explicitly to browser automation or mock mode.
+- Login now normalizes email case, performs constant-work password verification for unknown accounts, rate-limits IP and account attempts before bcrypt, and uses correct 303 redirects. Production rejects weak JWT secrets, deleted users lose authorization immediately, and bcrypt-overlong passwords are rejected.
+- Spotify OAuth no longer falls back to another admin when the authenticated user is gone; malformed/time-limited provider responses return to Connections without storing credentials, and failed state cookies are cleared.
+- Auth redirects now use `APP_URL` (or the request URL) instead of trusting `Host` headers, and browser-session uploads reject oversized bodies by declared and actual UTF-8 byte size.
+- YouTube add duplicate detection no longer treats an equal/generic title from a different artist as the same track; source ID, ISRC, artist-aware title evidence, or an artist-and-title query is required.
+- Partial YouTube/SoundCloud track reads no longer overwrite complete snapshots, browser write routes verify playlist ownership before invoking runners, and incomplete provider playlist enumeration no longer cascades into cached-row deletion.
+- `ADD_AND_REMOVE` now compares canonical destination `ServiceTrack` IDs, so a valid cross-service match cannot be added and immediately removed because provider IDs differ. Complete external-search failure now fails the job instead of masquerading as “not found”.
+- Browser runners clear successful timeout timers, reject promptly on timeout, use exact playlist-dialog title matching, and refuse SoundCloud whole-playlist PUT fallback from a partial track ID list.
+- The UI harness now exercises modal/popover focus, keyboard tabs, mutation-safe review shortcuts, open disclosures at 320px, and 844x390 landscape layouts.
+
 Structure pass — task-first page layouts:
 
 - The shell now keeps global health/sign-out in navigation, leaving page headers for page context and one local action. Primary mobile navigation remains five items with safe-area spacing.
@@ -240,7 +257,7 @@ Browser verification:
 
 UI verification (`scripts/ui-check.mjs`, needs `npm run dev` and `ADMIN_*` in `.env`):
 
-- `npm run ui:shots` — screenshots every page at 1440 and 390 into `.design-audit/`, and fails on horizontal overflow, console errors or 4xx/5xx. Clean.
+- `npm run ui:shots` — screenshots every page at 1440 and 390 into `.design-audit/`; also checks open disclosures at 320 and every route at 844x390 landscape, failing on horizontal overflow, console errors or 4xx/5xx. Clean.
 - `npm run ui:smoke` — walks every page, checks sidebar reachability and every internal link, then clicks buttons. Clean.
 - **`ui:smoke` used to click mutating buttons.** It guarded itself with a blacklist of labels (`delete|accept|reject|refresh|…`), which fails open: `Use` and `Skip` on `/manual-match` were not on it, so a smoke run resolved real review items — 30 `TrackMatch` rows and 37 negative-cache entries, draining the pending queue to zero. It is now an allowlist of UI-only labels; anything unrecognised is skipped and printed under `not clicked:` so the coverage gap is visible instead of silent. It also re-queries each button before clicking, because a click that re-renders the list detached the handles it had captured and reported that as a failure.
 

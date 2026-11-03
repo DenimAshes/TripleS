@@ -33,6 +33,7 @@ Set these in Vercel for Production and Preview:
 ```txt
 DATABASE_URL
 DIRECT_URL
+APP_URL
 ADMIN_EMAIL
 ADMIN_PASSWORD
 JWT_SECRET

@@ -23,7 +23,7 @@ export function PlaylistDiagnosticsCard({ playlist, activeStates }: { playlist: 
       <div className="mb-6 flex flex-wrap items-center gap-2 text-xs text-muted-fg">
         <span className="pill pill-success max-w-full whitespace-normal">
           <CheckCircle2 size={12} />
-          Cache complete · {activeStates} tracks · scanned {formatRelative(playlist.lastFetchedAt)}
+          Cache complete · {activeStates} {activeStates === 1 ? "track" : "tracks"} · scanned {formatRelative(playlist.lastFetchedAt)}
         </span>
       </div>
     );

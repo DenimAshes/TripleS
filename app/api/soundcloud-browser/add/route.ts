@@ -3,13 +3,14 @@ import { requireAuth } from "@/lib/auth/session";
 import { addSoundCloudTrackToPlaylistCli } from "@/lib/services/soundcloud/soundCloudBrowserCli";
 import { invalidateSoundCloudPlaylistTracks } from "@/lib/services/soundcloud/soundcloudCache";
 import { BrowserLabRequestError, parseSoundCloudTrackRequest } from "@/lib/services/browserLabRequest";
+import { browserPlaylistOwnedByUser } from "@/lib/services/browserPlaylistOwnership";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  await requireAuth(request);
+  const session = await requireAuth(request);
   const body = await request.json().catch(() => ({}));
   let input: ReturnType<typeof parseSoundCloudTrackRequest>;
   try {
@@ -19,6 +20,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     throw error;
+  }
+  if (!await browserPlaylistOwnedByUser(session.userId, "SOUNDCLOUD", input.playlistId)) {
+    return NextResponse.json({ error: "Playlist not found" }, { status: 404 });
   }
 
   try {

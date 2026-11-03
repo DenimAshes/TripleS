@@ -145,7 +145,9 @@ export default async function SettingsPage({
                           <ServiceIcon key={member.id} service={member.service} size="sm" className="h-5 w-5" />
                         ))}
                       </span>
-                      <span className="text-xs text-dim-fg">{activeSources}/{groupRules.length} sources on</span>
+                      <span className="text-xs text-dim-fg">
+                        {activeSources}/{groupRules.length} {groupRules.length === 1 ? "source" : "sources"} on
+                      </span>
                     </span>
                   </Link>
                 );
@@ -163,11 +165,11 @@ export default async function SettingsPage({
             <div className="grid grid-cols-2 border-t border-line-soft text-center text-xs text-muted-fg">
               <div className="border-r border-line-soft px-3 py-3">
                 <strong className="block text-base font-semibold tabular-nums text-[var(--text)]">{groups.length}</strong>
-                groups
+                {groups.length === 1 ? "group" : "groups"}
               </div>
               <div className="px-3 py-3">
                 <strong className="block text-base font-semibold tabular-nums text-[var(--text)]">{enabledGroupSources}</strong>
-                active sources
+                active {enabledGroupSources === 1 ? "source" : "sources"}
               </div>
             </div>
           </section>
@@ -210,7 +212,7 @@ export default async function SettingsPage({
                 <div className="eyebrow text-muted-fg">Playlist group</div>
                 <h2 className="heading-card mt-1 truncate">{selectedGroup.name}</h2>
                 <p className="mt-1 text-sm text-muted-fg">
-                  {selectedGroup.members.length} platforms · {selectedGroupRules.filter((rule) => rule.isEnabled).length} can send changes
+                  {selectedGroup.members.length} {selectedGroup.members.length === 1 ? "platform" : "platforms"} · {selectedGroupRules.filter((rule) => rule.isEnabled).length} can send changes
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -261,7 +263,9 @@ export default async function SettingsPage({
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-fg"><ServiceIcon service={member.service} size="sm" className="h-4 w-4" /> {meta.shortLabel}</div>
                           <Link href={`/playlists/${playlist.id}`} title={playlist.name} className="mt-1 flex min-h-8 items-center truncate text-sm font-semibold text-[var(--text)] hover:text-[var(--accent-fg)]">{playlist.name}</Link>
-                          <div className="mt-0.5 text-xs text-dim-fg">{playlist.trackCount} songs</div>
+                          <div className="mt-0.5 text-xs text-dim-fg">
+                            {playlist.trackCount} {playlist.trackCount === 1 ? "song" : "songs"}
+                          </div>
                           {latestJob && latestJob.status !== "SUCCESS" ? <div className="mt-1.5"><StatusBadge status={latestJob.status.toLowerCase()} /></div> : null}
                         </div>
                       </div>

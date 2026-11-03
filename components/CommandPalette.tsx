@@ -118,6 +118,7 @@ export function CommandPalette() {
       const meta = event.metaKey || event.ctrlKey;
       if (meta && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        if (!open && document.querySelector('[aria-modal="true"]')) return;
         setOpen((value) => {
           if (value) {
             setQuery("");
@@ -193,6 +194,12 @@ export function CommandPalette() {
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       setActiveIndex((idx) => Math.max(0, idx - 1));
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setActiveIndex(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setActiveIndex(Math.max(0, filtered.length - 1));
     } else if (event.key === "Enter") {
       event.preventDefault();
       const item = filtered[activeIndex];
@@ -206,6 +213,9 @@ export function CommandPalette() {
         ref={triggerRef}
         type="button"
         onClick={openPalette}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? "command-palette-dialog" : undefined}
         className="surface-lift group hidden items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border-soft)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-medium text-muted-fg transition hover:border-[var(--border)] hover:text-[var(--text)] sm:inline-flex"
         title="Open command palette"
       >
@@ -220,6 +230,7 @@ export function CommandPalette() {
       {open ? (
         <div
           role="dialog"
+          id="command-palette-dialog"
           aria-modal="true"
           aria-label="Quick jump"
           className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh] sm:pt-[18vh]"
@@ -242,7 +253,12 @@ export function CommandPalette() {
                 ref={inputRef}
                 type="search"
                 name="commandSearch"
+                role="combobox"
                 aria-label="Search commands"
+                aria-autocomplete="list"
+                aria-expanded="true"
+                aria-controls="command-listbox"
+                aria-activedescendant={filtered[activeIndex] ? `command-option-${filtered[activeIndex].id}` : undefined}
                 autoComplete="off"
                 spellCheck={false}
                 value={query}
@@ -257,7 +273,7 @@ export function CommandPalette() {
               <kbd className="kbd select-none">Esc</kbd>
             </div>
 
-            <div ref={listRef} className="max-h-[55vh] overflow-y-auto p-2">
+            <div id="command-listbox" ref={listRef} role="listbox" aria-label="Commands" className="max-h-[55vh] overflow-y-auto p-2">
               {filtered.length === 0 ? (
                 <div className="px-3 py-8 text-center text-sm text-muted-fg">
                   Nothing matches <span className="font-semibold text-[var(--text)]">&ldquo;{query}&rdquo;</span>.
@@ -303,7 +319,7 @@ function renderGroups(items: CommandItem[], activeIndex: number, run: (item: Com
     groups.get(item.group)!.push({ item, index });
   });
   return Array.from(groups.entries()).map(([group, entries]) => (
-    <div key={group} className="mb-1 last:mb-0">
+    <div key={group} role="group" aria-label={group} className="mb-1 last:mb-0">
       <div className="eyebrow px-3 pb-1 pt-2 text-muted-fg">{group}</div>
       <div className="space-y-0.5">
         {entries.map(({ item, index }) => {
@@ -311,7 +327,11 @@ function renderGroups(items: CommandItem[], activeIndex: number, run: (item: Com
           return (
             <button
               key={item.id}
+              id={`command-option-${item.id}`}
               type="button"
+              role="option"
+              aria-selected={active}
+              tabIndex={-1}
               data-cmd-index={index}
               onMouseEnter={() => setActiveIndex(index)}
               onClick={() => run(item)}

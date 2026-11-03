@@ -8,10 +8,13 @@ export default async function SoundCloudBrowserPage() {
   const playlists = session
     ? await getCachedSoundCloudPlaylists(session.userId)
     : { playlists: [], lastSyncedAt: null, fromCache: true, isStale: true };
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
 
   return (
     <AppShell title="SoundCloud" description="Read, search and edit sets through the saved browser session.">
       <SoundCloudBrowserLab
+        nowMs={nowMs}
         initialPlaylists={{
           playlists: playlists.playlists,
           lastSyncedAt: playlists.lastSyncedAt?.toISOString() || null,

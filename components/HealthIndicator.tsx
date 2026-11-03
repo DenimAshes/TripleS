@@ -13,13 +13,15 @@ export function HealthIndicator() {
   const [detail, setDetail] = useState<string>("Checking…");
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    let requestInFlight = false;
 
     async function tick() {
+      if (requestInFlight) return;
+      requestInFlight = true;
       try {
-        const res = await fetch("/api/health", { cache: "no-store" });
+        const res = await fetch("/api/health", { cache: "no-store", signal: controller.signal });
         const data = await res.json();
-        if (cancelled) return;
         if (!res.ok || !data.ok) {
           setHealth("fail");
           setDetail(data?.checks?.db?.error || `HTTP ${res.status}`);
@@ -35,16 +37,18 @@ export function HealthIndicator() {
         setHealth("ok");
         setDetail(`DB ${dbLatency != null ? `${dbLatency}ms` : "OK"}`);
       } catch (error) {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setHealth("fail");
         setDetail(error instanceof Error ? error.message : "fetch failed");
+      } finally {
+        requestInFlight = false;
       }
     }
 
     tick();
     const id = window.setInterval(tick, 60_000);
     return () => {
-      cancelled = true;
+      controller.abort();
       window.clearInterval(id);
     };
   }, []);
@@ -78,7 +82,7 @@ export function HealthIndicator() {
         <span className={`absolute -inset-1 rounded-full ${color} opacity-20`} />
         <span className={`relative inline-flex h-2 w-2 rounded-full ${color}`} />
       </span>
-      <span className="sr-only">{label}. {detail}</span>
+      <span className="sr-only">{label}{health === "ok" ? "." : `. ${detail}`}</span>
       <span aria-hidden="true" className="hidden sm:inline">{label}</span>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronUp, Clock3 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { StatusBadge } from "./StatusBadge";
 
 type HistoryJob = {
@@ -31,7 +31,8 @@ function formatDuration(ms: number | null): string {
   if (ms == null) return "-";
   if (ms < 1_000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+  const totalSeconds = Math.round(ms / 1000);
+  return `${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s`;
 }
 
 // Inline run-history block for a SyncRule. Lazy-loads on first expand so the
@@ -41,44 +42,53 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
   const [jobs, setJobs] = useState<HistoryJob[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [nowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const loadedRuleRef = useRef<string | null>(null);
+  const panelId = useId();
 
   useEffect(() => {
     if (!open) return;
-    let aborted = false;
+    const controller = new AbortController();
+    let requestInFlight = false;
 
     async function load(showSpinner: boolean) {
+      if (requestInFlight) return;
+      requestInFlight = true;
       if (showSpinner) setLoading(true);
       try {
-        const res = await fetch(`/api/sync-rules/${ruleId}/history`);
+        const res = await fetch(`/api/sync-rules/${ruleId}/history`, { signal: controller.signal });
         if (!res.ok) {
           throw new Error((await res.json().catch(() => null))?.error || `Failed (${res.status})`);
         }
         const data = await res.json();
-        if (aborted) return;
         setJobs(Array.isArray(data.jobs) ? data.jobs : []);
+        loadedRuleRef.current = ruleId;
+        setNowMs(Date.now());
         setError(null);
       } catch (err) {
-        if (aborted) return;
+        if (controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : "Could not load history");
       } finally {
-        if (!aborted && showSpinner) setLoading(false);
+        requestInFlight = false;
+        if (!controller.signal.aborted && showSpinner) setLoading(false);
       }
     }
 
-    if (jobs === null) void load(true);
+    if (loadedRuleRef.current !== ruleId) void load(true);
     const id = window.setInterval(() => void load(false), 10_000);
     return () => {
-      aborted = true;
+      controller.abort();
       window.clearInterval(id);
     };
-  }, [open, jobs, ruleId]);
+  }, [open, ruleId]);
 
   return (
     <div className="mt-4 border-t border-[var(--border-soft)] pt-3">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
         className="inline-flex min-h-8 items-center gap-1.5 text-xs font-medium text-muted-fg transition hover:text-[var(--text)]"
       >
         <Clock3 size={12} />
@@ -86,7 +96,7 @@ export function SyncRuleHistory({ ruleId }: { ruleId: string }) {
         {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
       </button>
       {open ? (
-        <div className="rows mt-2">
+        <div id={panelId} className="rows mt-2">
           {loading ? <div role="status" aria-live="polite" className="text-xs text-dim-fg">Loading…</div> : null}
           {error ? <div role="alert" className="text-xs text-danger-fg">{error}</div> : null}
           {jobs && jobs.length === 0 ? (

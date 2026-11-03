@@ -91,9 +91,9 @@ export default async function PlaylistsPage({
     >
       <PlaylistsAutoRefresh hasPlaylists={playlistOptions.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
       <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line-soft pb-4 text-sm text-muted-fg">
-        <span><strong className="font-semibold tabular-nums text-[var(--text)]">{visibleTotal}</strong> playlists</span>
-        <span><strong className="font-semibold tabular-nums text-[var(--text)]">{NUMBER.format(trackTotal)}</strong> songs</span>
-        <span><strong className="font-semibold tabular-nums text-[var(--text)]">{enabledRules}</strong> active copies</span>
+        <span><strong className="font-semibold tabular-nums text-[var(--text)]">{visibleTotal}</strong> {visibleTotal === 1 ? "playlist" : "playlists"}</span>
+        <span><strong className="font-semibold tabular-nums text-[var(--text)]">{NUMBER.format(trackTotal)}</strong> {trackTotal === 1 ? "song" : "songs"}</span>
+        <span><strong className="font-semibold tabular-nums text-[var(--text)]">{enabledRules}</strong> active {enabledRules === 1 ? "copy" : "copies"}</span>
       </div>
       <PlaylistSyncSelector
         playlists={playlistOptions}

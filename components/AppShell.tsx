@@ -35,7 +35,7 @@ export function AppShell({
       <AppSidebar />
       <main id="main-content" tabIndex={-1} className="relative w-full min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">
         <div className="flex h-14 items-center justify-between border-b border-line-soft bg-[var(--sidebar)] px-4 md:hidden">
-          <Link href="/dashboard" className="flex items-center gap-2.5" aria-label="TripleS home">
+          <Link href="/dashboard" className="flex min-h-11 items-center gap-2.5" aria-label="TripleS home">
             <TripleSMark size="sm" />
             <span translate="no" className="text-sm font-semibold tracking-[-0.02em]">TripleS</span>
           </Link>
@@ -45,7 +45,7 @@ export function AppShell({
           <header className="mb-7 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-b border-line-soft pb-5 md:mb-8">
             <div className="min-w-0 flex-1">
               {backHref ? (
-                <Link href={backHref} className="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-muted-fg transition-colors hover:text-[var(--text)]">
+                <Link href={backHref} className="mb-2 inline-flex min-h-11 items-center gap-1.5 text-xs font-medium text-muted-fg transition-colors hover:text-[var(--text)] md:min-h-8">
                   <ArrowLeft size={13} />
                   {backLabel}
                 </Link>

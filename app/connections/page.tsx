@@ -1,15 +1,15 @@
-import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Clock3, KeyRound, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { Callout } from "@/components/Callout";
 import { ServiceConnectionCard } from "@/components/ServiceConnectionCard";
 import { serviceMeta } from "@/components/ServiceBrand";
 import { SessionUploader } from "@/components/SessionUploader";
 import { SpotifyOAuthSetup } from "@/components/SpotifyOAuthSetup";
 import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
-import { hasSpotifyCredentials, validateSpotifyRedirectUri } from "@/lib/services/spotify/spotifyAuth";
+import { getSpotifyRedirectUri, hasSpotifyCredentials, validateSpotifyRedirectUri } from "@/lib/services/spotify/spotifyAuth";
 import { getSpotifyWebCookie } from "@/lib/services/spotify/spotifyCookieStore";
 import {
   hasUsableStoredSession,
@@ -27,9 +27,14 @@ function browserRoute(service: string): string {
   return service.toLowerCase() === "soundcloud" ? "/soundcloud-browser" : "/youtube-browser";
 }
 
-export default async function ConnectionsPage() {
+export default async function ConnectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ spotify_error?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect("/login");
+  const params = await searchParams;
 
   const [rows, spotifyAccount] = await Promise.all([
     prisma.workerSessionState.findMany({
@@ -40,11 +45,7 @@ export default async function ConnectionsPage() {
     }),
   ]);
 
-  const hdrs = await headers();
-  const host = hdrs.get("x-forwarded-host") || hdrs.get("host") || "";
-  const proto = hdrs.get("x-forwarded-proto") || "https";
-  const fallbackRedirect = host ? `${proto}://${host}/api/oauth/spotify/callback` : "";
-  const redirectUri = process.env.SPOTIFY_REDIRECT_URI || fallbackRedirect || "http://127.0.0.1:3000/api/oauth/spotify/callback";
+  const redirectUri = getSpotifyRedirectUri();
   const redirectValidation = process.env.SPOTIFY_REDIRECT_URI ? validateSpotifyRedirectUri() : { ok: true, error: null };
 
   const byService = new Map(rows.map((row) => [row.service, row]));
@@ -96,12 +97,21 @@ export default async function ConnectionsPage() {
 
   const nextTask = setupTasks.find((task) => task.tone !== "success") ?? null;
   const readyCount = setupTasks.filter((task) => task.tone === "success").length;
+  // Server-rendered once and serialized into each client uploader to keep
+  // relative timestamps identical during hydration.
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
 
   return (
     <AppShell
       title="Connections"
       description="Spotify signs in with OAuth. YouTube Music and SoundCloud work through a saved browser session."
     >
+      {params.spotify_error ? (
+        <Callout tone="danger" role="alert" className="mb-5" title="Spotify connection failed">
+          {params.spotify_error}
+        </Callout>
+      ) : null}
       <section className="workbench overflow-hidden" aria-labelledby="connection-progress-heading">
         <div className="workbench-header">
           <div>
@@ -115,7 +125,10 @@ export default async function ConnectionsPage() {
             {setupTasks.map((task) => (
               <div key={task.service} className="min-w-0 flex-1">
                 <div className={`h-1.5 rounded-full ${task.tone === "success" ? "bg-success" : "bg-warning"}`} />
-                <div className="mt-2 truncate text-xs text-muted-fg">{serviceMeta(task.service).shortLabel}: {task.status}</div>
+                <div className="mt-2 min-w-0 text-xs leading-4 text-muted-fg">
+                  <span className="block truncate font-medium text-[var(--text)]">{serviceMeta(task.service).shortLabel}</span>
+                  <span className="block truncate">{task.status}</span>
+                </div>
               </div>
             ))}
           </div>
@@ -164,7 +177,7 @@ export default async function ConnectionsPage() {
           </ServiceConnectionCard>
 
           {browserSessions.map((item) => (
-            <SessionUploader key={item.service} cardId={`connection-${item.service.toLowerCase()}`} initial={item} />
+            <SessionUploader key={item.service} cardId={`connection-${item.service.toLowerCase()}`} initial={item} nowMs={nowMs} />
           ))}
         </div>
       </section>

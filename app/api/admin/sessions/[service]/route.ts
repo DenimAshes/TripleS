@@ -50,8 +50,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ serv
   const { service } = await params;
   if (!isSessionService(service)) return NextResponse.json({ error: "UNKNOWN_SERVICE" }, { status: 400 });
 
+  const declaredBytes = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredBytes) && declaredBytes > MAX_STATE_BYTES) {
+    return NextResponse.json({ error: "TOO_LARGE", limit: MAX_STATE_BYTES }, { status: 413 });
+  }
   const raw = await request.text();
-  if (raw.length > MAX_STATE_BYTES) return NextResponse.json({ error: "TOO_LARGE", limit: MAX_STATE_BYTES }, { status: 413 });
+  if (Buffer.byteLength(raw, "utf8") > MAX_STATE_BYTES) {
+    return NextResponse.json({ error: "TOO_LARGE", limit: MAX_STATE_BYTES }, { status: 413 });
+  }
 
   let parsed: unknown;
   try {

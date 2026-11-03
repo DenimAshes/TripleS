@@ -2,8 +2,8 @@ import "./_runnerGuard";
 import fs from "node:fs";
 import { type BrowserContext, type Locator, type Page } from "playwright";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
+import { isDuplicateYouTubeTrack } from "@/lib/services/youtube/youtubeDuplicate";
 import { findYouTubePlaylistByName } from "@/lib/services/youtube/youtubePlaylistName";
-import { normalizeArtist, normalizeTitle } from "@/lib/utils/normalizeTrack";
 import { openWorkerBrowser, saveStorageState } from "../browserSession";
 import { debugArtifactPath, SERVICE_URLS } from "../config";
 import { humanDwell, humanHoverClick, sleep } from "../sleep";
@@ -42,14 +42,15 @@ async function withContext<T>(
 ): Promise<T> {
   let abortCleanup: (() => Promise<void>) | null = null;
   let timedOut = false;
+  let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
 
   const timeoutPromise = new Promise<never>((_, reject) => {
-    const timer = setTimeout(async () => {
+    timeoutTimer = setTimeout(() => {
       timedOut = true;
-      if (abortCleanup) await abortCleanup().catch(() => {});
       reject(new Error(`YouTube runner timed out after ${RUNNER_TIMEOUT_MS}ms`));
+      if (abortCleanup) void abortCleanup().catch(() => {});
     }, RUNNER_TIMEOUT_MS);
-    (timer as { unref?: () => void }).unref?.();
+    (timeoutTimer as { unref?: () => void }).unref?.();
   });
 
   const run = async () => {
@@ -83,7 +84,11 @@ async function withContext<T>(
     }
   };
 
-  return Promise.race([run(), timeoutPromise]);
+  try {
+    return await Promise.race([run(), timeoutPromise]);
+  } finally {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+  }
 }
 
 function sanitizeDebugLabel(label: string): string {
@@ -756,27 +761,6 @@ export async function addFirstSearchResultToPlaylist(query: string, playlistName
   });
 }
 
-function words(value: string): string[] {
-  return value.split(/\s+/).filter((word) => word.length > 2);
-}
-
-function isDuplicateTrack(candidate: NormalizedTrack, playlistTrack: NormalizedTrack, query?: string): boolean {
-  if (candidate.sourceTrackId && candidate.sourceTrackId === playlistTrack.sourceTrackId) return true;
-  if (candidate.isrc && candidate.isrc === playlistTrack.isrc) return true;
-
-  const candidateTitle = normalizeTitle(candidate.title);
-  const playlistTitle = normalizeTitle(playlistTrack.title);
-  const candidateArtist = normalizeArtist(candidate.artists[0] || "");
-  const playlistArtist = normalizeArtist(playlistTrack.artists[0] || "");
-  const normalizedQuery = normalizeTitle(query || "");
-
-  if (playlistTitle && candidateTitle.includes(playlistTitle)) return true;
-  if (playlistTitle && normalizedQuery.includes(playlistTitle)) return true;
-  if (playlistTitle && words(playlistTitle).length >= 2 && words(playlistTitle).every((word) => normalizedQuery.includes(word))) return true;
-
-  return Boolean(candidateTitle && playlistTitle && candidateTitle === playlistTitle && candidateArtist && playlistArtist && candidateArtist === playlistArtist);
-}
-
 export async function addFirstSearchResultToPlaylistIfMissing(query: string, playlistNameOrId: string): Promise<{ added: boolean; duplicate?: NormalizedTrack }> {
   const candidates = await searchYouTubeTracks(query);
   const candidate = candidates[0];
@@ -784,7 +768,7 @@ export async function addFirstSearchResultToPlaylistIfMissing(query: string, pla
 
   if (/^PL[A-Za-z0-9_-]+$/.test(playlistNameOrId)) {
     const playlistTracks = await listYouTubePlaylistTracks(playlistNameOrId);
-    const duplicate = playlistTracks.find((track) => isDuplicateTrack(candidate, track, query));
+    const duplicate = playlistTracks.find((track) => isDuplicateYouTubeTrack(candidate, track, query));
     if (duplicate) return { added: false, duplicate };
   }
 
@@ -887,6 +871,7 @@ async function main() {
     } else {
       console.log(`[yt:add] Already in playlist: ${result.duplicate?.title || query}`);
     }
+    console.log(JSON.stringify(result));
     return;
   }
 

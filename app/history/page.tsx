@@ -171,7 +171,7 @@ export default async function HistoryPage({
               >
                 <span className={active ? "text-[var(--accent)]" : "text-dim-fg"}>{filter.icon}</span>
                 {filter.label}
-                <span className="rounded-[var(--radius-sm)] bg-surface-3 px-1.5 py-0.5 text-xs tabular-nums">{filter.count}</span>
+                <span className="rounded-[var(--radius-sm)] bg-surface-3 px-1.5 py-0.5 text-xs tabular-nums">{NUMBER.format(filter.count)}</span>
               </Link>
             );
           })}
@@ -208,7 +208,7 @@ export default async function HistoryPage({
           {page > 1 ? (
             <Link href={activityHref(view, page - 1)} className="btn btn-ghost"><ChevronLeft size={15} /> Newer</Link>
           ) : <span />}
-          <span className="text-xs text-muted-fg">Page {page}</span>
+          <span className="text-xs text-muted-fg">Page {NUMBER.format(page)}</span>
           {hasNext ? (
             <Link href={activityHref(view, page + 1)} className="btn btn-ghost">Older <ChevronRight size={15} /></Link>
           ) : <span />}

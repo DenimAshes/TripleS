@@ -15,12 +15,29 @@ export type YouTubeTrackRefreshJob = {
 
 const jobs = new Map<string, YouTubeTrackRefreshJob>();
 const runningByPlaylist = new Map<string, string>();
+const FINISHED_JOB_TTL_MS = 60 * 60 * 1000;
+const MAX_RETAINED_JOBS = 200;
+
+function pruneJobs(now = Date.now()) {
+  for (const [id, job] of jobs) {
+    if (job.finishedAt && now - job.finishedAt.getTime() > FINISHED_JOB_TTL_MS) jobs.delete(id);
+  }
+  if (jobs.size <= MAX_RETAINED_JOBS) return;
+  const finished = Array.from(jobs.values())
+    .filter((job) => job.finishedAt)
+    .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+  for (const job of finished) {
+    if (jobs.size <= MAX_RETAINED_JOBS) break;
+    jobs.delete(job.id);
+  }
+}
 
 function jobKey(userId: string, playlistId: string) {
   return `${userId}:${playlistId}`;
 }
 
 export function getYouTubeTrackRefreshJob(userId: string, playlistId: string): YouTubeTrackRefreshJob | null {
+  pruneJobs();
   const runningId = runningByPlaylist.get(jobKey(userId, playlistId));
   if (runningId) return jobs.get(runningId) || null;
 
@@ -31,6 +48,7 @@ export function getYouTubeTrackRefreshJob(userId: string, playlistId: string): Y
 }
 
 export function startYouTubeTrackRefreshJob(userId: string, playlistId: string): YouTubeTrackRefreshJob {
+  pruneJobs();
   const key = jobKey(userId, playlistId);
   const runningId = runningByPlaylist.get(key);
   const running = runningId ? jobs.get(runningId) : null;

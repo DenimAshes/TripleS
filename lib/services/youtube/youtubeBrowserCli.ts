@@ -1,6 +1,6 @@
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
-import { normalizeArtist, normalizeTitle } from "@/lib/utils/normalizeTrack";
 import { runBrowserRunnerCli } from "../browserRunnerCli";
+import { isDuplicateYouTubeTrack } from "./youtubeDuplicate";
 
 export type YtPlaylist = {
   id: string;
@@ -39,6 +39,13 @@ function parseJsonArray<T>(stdout: string): T[] {
 }
 
 function parseJsonObject<T>(stdout: string): T {
+  for (const line of stdout.split(/\r?\n/).reverse()) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) continue;
+    try {
+      return JSON.parse(trimmed) as T;
+    } catch {}
+  }
   const start = stdout.indexOf("{");
   const end = stdout.lastIndexOf("}");
   if (start < 0 || end < start) throw new Error(`Could not parse YouTube runner output: ${stdout.slice(0, 500)}`);
@@ -66,30 +73,9 @@ export async function deleteYouTubePlaylistCli(playlistId: string): Promise<{ de
   return parseJsonObject<{ deleted: boolean }>(await runYt(["delete", playlistId]));
 }
 
-function words(value: string) {
-  return value.split(/\s+/).filter((word) => word.length > 2);
-}
-
-function isDuplicateTrack(candidate: NormalizedTrack, playlistTrack: NormalizedTrack, query?: string) {
-  if (candidate.sourceTrackId && candidate.sourceTrackId === playlistTrack.sourceTrackId) return true;
-  if (candidate.isrc && candidate.isrc === playlistTrack.isrc) return true;
-
-  const candidateTitle = normalizeTitle(candidate.title);
-  const playlistTitle = normalizeTitle(playlistTrack.title);
-  const candidateArtist = normalizeArtist(candidate.artists[0] || "");
-  const playlistArtist = normalizeArtist(playlistTrack.artists[0] || "");
-  const normalizedQuery = normalizeTitle(query || "");
-
-  if (playlistTitle && candidateTitle.includes(playlistTitle)) return true;
-  if (playlistTitle && normalizedQuery.includes(playlistTitle)) return true;
-  if (playlistTitle && words(playlistTitle).length >= 2 && words(playlistTitle).every((word) => normalizedQuery.includes(word))) return true;
-
-  return Boolean(candidateTitle && playlistTitle && candidateTitle === playlistTitle && candidateArtist && playlistArtist && candidateArtist === playlistArtist);
-}
-
 export async function findYouTubeDuplicateInPlaylistCli(playlistId: string, track: NormalizedTrack, query?: string): Promise<NormalizedTrack | null> {
   const playlistTracks = await listYouTubePlaylistTracksCli(playlistId);
-  return playlistTracks.find((playlistTrack) => isDuplicateTrack(track, playlistTrack, query)) || null;
+  return playlistTracks.find((playlistTrack) => isDuplicateYouTubeTrack(track, playlistTrack, query)) || null;
 }
 
 export async function addFirstSearchResultToPlaylistCli(playlistId: string, query: string): Promise<{ added: boolean; duplicate?: NormalizedTrack }> {
@@ -100,8 +86,7 @@ export async function addFirstSearchResultToPlaylistCli(playlistId: string, quer
   const duplicate = await findYouTubeDuplicateInPlaylistCli(playlistId, candidate, query);
   if (duplicate) return { added: false, duplicate };
 
-  await runYt(["add", playlistId, query]);
-  return { added: true };
+  return parseJsonObject<{ added: boolean; duplicate?: NormalizedTrack }>(await runYt(["add", playlistId, query]));
 }
 
 export async function removeTrackFromPlaylistCli(playlistId: string, trackText: string): Promise<void> {

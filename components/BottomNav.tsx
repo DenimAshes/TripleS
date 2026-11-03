@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Clock3,
   Gauge,
@@ -40,31 +40,66 @@ export function BottomNav() {
   const [openFor, setOpenFor] = useState<string | null>(null);
   const open = openFor !== null && openFor === pathname;
   const setOpen = (next: boolean) => setOpenFor(next ? pathname : null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const restoreFocusRef = useRef(true);
 
   useEffect(() => {
     if (!open) return;
+    restoreFocusRef.current = true;
+    const previousOverflow = document.body.style.overflow;
+    const moreButton = moreButtonRef.current;
+    document.body.style.overflow = "hidden";
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpenFor(null);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLElement>('button:not([tabindex="-1"]), a[href]')?.focus());
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+      if (restoreFocusRef.current) moreButton?.focus();
+    };
   }, [open]);
+
+  function trapFocus(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Tab") return;
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]):not([tabindex="-1"])');
+    if (!focusable?.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 
   const moreActive = MORE.some((item) => isActivePath(pathname, item.href));
 
   return (
     <>
       {open ? (
-        <div className="fixed inset-0 z-30 md:hidden">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-more-title"
+          onKeyDown={trapFocus}
+          className="fixed inset-0 z-30 md:hidden"
+        >
           <button
             type="button"
             aria-label="Close menu"
             onClick={() => setOpen(false)}
+            tabIndex={-1}
             className="absolute inset-0 bg-[var(--scrim)]"
           />
           <nav
             id="mobile-more-menu"
-            aria-labelledby="mobile-more-title"
+            aria-label="More pages"
             className="absolute inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] mx-3 overflow-hidden overscroll-contain rounded-[var(--radius)] border border-line-soft bg-[var(--surface)]"
           >
             <div className="panel-header flex items-center justify-between">
@@ -80,6 +115,11 @@ export function BottomNav() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      onClick={() => {
+                        restoreFocusRef.current = false;
+                        setOpen(false);
+                      }}
                       className={`flex min-h-11 items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm ${
                         active ? "bg-surface-2 font-medium text-[var(--text)]" : "text-muted-fg"
                       }`}
@@ -121,10 +161,11 @@ export function BottomNav() {
           );
         })}
         <button
+          ref={moreButtonRef}
           type="button"
           onClick={() => setOpen(!open)}
           aria-expanded={open}
-          aria-controls="mobile-more-menu"
+          aria-controls={open ? "mobile-more-menu" : undefined}
           className={`flex h-16 flex-col items-center justify-center gap-1 text-xs ${
             open || moreActive ? "text-accent" : "text-muted-fg"
           }`}

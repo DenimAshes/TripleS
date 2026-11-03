@@ -370,6 +370,8 @@ export async function findMatch(
   const structuredArtist = normalizeArtist(inferred?.artist || splitArtists(sourceTrack.artists)[0] || "");
   const pool = new Map<string, NormalizedTrack>();
   let searchHadFailure = false;
+  let successfulSearches = 0;
+  let firstSearchError: unknown = null;
   for (const candidate of localCandidates) {
     pool.set(trackKey(candidate), candidate);
   }
@@ -388,10 +390,16 @@ export async function findMatch(
             artist: i === 0 ? structuredArtist : undefined,
           }),
           SEARCH_TIMEOUT_MS,
-        ).catch(() => {
-          searchHadFailure = true;
-          return [] as NormalizedTrack[];
-        });
+        )
+          .then((tracks) => {
+            successfulSearches += 1;
+            return tracks;
+          })
+          .catch((error) => {
+            searchHadFailure = true;
+            firstSearchError ??= error;
+            return [] as NormalizedTrack[];
+          });
       }),
     );
     for (const candidates of results) {
@@ -404,6 +412,10 @@ export async function findMatch(
     const top = ranked[0];
     if (top && (!best || top.confidence > best.confidence)) best = top;
     if (best && best.confidence >= EARLY_EXIT_CONFIDENCE) break;
+  }
+
+  if (searchHadFailure && successfulSearches === 0) {
+    throw firstSearchError instanceof Error ? firstSearchError : new Error("Every destination search attempt failed.");
   }
 
   const ranked = rankCandidates(sourceTrack, Array.from(pool.values()));

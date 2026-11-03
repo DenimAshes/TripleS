@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { writePlaylistSnapshot } from "@/lib/sync/snapshot";
+import { isReadComplete, writePlaylistSnapshot } from "@/lib/sync/snapshot";
 import type { NormalizedTrack } from "@/lib/sync/syncTypes";
 import {
   listSoundCloudPlaylistTracksCli,
@@ -82,11 +82,16 @@ export async function refreshSoundCloudPlaylists(userId: string): Promise<Cached
   const now = new Date();
 
   try {
+    const owners = new Map((await prisma.playlist.findMany({
+      where: { service: SERVICE, servicePlaylistId: { in: live.map((item) => item.id) } },
+      select: { servicePlaylistId: true, userId: true },
+    })).map((playlist) => [playlist.servicePlaylistId, playlist.userId]));
     for (const item of live) {
+      const owner = owners.get(item.id);
+      if (owner && owner !== userId) throw new Error(`SoundCloud playlist ${item.id} is already owned by another app user.`);
       await prisma.playlist.upsert({
         where: { service_servicePlaylistId: { service: SERVICE, servicePlaylistId: item.id } },
         update: {
-          userId,
           name: item.name,
           imageUrl: item.imageUrl,
           trackCount: item.trackCount,
@@ -104,14 +109,8 @@ export async function refreshSoundCloudPlaylists(userId: string): Promise<Cached
       });
     }
 
-    const liveIds = new Set(live.map((playlist) => playlist.id));
-    const stale = await prisma.playlist.findMany({
-      where: { userId, service: SERVICE, servicePlaylistId: { notIn: [...liveIds] } },
-      select: { id: true },
-    });
-    if (stale.length > 0) {
-      await prisma.playlist.deleteMany({ where: { id: { in: stale.map((playlist) => playlist.id) } } });
-    }
+    // shortcut: the browser runner cannot yet prove enumeration completeness;
+    // retain absent cached rows until a verified remote-deletion path exists.
   } catch (error) {
     if (!isDatabaseError(error)) throw error;
     const value = { playlists: live, lastSyncedAt: now, fromCache: false, isStale: false };
@@ -204,9 +203,6 @@ export async function getCachedSoundCloudTracks(
 }
 
 export async function refreshSoundCloudPlaylistTracks(userId: string, servicePlaylistId: string): Promise<CachedSoundCloudTracks> {
-  const live = await listSoundCloudPlaylistTracksCli(servicePlaylistId);
-  const now = new Date();
-
   let playlist;
   try {
     playlist = await prisma.playlist.findUnique({
@@ -214,17 +210,23 @@ export async function refreshSoundCloudPlaylistTracks(userId: string, servicePla
     });
   } catch (error) {
     if (!isDatabaseError(error)) throw error;
-    const value = { tracks: live, lastFetchedAt: now, fromCache: false, isStale: false };
-    tracksMemoryCache.set(`${userId}:${servicePlaylistId}`, { value, expiresAt: Date.now() + TRACKS_MEMORY_TTL_MS });
-    return value;
+    throw new Error("Could not verify SoundCloud playlist ownership because the database is unavailable.");
   }
   if (!playlist || playlist.userId !== userId) {
-    const value = { tracks: live, lastFetchedAt: now, fromCache: false, isStale: false };
-    tracksMemoryCache.set(`${userId}:${servicePlaylistId}`, { value, expiresAt: Date.now() + TRACKS_MEMORY_TTL_MS });
-    return value;
+    throw new Error("Playlist not found for this user. Refresh playlists first.");
   }
 
-  await writePlaylistSnapshot(playlist.id, live, { allowPartial: true });
+  const live = await listSoundCloudPlaylistTracksCli(servicePlaylistId);
+  const now = new Date();
+  const activeStateCount = await prisma.playlistTrackState.count({
+    where: { playlistId: playlist.id, removedAt: null },
+  });
+  const expected = Math.max(playlist.trackCount ?? 0, activeStateCount);
+  if (!isReadComplete(live.length, expected)) {
+    throw new Error(`SoundCloud playlist read was incomplete (${live.length}/${expected}); keeping the previous snapshot.`);
+  }
+
+  await writePlaylistSnapshot(playlist.id, live, { expectedCount: expected, allowPartial: true });
 
   const value = { tracks: live, lastFetchedAt: now, fromCache: false, isStale: false };
   tracksMemoryCache.set(`${userId}:${servicePlaylistId}`, { value, expiresAt: Date.now() + TRACKS_MEMORY_TTL_MS });

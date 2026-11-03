@@ -24,14 +24,17 @@ export async function GET(request: Request) {
   if (account && !account.isMock) {
     try {
       const accessToken = decryptToken(account.accessTokenEncrypted);
-      const meResp = await fetch("https://api.spotify.com/v1/me", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const meBody = await meResp.text();
-      const playlistsResp = await fetch("https://api.spotify.com/v1/me/playlists?limit=5", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const playlistsBody = await playlistsResp.text();
+      const [meResp, playlistsResp] = await Promise.all([
+        fetch("https://api.spotify.com/v1/me", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(10_000),
+        }),
+        fetch("https://api.spotify.com/v1/me/playlists?limit=5", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          signal: AbortSignal.timeout(10_000),
+        }),
+      ]);
+      const [meBody, playlistsBody] = await Promise.all([meResp.text(), playlistsResp.text()]);
       liveCheck = {
         me: { status: meResp.status, body: meBody.slice(0, 500) },
         playlists: { status: playlistsResp.status, body: playlistsBody.slice(0, 500) },

@@ -3,19 +3,25 @@
 import { Check, Link, MinusCircle, MoreHorizontal, SkipForward } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useManualMatchLock } from "./ManualMatchLock";
 
 export function ManualMatchActions({
   id,
   serviceTrackId,
+  trackTitle,
   targetService,
   compact = false,
+  showBestMatch = true,
 }: {
   id: string;
   serviceTrackId?: string;
+  trackTitle?: string;
   targetService?: string;
   compact?: boolean;
+  showBestMatch?: boolean;
 }) {
   const router = useRouter();
+  const decisionLock = useManualMatchLock();
   const [busy, setBusy] = useState<"accept" | "reject" | "use" | "link" | "exclude" | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
@@ -32,6 +38,7 @@ export function ManualMatchActions({
   }
 
   async function act(action: "accept" | "reject" | "exclude") {
+    if (!decisionLock.acquire()) return;
     setBusy(action);
     setError(null);
     setNotice(null);
@@ -43,10 +50,12 @@ export function ManualMatchActions({
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusy(null);
+      decisionLock.release();
     }
   }
   async function useThis() {
     if (!serviceTrackId) return;
+    if (!decisionLock.acquire()) return;
     setBusy("use");
     setError(null);
     setNotice(null);
@@ -62,6 +71,7 @@ export function ManualMatchActions({
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusy(null);
+      decisionLock.release();
     }
   }
   async function submitLink() {
@@ -70,6 +80,7 @@ export function ManualMatchActions({
       setError("Link must start with http:// or https://");
       return;
     }
+    if (!decisionLock.acquire()) return;
     setBusy("link");
     setError(null);
     setNotice(null);
@@ -87,13 +98,14 @@ export function ManualMatchActions({
       setError(err instanceof Error ? err.message : "Could not save link");
     } finally {
       setBusy(null);
+      decisionLock.release();
     }
   }
   return (
     <div className={compact ? "" : "space-y-2"}>
       {serviceTrackId ? (
         <div className="flex flex-wrap gap-2">
-          <button type="button" disabled={Boolean(busy)} onClick={useThis} className={compact ? "btn btn-primary h-8 px-3 text-xs" : "btn btn-primary"}>
+          <button type="button" disabled={Boolean(busy) || decisionLock.locked} onClick={useThis} aria-label={trackTitle ? `Use ${trackTitle}` : undefined} className={compact ? "btn btn-primary h-8 px-3 text-xs" : "btn btn-primary"}>
             <Check size={compact ? 13 : 16} />
             {busy === "use" ? "Saving…" : "Use"}
           </button>
@@ -101,23 +113,25 @@ export function ManualMatchActions({
       ) : (
         <div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={Boolean(busy)} onClick={() => act("accept")} className="btn btn-primary">
-              <Check size={16} />
-              {busy === "accept" ? "Saving…" : "Use best match"}
-            </button>
+            {showBestMatch ? (
+              <button type="button" disabled={Boolean(busy) || decisionLock.locked} onClick={() => act("accept")} className="btn btn-primary">
+                <Check size={16} />
+                {busy === "accept" ? "Saving…" : "Use best match"}
+              </button>
+            ) : null}
             <details className="group">
               <summary className="btn btn-ghost list-none marker:content-none">
                 <MoreHorizontal size={16} /> Other choices
               </summary>
               <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" disabled={Boolean(busy)} onClick={() => setLinkOpen((open) => !open)} className="btn btn-ghost">
+                <button type="button" disabled={Boolean(busy) || decisionLock.locked} onClick={() => setLinkOpen((open) => !open)} className="btn btn-ghost">
                   <Link size={16} /> {linkOpen ? "Close link" : "Use a link"}
                 </button>
-                <button type="button" disabled={Boolean(busy)} onClick={() => act("exclude")} className="btn btn-ghost">
-                  <MinusCircle size={16} /> {busy === "exclude" ? "Saving…" : "Keep only here"}
+                <button type="button" disabled={Boolean(busy) || decisionLock.locked} onClick={() => act("exclude")} className="btn btn-ghost">
+                  <MinusCircle size={16} /> {busy === "exclude" ? "Saving…" : "Keep on source only"}
                 </button>
-                <button type="button" disabled={Boolean(busy)} onClick={() => act("reject")} className="btn btn-ghost">
-                  <SkipForward size={16} /> {busy === "reject" ? "Skipping…" : "Skip suggestion"}
+                <button type="button" disabled={Boolean(busy) || decisionLock.locked} onClick={() => act("reject")} className="btn btn-ghost">
+                  <SkipForward size={16} /> {busy === "reject" ? "Skipping…" : "Skip this song"}
                 </button>
               </div>
             </details>
@@ -143,7 +157,7 @@ export function ManualMatchActions({
             placeholder={`Paste song link${targetService ? ` for ${targetService}` : ""}…`}
             className="min-w-0 flex-1"
           />
-          <button disabled={Boolean(busy)} className="btn btn-primary" type="submit">
+          <button disabled={Boolean(busy) || decisionLock.locked} className="btn btn-primary" type="submit">
             {busy === "link" ? "Saving…" : "Save link"}
           </button>
         </form>

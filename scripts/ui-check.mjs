@@ -25,7 +25,7 @@ const PAGES = [
 ];
 const EXTRA_PAGES = [["group-builder", "/playlists?groupMode=1"]];
 
-const MOBILE_PAGES = ["dashboard", "playlists", "manual-match", "history", "settings", "connections", "youtube-browser"];
+const MOBILE_PAGES = ["dashboard", "playlists", "manual-match", "history", "settings", "connections", "youtube-browser", "soundcloud-browser"];
 
 // PAGES is also the sidebar contract, so it can only hold static routes.
 // /playlists/[id] is a real page with its own hero, table and dialogs, and it
@@ -97,6 +97,7 @@ async function screenshots(browser) {
   watch(page, () => current);
   await login(page);
   const pages = await routes(page);
+  const authState = await desktop.storageState();
 
   for (const [name, url] of pages) {
     current = url;
@@ -107,10 +108,13 @@ async function screenshots(browser) {
     if (overflow > 1) problems.push(`overflow-x ${overflow}px  ${url}  (1440)`);
     console.log(`shot ${url}`);
   }
+  await desktop.close();
 
   const mobile = await browser.newContext({
     viewport: { width: 390, height: 844 },
-    storageState: await desktop.storageState(),
+    isMobile: true,
+    hasTouch: true,
+    storageState: authState,
   });
   const mp = await mobile.newPage();
   watch(mp, () => `${current} (390)`);
@@ -127,6 +131,44 @@ async function screenshots(browser) {
     if (overflow > 1) problems.push(`overflow-x ${overflow}px  ${url}  (390)`);
     console.log(`shot mobile ${url}`);
   }
+  await mobile.close();
+
+  const narrow = await browser.newContext({
+    viewport: { width: 320, height: 700 },
+    isMobile: true,
+    hasTouch: true,
+    storageState: authState,
+  });
+  const np = await narrow.newPage();
+  watch(np, () => `${current} (320)`);
+  for (const [, url] of mobileRoutes) {
+    current = url;
+    await np.goto(BASE + url, { waitUntil: "domcontentloaded", timeout: 90_000 });
+    await np.waitForTimeout(600);
+    await np.evaluate(() => document.querySelectorAll("details").forEach((details) => { details.open = true; }));
+    const overflow = await np.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    if (overflow > 1) problems.push(`overflow-x ${overflow}px  ${url}  (320, details open)`);
+  }
+  console.log(`checked ${mobileRoutes.length} routes at 320px`);
+  await narrow.close();
+
+  const landscape = await browser.newContext({
+    viewport: { width: 844, height: 390 },
+    isMobile: true,
+    hasTouch: true,
+    storageState: authState,
+  });
+  const lp = await landscape.newPage();
+  watch(lp, () => `${current} (landscape)`);
+  for (const [, url] of mobileRoutes) {
+    current = url;
+    await lp.goto(BASE + url, { waitUntil: "domcontentloaded", timeout: 90_000 });
+    await lp.waitForTimeout(600);
+    const overflow = await lp.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    if (overflow > 1) problems.push(`overflow-x ${overflow}px  ${url}  (844x390)`);
+  }
+  console.log(`checked ${mobileRoutes.length} routes in landscape`);
+  await landscape.close();
 }
 
 async function smoke(browser) {
@@ -193,16 +235,127 @@ async function smoke(browser) {
     if (unexercised.length) console.log(`  not clicked: ${unexercised.join(" | ")}`);
   }
 
+  current = "/dashboard (history disclosure)";
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+  await page.waitForTimeout(500);
+  const ruleDetails = page.locator("summary").filter({ hasText: "Details and run history" }).first();
+  if (await ruleDetails.count()) {
+    await ruleDetails.click();
+    const runHistory = page.getByRole("button", { name: /Run history/ }).first();
+    if (await runHistory.count()) {
+      await runHistory.click();
+      await page.waitForTimeout(500);
+      if ((await runHistory.getAttribute("aria-expanded")) !== "true") problems.push("disclosure  Run history did not expose its expanded state");
+      const panelId = await runHistory.getAttribute("aria-controls");
+      if (!panelId || !(await page.evaluate((id) => Boolean(document.getElementById(id)), panelId))) problems.push("disclosure  Run history panel is not linked to its trigger");
+    }
+  }
+
+  // Stateful overlays need more than a page-load check: focus must enter,
+  // keyboard navigation must work, and Escape must restore the trigger.
+  current = "/playlists (keyboard)";
+  await page.goto(`${BASE}/playlists`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+  await page.waitForTimeout(500);
+  const serviceTabs = page.getByRole("tab");
+  if ((await serviceTabs.count()) >= 2) {
+    await serviceTabs.first().focus();
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(50);
+    if ((await serviceTabs.nth(1).getAttribute("aria-selected")) !== "true") problems.push("keyboard  /playlists service tabs ignore ArrowRight");
+  }
+  const actionTrigger = page.locator('button[aria-label^="Actions for "]').first();
+  if (await actionTrigger.count()) {
+    await actionTrigger.click();
+    const controlledId = await actionTrigger.getAttribute("aria-controls");
+    if (!controlledId || !(await page.locator(`#${controlledId}`).count())) problems.push("popover  /playlists actions menu is not exposed by aria-controls");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(50);
+    if (!(await actionTrigger.evaluate((node) => node === document.activeElement))) problems.push("focus  /playlists actions menu did not restore its trigger");
+  }
+
+  await page.keyboard.press("Control+K");
+  const palette = page.getByRole("dialog", { name: "Quick jump" });
+  if (!(await palette.count())) problems.push("dialog  command palette did not open");
+  else {
+    const combo = palette.getByRole("combobox");
+    if (!(await combo.count()) || !(await combo.evaluate((node) => node === document.activeElement))) problems.push("focus  command palette did not focus search");
+    await page.keyboard.press("Escape");
+  }
+
+  current = "/manual-match (keyboard)";
+  let blockedManualActions = 0;
+  const blockManualAction = (route) => {
+    blockedManualActions += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, scheduledRules: 0 }),
+    });
+  };
+  await page.route("**/api/manual-match/**", blockManualAction);
+  await page.goto(`${BASE}/manual-match`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+  await page.waitForTimeout(500);
+  const otherChoices = page.locator("summary").filter({ hasText: "Other choices" });
+  if (await otherChoices.count()) {
+    await otherChoices.focus();
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(50);
+    if (blockedManualActions !== 0) problems.push("shortcut  Enter on Other choices triggered a review action");
+  }
+  const useMatch = page.locator('button[aria-label^="Use "]').first();
+  if (await useMatch.count()) {
+    await useMatch.press("Enter");
+    await page.waitForTimeout(100);
+    if (blockedManualActions !== 1) problems.push(`shortcut  Enter on candidate sent ${blockedManualActions} review actions instead of 1`);
+  }
+  await page.unroute("**/api/manual-match/**", blockManualAction);
+
+  const playlistDetail = pages.find(([name]) => name === "playlist-detail");
+  if (playlistDetail) {
+    current = `${playlistDetail[1]} (dialog)`;
+    await page.goto(BASE + playlistDetail[1], { waitUntil: "domcontentloaded", timeout: 90_000 });
+    await page.waitForTimeout(500);
+    const addSync = page.getByRole("button", { name: "Add sync" });
+    if (await addSync.count()) {
+      await addSync.click();
+      const dialog = page.getByRole("dialog", { name: /Choose where this playlist should mirror/i });
+      if (!(await dialog.count())) problems.push("dialog  Add sync did not expose modal semantics");
+      else if (!(await dialog.evaluate((node) => node.contains(document.activeElement)))) problems.push("focus  Add sync left focus behind the modal");
+      await page.keyboard.press("Control+K");
+      if ((await page.getByRole("dialog").count()) !== 1) problems.push("dialog  command palette opened over Add sync");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(50);
+      if (!(await addSync.evaluate((node) => node === document.activeElement))) problems.push("focus  Add sync did not restore its trigger");
+    }
+  }
+
+  const authState = await ctx.storageState();
+  await ctx.close();
+
   // Mobile: the More sheet is the only route to the pages that don't fit.
-  const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, storageState: await ctx.storageState() });
+  const mobile = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    storageState: authState,
+  });
   const mp = await mobile.newPage();
   watch(mp, () => "mobile nav");
   await mp.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 90_000 });
-  await mp.getByRole("button", { name: "More" }).click();
+  await mp.waitForTimeout(500);
+  const moreButton = mp.getByRole("button", { name: "More" });
+  await moreButton.click();
+  const moreDialog = mp.getByRole("dialog", { name: "More" });
+  if (!(await moreDialog.count())) problems.push("dialog  mobile More menu lacks modal semantics");
+  else if (!(await moreDialog.evaluate((node) => node.contains(document.activeElement)))) problems.push("focus  mobile More menu left focus behind the sheet");
   for (const href of ["/connections", "/history", "/youtube-browser", "/soundcloud-browser"]) {
-    const count = await mp.locator(`nav ~ div a[href="${href}"], div a[href="${href}"]`).count();
+    const count = await mp.locator(`#mobile-more-menu a[href="${href}"]`).count();
     if (!count) problems.push(`unreachable  ${href} missing from the mobile More sheet`);
   }
+  await mp.keyboard.press("Escape");
+  await mp.waitForTimeout(50);
+  if (!(await moreButton.evaluate((node) => node === document.activeElement))) problems.push("focus  mobile More menu did not restore its trigger");
+  await mobile.close();
 }
 
 const browser = await chromium.launch();

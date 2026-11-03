@@ -7,20 +7,23 @@ import { SpotifyAdapter } from "./spotify/SpotifyAdapter";
 import { SpotifyMockAdapter } from "./spotify/SpotifyMockAdapter";
 import { YouTubeBrowserAdapter } from "./youtube/YouTubeBrowserAdapter";
 import { YouTubeMockAdapter } from "./youtube/YouTubeMockAdapter";
-import { SoundCloudAdapter } from "./soundcloud/SoundCloudAdapter";
 import { SoundCloudBrowserAdapter } from "./soundcloud/SoundCloudBrowserAdapter";
 import { SoundCloudMockAdapter } from "./soundcloud/SoundCloudMockAdapter";
 
 export function serviceKey(service: string): ServiceKey {
-  return service.toLowerCase() as ServiceKey;
+  const key = service.trim().toLowerCase();
+  if (key !== "spotify" && key !== "youtube" && key !== "soundcloud") {
+    throw new Error(`Unsupported service: ${service}`);
+  }
+  return key;
 }
 
 export function serviceEnum(service: ServiceKey): string {
-  return service.toUpperCase();
+  return service.trim().toUpperCase();
 }
 
 export function getAdapter(service: string, userId?: string): MusicServiceAdapter {
-  const key = typeof service === "string" && service === service.toUpperCase() ? service.toLowerCase() : service;
+  const key = String(service).trim().toLowerCase();
   if (key === "spotify") {
     // SpotifyAdapter handles both OAuth (when SPOTIFY_CLIENT_ID is set) and
     // the sp_dc web-cookie path (no OAuth credentials needed). Falling back
@@ -49,10 +52,8 @@ export function getAdapter(service: string, userId?: string): MusicServiceAdapte
       log.debug("soundcloud adapter resolved", { mode: "browser" });
       return new SoundCloudBrowserAdapter(userId);
     }
-    if (!process.env.SOUNDCLOUD_CLIENT_ID) {
-      log.debug("soundcloud adapter resolved", { mode: "mock" });
-      return new SoundCloudMockAdapter();
-    }
+    log.debug("soundcloud adapter resolved", { mode: "mock" });
+    return new SoundCloudMockAdapter();
   }
-  return new SoundCloudAdapter();
+  throw new Error(`Unsupported service: ${service}`);
 }

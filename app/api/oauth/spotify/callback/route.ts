@@ -7,12 +7,17 @@ import type { SpotifyUser } from "@/lib/services/spotify/spotifyTypes";
 import { refreshServicePlaylists } from "@/lib/services/playlistRefresh";
 import { sameOriginUrl } from "@/lib/utils/requestUrl";
 
+function spotifyErrorRedirect(request: Request, message: string) {
+  const response = NextResponse.redirect(
+    sameOriginUrl(request, `/connections?spotify_error=${encodeURIComponent(message)}#connection-spotify`),
+  );
+  response.cookies.delete("spotify_oauth_state");
+  return response;
+}
+
 export async function GET(request: Request) {
   const session = await requireAuth(request);
-  const sessionUser = await prisma.user.findUnique({ where: { id: session.userId } });
-  const user =
-    sessionUser ||
-    (await prisma.user.findUnique({ where: { email: process.env.ADMIN_EMAIL || "admin@example.com" } }));
+  const user = await prisma.user.findUnique({ where: { id: session.userId } });
   if (!user) {
     return NextResponse.json({ error: "Authenticated user no longer exists. Run npx prisma db seed and login again." }, { status: 401 });
   }
@@ -27,59 +32,91 @@ export async function GET(request: Request) {
     .find((part) => part.startsWith("spotify_oauth_state="))
     ?.split("=")[1];
 
+  if (!state || !cookieState || state !== cookieState) {
+    return spotifyErrorRedirect(request, "Invalid or expired Spotify login state. Start the connection again.");
+  }
   if (error) {
-    return NextResponse.redirect(sameOriginUrl(request, `/settings?spotify_error=${encodeURIComponent(error)}`));
+    return spotifyErrorRedirect(request, error === "access_denied" ? "Spotify login was cancelled." : error);
   }
-  if (!code || !state || !cookieState || state !== cookieState) {
-    return NextResponse.json({ error: "Invalid Spotify OAuth state" }, { status: 400 });
-  }
+  if (!code) return spotifyErrorRedirect(request, "Spotify did not return an authorization code. Start the connection again.");
 
-  const tokenResponse = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: {
-      Authorization: spotifyBasicAuthHeader(),
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: getSpotifyRedirectUri(),
-    }),
-  });
+  let tokenResponse: Response;
+  try {
+    tokenResponse = await fetch("https://accounts.spotify.com/api/token", {
+      method: "POST",
+      headers: {
+        Authorization: spotifyBasicAuthHeader(),
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: getSpotifyRedirectUri(),
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    return spotifyErrorRedirect(request, "Spotify token exchange timed out. Start the connection again.");
+  }
 
   if (!tokenResponse.ok) {
-    return NextResponse.json({ error: "Spotify token exchange failed", details: await tokenResponse.text() }, { status: 502 });
+    console.warn(`Spotify token exchange failed: ${await tokenResponse.text()}`);
+    return spotifyErrorRedirect(request, "Spotify login could not be completed. Start the connection again.");
   }
 
-  const token = (await tokenResponse.json()) as {
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-  };
+  const tokenPayload = await tokenResponse.json().catch(() => null) as Record<string, unknown> | null;
+  const token = tokenPayload &&
+    typeof tokenPayload.access_token === "string" &&
+    typeof tokenPayload.refresh_token === "string" &&
+    typeof tokenPayload.expires_in === "number" &&
+    Number.isFinite(tokenPayload.expires_in) &&
+    tokenPayload.expires_in > 0
+    ? {
+        access_token: tokenPayload.access_token,
+        refresh_token: tokenPayload.refresh_token,
+        expires_in: tokenPayload.expires_in,
+      }
+    : null;
+  if (!token) {
+    return spotifyErrorRedirect(request, "Spotify returned an invalid token response. Start the connection again.");
+  }
 
-  const profileResponse = await fetch("https://api.spotify.com/v1/me", {
-    headers: { Authorization: `Bearer ${token.access_token}` },
-  });
+  let profileResponse: Response | null = null;
+  try {
+    profileResponse = await fetch("https://api.spotify.com/v1/me", {
+      headers: { Authorization: `Bearer ${token.access_token}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    // Tokens are still useful for playlist access; store them as limited.
+  }
   let profile: SpotifyUser | null = null;
   let profileError: string | null = null;
-  if (profileResponse.ok) {
-    profile = (await profileResponse.json()) as SpotifyUser;
+  if (!profileResponse) {
+    profileError = "Spotify profile request timed out.";
+  } else if (profileResponse.ok) {
+    const profilePayload = await profileResponse.json().catch(() => null) as SpotifyUser | null;
+    if (profilePayload && typeof profilePayload.id === "string") profile = profilePayload;
+    else profileError = "Spotify returned an invalid profile response.";
   } else {
     profileError = await profileResponse.text();
-    console.warn(`Spotify profile fetch failed, saving tokens with fallback account: ${profileError}`);
+    console.warn(`Spotify profile fetch failed: ${profileError}`);
   }
 
-  const connectionStatus = profileError ? "LIMITED" : "CONNECTED";
+  if (!profile) {
+    return spotifyErrorRedirect(request, profileError || "Spotify profile could not be verified. Start the connection again.");
+  }
+
   await saveConnectedAccountTokens({
     userId: user.id,
     service: "SPOTIFY",
     accessToken: token.access_token,
     refreshToken: token.refresh_token,
     expiresAt: new Date(Date.now() + token.expires_in * 1000),
-    serviceUserId: profile?.id || `spotify_user_${user.id}`,
-    serviceUsername: profile?.display_name || profile?.email || "Spotify connected",
-    connectionStatus,
-    lastError: profileError,
+    serviceUserId: profile.id,
+    serviceUsername: profile.display_name || profile.email || "Spotify connected",
+    connectionStatus: "CONNECTED",
+    lastError: null,
   });
 
   try {
@@ -93,15 +130,15 @@ export async function GET(request: Request) {
       accessToken: token.access_token,
       refreshToken: token.refresh_token,
       expiresAt: new Date(Date.now() + token.expires_in * 1000),
-      serviceUserId: profile?.id || `spotify_user_${user.id}`,
-      serviceUsername: profile?.display_name || profile?.email || "Spotify connected",
+      serviceUserId: profile.id,
+      serviceUsername: profile.display_name || profile.email || "Spotify connected",
       connectionStatus: "LIMITED",
-      lastError: profileError || message,
+      lastError: message,
     });
   }
 
   const response = NextResponse.redirect(
-    sameOriginUrl(request, profileError ? "/dashboard?spotify=connected_profile_limited" : "/dashboard?spotify=connected"),
+    sameOriginUrl(request, "/dashboard?spotify=connected"),
   );
   response.cookies.delete("spotify_oauth_state");
   return response;

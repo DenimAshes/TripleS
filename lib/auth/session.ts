@@ -12,7 +12,26 @@ export type SessionUser = {
 };
 
 function secret() {
-  return new TextEncoder().encode(process.env.JWT_SECRET || DEFAULT_JWT_SECRET);
+  const configured = process.env.JWT_SECRET?.trim();
+  if (process.env.NODE_ENV === "production" && (
+    !configured ||
+    configured === DEFAULT_JWT_SECRET ||
+    configured === "replace-me" ||
+    configured.length < 32
+  )) {
+    throw new Error("JWT_SECRET must be a unique value of at least 32 characters in production.");
+  }
+  return new TextEncoder().encode(configured || DEFAULT_JWT_SECRET);
+}
+
+async function existingSessionUser(session: SessionUser | null): Promise<SessionUser | null> {
+  if (!session) return null;
+  const { prisma } = await import("@/lib/db/prisma");
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, email: true, name: true },
+  });
+  return user ? { userId: user.id, email: user.email, name: user.name } : null;
 }
 
 export async function createSessionToken(user: SessionUser) {
@@ -39,7 +58,7 @@ export async function verifySessionToken(token?: string): Promise<SessionUser | 
 
 export async function getSession() {
   const store = await cookies();
-  return verifySessionToken(store.get(COOKIE_NAME)?.value);
+  return existingSessionUser(await verifySessionToken(store.get(COOKIE_NAME)?.value));
 }
 
 export async function requireAuth(request: Request | NextRequest) {
@@ -49,7 +68,7 @@ export async function requireAuth(request: Request | NextRequest) {
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${COOKIE_NAME}=`))
     ?.split("=")[1];
-  const session = await verifySessionToken(token);
+  const session = await existingSessionUser(await verifySessionToken(token));
   if (!session) {
     throw new Error("UNAUTHORIZED");
   }

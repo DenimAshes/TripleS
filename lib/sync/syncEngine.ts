@@ -33,7 +33,7 @@ import { shouldRefreshSourceCache, sourceCacheMaxAgeMs } from "./sourceCachePoli
 import { releaseAllSessions } from "@/worker/sessionPool";
 import { preflightSyncRule } from "./preflight";
 import { bindCurrentJob, killChildPids, listKnownChildPids } from "@/worker/childPidRegistry";
-import { CancelledError, throwIfActiveJobAborted } from "@/lib/jobs/activeJobContext";
+import { CancelledError, getActiveJob, throwIfActiveJobAborted } from "@/lib/jobs/activeJobContext";
 
 const WRITE_THROTTLE_MIN_MS = Number(process.env.WORKER_WRITE_THROTTLE_MIN_MS ?? 4000);
 const WRITE_THROTTLE_SPREAD_MS = Number(process.env.WORKER_WRITE_THROTTLE_SPREAD_MS ?? 8000);
@@ -49,6 +49,24 @@ const REQUIRE_PREFLIGHT = process.env.WORKER_REQUIRE_PREFLIGHT !== "false";
 const SYNC_JOB_TIMEOUT_MS = Math.max(60_000, Number(process.env.WORKER_SYNC_JOB_TIMEOUT_MS ?? 30 * 60_000));
 
 export { PartialSourceReadError };
+
+function destinationTrackMatchField(service: string) {
+  if (service === "SPOTIFY") return "spotifyServiceTrackId" as const;
+  if (service === "YOUTUBE") return "youtubeServiceTrackId" as const;
+  return "soundcloudServiceTrackId" as const;
+}
+
+export function removableDestinationTracks(
+  destinationTracks: NormalizedTrack[],
+  targetService: ServiceKey,
+  serviceTrackByKey: ReadonlyMap<string, { id: string }>,
+  desiredServiceTrackIds: ReadonlySet<string>,
+) {
+  return destinationTracks.filter((track) => {
+    const serviceTrack = serviceTrackByKey.get(`${targetService}::${track.sourceTrackId}`);
+    return serviceTrack ? !desiredServiceTrackIds.has(serviceTrack.id) : false;
+  });
+}
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -528,12 +546,14 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
 
     const wallClockPromise = new Promise<never>((_, reject) => {
       wallClockTimer = setTimeout(() => {
-        reject(new Error(`Sync job exceeded wall-clock timeout of ${SYNC_JOB_TIMEOUT_MS}ms`));
+        const timeoutError = new Error(`Sync job exceeded wall-clock timeout of ${SYNC_JOB_TIMEOUT_MS}ms`);
+        getActiveJob()?.abortController.abort(timeoutError);
+        reject(timeoutError);
       }, SYNC_JOB_TIMEOUT_MS);
       (wallClockTimer as { unref?: () => void }).unref?.();
     });
 
-    await Promise.race([wallClockPromise, Promise.all(rule.destinations.map(async (destination) => {
+    await Promise.race([wallClockPromise, Promise.allSettled(rule.destinations.map(async (destination) => {
       throwIfActiveJobAborted();
       const targetKey = serviceKey(destination.service);
       const targetAdapter = getAdapter(destination.service, rule.userId);
@@ -552,7 +572,6 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
             ).map((item) => item.serviceTrackId)
           : [],
       );
-      const sourceIds = new Set(sourceTracks.map((track) => track.isrc || track.sourceTrackId));
       const previouslyLoggedTitles = await getPreviouslyLoggedTitles(syncRuleId, destination.service, destination.playlistId);
       const maxTracksThisRun = boundedTrackCount();
 
@@ -562,10 +581,33 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       if (maxTracksThisRun > 0 && candidatesForThisRun.length > pendingSourceTracks.length) {
         deferredByBatchLimit = true;
       }
-      const sourceServiceTrackById = await bulkUpsertServiceTracks(pendingSourceTracks);
+      const sourceServiceTrackById = await bulkUpsertServiceTracks(sourceTracks);
       const internalTrackIds = Array.from(
         new Set(Array.from(sourceServiceTrackById.values()).map((track) => track.internalTrackId)),
       );
+      const desiredDestinationServiceTrackIds = new Set<string>();
+      const eligibleSourceTracks = Array.from(sourceServiceTrackById.values()).filter((track) =>
+        !sourceExcludedTrackIds.has(track.id) &&
+        !excludedSourceAndService.has(`${track.id}:${destination.service}`),
+      );
+      const destinationField = destinationTrackMatchField(destination.service);
+      const storedDesiredMatches = eligibleSourceTracks.length
+        ? await prisma.trackMatch.findMany({
+            where: {
+              internalTrackId: { in: Array.from(new Set(eligibleSourceTracks.map((track) => track.internalTrackId))) },
+              status: { in: ["CONFIRMED", "AUTO_MATCHED"] },
+              [destinationField]: { not: null },
+            },
+          })
+        : [];
+      for (const match of storedDesiredMatches) {
+        const destinationTrackId = match[destinationField];
+        if (destinationTrackId) desiredDestinationServiceTrackIds.add(destinationTrackId);
+      }
+      for (const sourceTrack of eligibleSourceTracks) {
+        const overrideTrackId = overrideBySourceAndService.get(`${sourceTrack.id}:${destination.service}`);
+        if (overrideTrackId) desiredDestinationServiceTrackIds.add(overrideTrackId);
+      }
 
       // Tracks that already have a PENDING manual-review candidate for this
       // destination service. Re-searching them every run is pure waste: the
@@ -623,7 +665,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
           skipIsrcDb: true,
           internalTrackId: item.internalTrackId,
           localCatalogPool,
-        }).catch(() => null),
+        }),
       );
       const precomputedMatches = new Map<string, Awaited<ReturnType<typeof findMatch>>>();
       for (let i = 0; i < searchNeeded.length; i++) {
@@ -762,6 +804,7 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
           recordSource(match.source, destination);
           recordConfidence(match.confidence, destination);
           const targetServiceTrack = await getTargetServiceTrack(match.track);
+          desiredDestinationServiceTrackIds.add(targetServiceTrack.id);
           await upsertAutoTrackMatch({
             internalTrackId: sourceServiceTrack.internalTrackId,
             sourceService: rule.sourceService,
@@ -938,11 +981,16 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
       }
 
       if (rule.mode === "ADD_AND_REMOVE") {
-        const removable = destinationTracks.filter((track) => !sourceIds.has(track.isrc || track.sourceTrackId));
-        const removableTracksToUpsert = removable.map((track) => ({ ...track, sourceService: targetKey as ServiceKey }));
-        const removableServiceTrackByKey = removableTracksToUpsert.length
-          ? await bulkUpsertServiceTracks(removableTracksToUpsert)
+        const destinationTracksToUpsert = destinationTracks.map((track) => ({ ...track, sourceService: targetKey as ServiceKey }));
+        const removableServiceTrackByKey = destinationTracksToUpsert.length
+          ? await bulkUpsertServiceTracks(destinationTracksToUpsert)
           : new Map<string, ServiceTrack>();
+        const removable = removableDestinationTracks(
+          destinationTracks,
+          targetKey,
+          removableServiceTrackByKey,
+          desiredDestinationServiceTrackIds,
+        );
         const removableServiceTrackIds = Array.from(removableServiceTrackByKey.values())
           .map((track) => track.id)
           .filter((id) => !destinationExcludedTrackIds.has(id));
@@ -1021,7 +1069,10 @@ export async function runSync(syncRuleId: string): Promise<SyncJob> {
           });
         }
       }
-    }))]);
+    })).then((results) => {
+      const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+      if (failed) throw failed.reason;
+    })]);
 
     const status = stats.notFound || stats.manualRequired ? "PARTIAL_SUCCESS" : "SUCCESS";
     const finished = await prisma.syncJob.update({

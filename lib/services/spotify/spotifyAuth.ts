@@ -41,12 +41,28 @@ export function hasSpotifyCredentials() {
 }
 
 export function getSpotifyRedirectUri() {
-  return process.env.SPOTIFY_REDIRECT_URI || DEFAULT_SPOTIFY_REDIRECT_URI;
+  if (process.env.SPOTIFY_REDIRECT_URI) return process.env.SPOTIFY_REDIRECT_URI;
+  if (process.env.APP_URL) {
+    try {
+      return new URL("/api/oauth/spotify/callback", process.env.APP_URL).toString();
+    } catch {
+      return process.env.APP_URL;
+    }
+  }
+  return DEFAULT_SPOTIFY_REDIRECT_URI;
 }
 
 export function validateSpotifyRedirectUri() {
-  const redirectUri = getSpotifyRedirectUri();
-  if (redirectUri.includes("localhost")) {
+  let redirectUri: URL;
+  try {
+    redirectUri = new URL(getSpotifyRedirectUri());
+  } catch {
+    return { ok: false, error: "SPOTIFY_REDIRECT_URI or APP_URL is not a valid absolute URL." };
+  }
+  if (redirectUri.protocol !== "http:" && redirectUri.protocol !== "https:") {
+    return { ok: false, error: "Spotify redirect URI must use http or https." };
+  }
+  if (redirectUri.hostname.toLowerCase() === "localhost") {
     return {
       ok: false,
       error: "Spotify rejects localhost redirect URIs. Use http://127.0.0.1:3000/api/oauth/spotify/callback instead.",

@@ -65,7 +65,7 @@ export function SpotifyOAuthSetup({
 
           {isConnected ? (
             <details className="mt-3 text-xs text-muted-fg">
-              <summary className="cursor-pointer rounded-[var(--radius-sm)] py-1 hover:text-[var(--text)]">Connection options</summary>
+              <summary className="inline-flex min-h-11 cursor-pointer items-center rounded-[var(--radius-sm)] py-1 hover:text-[var(--text)]">Connection options</summary>
               <div className="mt-2 border-t border-line-soft pt-3">
                 <form method="post" action="/api/oauth/spotify/start">
                   <button type="submit" className="btn btn-ghost w-full">
@@ -96,7 +96,7 @@ export function SpotifyOAuthSetup({
           href="https://developer.spotify.com/dashboard"
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-[var(--accent)] transition hover:text-[var(--accent-hover)]"
+          className="inline-flex min-h-8 items-center gap-1.5 text-[var(--accent)] transition hover:text-[var(--accent-hover)]"
         >
           Spotify Developer Dashboard <ExternalLink size={12} />
         </a>

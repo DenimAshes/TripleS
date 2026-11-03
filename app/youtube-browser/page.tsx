@@ -8,10 +8,13 @@ export default async function YouTubeBrowserPage() {
   const playlists = session
     ? await getCachedYouTubePlaylists(session.userId)
     : { playlists: [], lastSyncedAt: null, fromCache: true, isStale: true };
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
 
   return (
     <AppShell title="YouTube Music" description="Create, read, search and edit playlists through the saved browser session.">
       <YouTubeBrowserLab
+        nowMs={nowMs}
         initialPlaylists={{
           playlists: playlists.playlists,
           lastSyncedAt: playlists.lastSyncedAt?.toISOString() || null,

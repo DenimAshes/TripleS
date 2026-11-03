@@ -19,6 +19,7 @@ vi.mock("@/lib/db/prisma", () => ({
 }));
 
 import { PUT } from "../app/api/admin/sessions/[service]/route";
+import { MAX_STATE_BYTES } from "@/lib/services/workerSessionState";
 
 function request(body: unknown) {
   return new Request("http://localhost/api/admin/sessions/youtube", {
@@ -49,6 +50,18 @@ describe("browser session upload route", () => {
 
     expect(response.status).toBe(422);
     expect(await response.json()).toMatchObject({ error: "MISSING_AUTH_COOKIES" });
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized upload from its content length", async () => {
+    const oversized = request({ cookies: [] });
+    oversized.headers.set("Content-Length", String(MAX_STATE_BYTES + 1));
+
+    const response = await PUT(oversized, {
+      params: Promise.resolve({ service: "youtube" }),
+    });
+
+    expect(response.status).toBe(413);
     expect(mocks.upsert).not.toHaveBeenCalled();
   });
 

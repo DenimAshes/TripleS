@@ -1,11 +1,13 @@
 "use client";
 
+import * as Dialog from "@radix-ui/react-dialog";
 import { Check, ChevronDown, Link2, ListMusic, Loader2, Plus, Wand2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { pollBrowserJob, startBrowserJob } from "./browserJobClient";
 import { Callout } from "./Callout";
+import { ArtworkImage } from "./ArtworkImage";
 import { ServiceIcon, serviceMeta } from "./ServiceBrand";
 
 export type SyncPlaylistOption = {
@@ -53,16 +55,14 @@ function defaultTargets(sourceService: string, playlists: SyncPlaylistOption[]):
 }
 
 function Artwork({ playlist }: { playlist: SyncPlaylistOption }) {
-  if (playlist.imageUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={playlist.imageUrl} alt="" width={40} height={40} loading="lazy" className="h-10 w-10 shrink-0 rounded-[var(--radius-sm)] object-cover ring-1 ring-[var(--border-soft)]" />
-    );
-  }
   return (
-    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-sm)] bg-[var(--surface)] text-dim-fg ring-1 ring-[var(--border-soft)]">
-      <ListMusic size={16} strokeWidth={1.6} />
-    </div>
+    <ArtworkImage
+      src={playlist.imageUrl}
+      width={40}
+      height={40}
+      className="h-10 w-10 rounded-[var(--radius-sm)] bg-[var(--surface)] text-dim-fg ring-1 ring-[var(--border-soft)]"
+      fallback={<ListMusic size={16} strokeWidth={1.6} />}
+    />
   );
 }
 
@@ -123,6 +123,9 @@ export function AddPlaylistSyncButton({
   const [pendingReviewCount, setPendingReviewCount] = useState<number | null>(null);
   const [syncSummary, setSyncSummary] = useState<string | null>(null);
   const [initialWarnings, setInitialWarnings] = useState<string[]>([]);
+  const pollControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => pollControllerRef.current?.abort(), []);
 
   const targetServices = useMemo(() => SERVICES.filter((service) => service !== serviceKey(sourceService)), [sourceService]);
   const enabledServices = targetServices.filter((service) => targets[service]?.enabled);
@@ -165,6 +168,9 @@ export function AddPlaylistSyncButton({
       setError("Choose at least one destination playlist.");
       return;
     }
+    pollControllerRef.current?.abort();
+    const controller = new AbortController();
+    pollControllerRef.current = controller;
     setSaving(true);
     setStatus("Queued");
     setError(null);
@@ -185,7 +191,7 @@ export function AddPlaylistSyncButton({
         runInitialSync: true,
       });
       setStatus(started.currentStep);
-      const finished = await pollBrowserJob(started.id, (job) => setStatus(job.currentStep));
+      const finished = await pollBrowserJob(started.id, (job) => setStatus(job.currentStep), controller.signal);
       if (finished.status === "failed" || finished.status === "cancelled") {
         setError(finished.error || "Could not connect playlists.");
         return;
@@ -204,46 +210,51 @@ export function AddPlaylistSyncButton({
       }
       router.refresh();
     } catch (err) {
+      if (controller.signal.aborted) return;
       setError(err instanceof Error ? err.message : "Could not connect playlists.");
     } finally {
-      setSaving(false);
-      setStatus(null);
+      if (pollControllerRef.current === controller) pollControllerRef.current = null;
+      if (!controller.signal.aborted) {
+        setSaving(false);
+        setStatus(null);
+      }
     }
   }
 
   return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} className="btn btn-primary">
-        <Link2 size={16} /> Add sync
-      </button>
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Trigger asChild>
+        <button type="button" className="btn btn-primary">
+          <Link2 size={16} /> Add sync
+        </button>
+      </Dialog.Trigger>
 
-      {open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--scrim)] p-3 backdrop-blur-sm">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="add-sync-title"
-            className="panel max-h-[calc(100vh-1.5rem)] w-full max-w-4xl overflow-hidden shadow-[var(--shadow-overlay)]"
-          >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-[var(--scrim)] backdrop-blur-sm" />
+        <Dialog.Content className="panel fixed left-1/2 top-1/2 z-50 max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-4xl -translate-x-1/2 -translate-y-1/2 overflow-hidden shadow-[var(--shadow-overlay)]">
+          <Dialog.Description className="sr-only">
+            Choose existing or new destination playlists for this sync.
+          </Dialog.Description>
             <div className="flex items-center justify-between border-b border-[var(--border-soft)] p-4 sm:p-5">
               <div className="min-w-0">
                 <div className="eyebrow flex items-center gap-2">
                   <Wand2 size={14} />
                   Sync setup
                 </div>
-                <h2 id="add-sync-title" className="heading-section mt-1">Choose where this playlist should mirror</h2>
+                <Dialog.Title className="heading-section mt-1">Choose where this playlist should mirror</Dialog.Title>
               </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-[var(--radius-sm)] p-2 text-muted-fg transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-                aria-label="Close"
-              >
-                <X size={18} />
-              </button>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="grid size-11 shrink-0 place-items-center rounded-[var(--radius-sm)] text-muted-fg transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+                  aria-label="Close"
+                >
+                  <X size={18} />
+                </button>
+              </Dialog.Close>
             </div>
 
-            <div className="max-h-[calc(100vh-8rem)] overscroll-contain overflow-auto p-4 sm:p-5">
+            <div className="max-h-[calc(100dvh-8rem)] overscroll-contain overflow-auto p-4 sm:p-5">
               <div className="grid gap-2 sm:grid-cols-3">
                 {targetServices.map((service) => (
                   <button
@@ -296,7 +307,7 @@ export function AddPlaylistSyncButton({
                         <button
                           type="button"
                           onClick={() => setTarget(service, { enabled: !target?.enabled })}
-                          className={`inline-flex h-9 items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-sm font-semibold transition ${
+                          className={`inline-flex h-11 items-center gap-1.5 rounded-[var(--radius-sm)] border px-3 text-sm font-semibold transition ${
                             target?.enabled
                               ? "border-success/40 bg-success text-[var(--text)]"
                               : "border-[var(--border-soft)] bg-[var(--surface-2)] text-muted-fg hover:text-[var(--text)]"
@@ -314,7 +325,7 @@ export function AddPlaylistSyncButton({
                               type="button"
                               onClick={() => setTarget(service, { mode: "existing" })}
                               aria-pressed={target.mode === "existing"}
-                              className={`rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition ${
+                              className={`min-h-11 rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition ${
                                 target.mode === "existing"
                                   ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]"
                                   : "border-[var(--border-soft)] bg-[var(--surface)] text-muted-fg"
@@ -326,7 +337,7 @@ export function AddPlaylistSyncButton({
                               type="button"
                               onClick={() => setTarget(service, { mode: "create" })}
                               aria-pressed={target.mode === "create"}
-                              className={`rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition ${
+                              className={`min-h-11 rounded-[var(--radius-sm)] border px-3 py-2 text-sm font-semibold transition ${
                                 target.mode === "create"
                                   ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text)]"
                                   : "border-[var(--border-soft)] bg-[var(--surface)] text-muted-fg"
@@ -361,7 +372,9 @@ export function AddPlaylistSyncButton({
                                   <Artwork playlist={selectedPlaylist} />
                                   <div className="min-w-0">
                                     <div className="truncate text-sm font-semibold text-[var(--text)]">{selectedPlaylist.name}</div>
-                                    <div className="text-xs text-muted-fg">{selectedPlaylist.trackCount} songs</div>
+                                    <div className="text-xs text-muted-fg">
+                                      {selectedPlaylist.trackCount} {selectedPlaylist.trackCount === 1 ? "song" : "songs"}
+                                    </div>
                                   </div>
                                 </div>
                               ) : null}
@@ -401,7 +414,7 @@ export function AddPlaylistSyncButton({
               ) : null}
               {error ? <Callout tone="danger" role="alert" className="mt-4">{error}</Callout> : null}
               {pendingReviewCount ? (
-                <Callout tone="warning" className="mt-4" title={`${pendingReviewCount} songs need review`}>
+                <Callout tone="warning" className="mt-4" title={`${pendingReviewCount} ${pendingReviewCount === 1 ? "song needs" : "songs need"} review`}>
                   <p className="text-sm">Pick the right versions once, then sync can reuse those choices.</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link href="/manual-match" className="btn btn-primary">
@@ -457,18 +470,17 @@ export function AddPlaylistSyncButton({
               ) : null}
 
               <div className="mt-5 flex flex-col-reverse gap-2 border-t border-[var(--border-soft)] pt-4 sm:flex-row sm:justify-end">
-                <button type="button" onClick={() => setOpen(false)} className="btn btn-ghost">
-                  Cancel
-                </button>
+                <Dialog.Close asChild>
+                  <button type="button" className="btn btn-ghost">Cancel</button>
+                </Dialog.Close>
                 <button type="button" onClick={save} disabled={saving || !canSave || pendingReviewCount !== null} className="btn btn-primary">
                   {saving ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
                   {saving ? "Syncing…" : `Start sync${enabledServices.length ? ` (${enabledServices.length})` : ""}`}
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      ) : null}
-    </>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

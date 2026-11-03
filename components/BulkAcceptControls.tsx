@@ -3,6 +3,7 @@
 import { ChevronDown, SlidersHorizontal, Trash2, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useManualMatchLock } from "./ManualMatchLock";
 
 type Mode = "accept" | "reject";
 
@@ -83,6 +84,7 @@ const CONFIGS: Record<Mode, CardConfig> = {
 
 function BulkSection({ config, totalPending }: { config: CardConfig; totalPending: number }) {
   const router = useRouter();
+  const decisionLock = useManualMatchLock();
   const [threshold, setThreshold] = useState(config.defaultThreshold);
   const [previewState, setPreviewState] = useState<PreviewState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -98,7 +100,8 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ threshold: newThreshold, preview: true }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Preview failed (${res.status})`);
       setPreviewState({
         count: typeof data.count === "number" ? data.count : 0,
         remaining: typeof data.remaining === "number" ? data.remaining : 0,
@@ -106,6 +109,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
       });
       setConfirming(false);
     } catch (err) {
+      setPreviewState(null);
       setOutcome(err instanceof Error ? err.message : "Preview failed");
     } finally {
       setBusy(false);
@@ -113,7 +117,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
   }
 
   async function apply() {
-    if (!previewState?.count) return;
+    if (!previewState?.count || !decisionLock.acquire()) return;
     setBusy(true);
     setOutcome(null);
     try {
@@ -139,6 +143,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
       setOutcome(err instanceof Error ? err.message : "Bulk operation failed");
     } finally {
       setBusy(false);
+      decisionLock.release();
     }
   }
 
@@ -161,17 +166,21 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
         <label className="flex items-center gap-2 text-xs text-muted-fg">
           <span>{config.thresholdLabel}</span>
           <input
+            name={`${config.mode}Threshold`}
             type="range"
             min={config.thresholdMin}
             max={config.thresholdMax}
             step="0.01"
             value={threshold}
+            disabled={busy || decisionLock.locked}
+            aria-label={`${config.title} threshold`}
+            aria-valuetext={`${Math.round(threshold * 100)}%`}
             onChange={(e) => onThresholdChange(Number(e.target.value))}
             className="!h-1 !w-32 !border-0 !bg-[var(--surface-2)] !p-0 accent-[var(--accent)]"
           />
           <span className="tabular-nums font-semibold text-[var(--text)]">{Math.round(threshold * 100)}%</span>
         </label>
-        <button type="button" onClick={() => preview(threshold)} disabled={busy} className="btn btn-ghost">
+        <button type="button" onClick={() => preview(threshold)} disabled={busy || decisionLock.locked} className="btn btn-ghost">
           Preview
         </button>
         {confirming && previewState?.count ? (
@@ -180,11 +189,11 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
               {config.confirmVerb} {previewState.count} at {config.thresholdLabel}
               {Math.round(threshold * 100)}%?
             </span>
-            <button type="button" onClick={apply} disabled={busy} className={config.buttonClass}>
+            <button type="button" onClick={apply} disabled={busy || decisionLock.locked} className={config.buttonClass}>
               {config.buttonIcon}
               Confirm
             </button>
-            <button type="button" onClick={() => setConfirming(false)} disabled={busy} className="btn btn-ghost">
+            <button type="button" onClick={() => setConfirming(false)} disabled={busy || decisionLock.locked} className="btn btn-ghost">
               Cancel
             </button>
           </>
@@ -192,7 +201,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            disabled={busy || !previewState?.count}
+            disabled={busy || decisionLock.locked || !previewState?.count}
             className={config.buttonClass}
           >
             {config.buttonIcon}
@@ -254,7 +263,7 @@ function BulkSection({ config, totalPending }: { config: CardConfig; totalPendin
 // exact count before committing, and both refresh the page on success so the
 // cards drop out without a manual reload.
 export function BulkAcceptControls({ totalPending }: { totalPending: number }) {
-  if (totalPending === 0) return null;
+  if (totalPending < 2) return null;
   return (
     <details className="group mb-6 border-y border-[var(--border-soft)]">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-3 marker:content-none">

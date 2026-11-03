@@ -54,7 +54,7 @@ export function RefreshPlaylistsButton() {
 
   return (
     <div className="inline-flex items-center gap-2">
-      <button onClick={refresh} className="btn btn-ghost" disabled={loading}>
+      <button type="button" onClick={refresh} className="btn btn-ghost" disabled={loading}>
         <RefreshCw size={16} className={loading ? "animate-spin" : ""} /> {loading ? "Updating…" : "Update"}
       </button>
       {outcome ? (

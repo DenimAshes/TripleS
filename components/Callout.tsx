@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
-export type CalloutTone = "info" | "success" | "warning" | "danger";
+type CalloutTone = "info" | "success" | "warning" | "danger";
 
 // One inline message box for the whole app. It replaced nineteen hand-rolled
 // variants that each picked their own border/background/text combination for

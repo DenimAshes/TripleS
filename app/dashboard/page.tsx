@@ -294,7 +294,7 @@ export default async function DashboardPage() {
       <PlaylistsAutoRefresh hasPlaylists={playlists.length > 0} lastChangedAt={lastChangedAt?.toISOString() || null} />
       <RunningJobsAutoRefresh runningCount={runningJobs.length} />
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(19rem,0.65fr)] lg:items-start">
-        <div className="grid gap-5">
+        <div className="grid min-w-0 gap-5">
           <section className="workbench overflow-hidden" aria-labelledby="attention-heading">
           <div className="workbench-header">
             <div>
@@ -309,7 +309,7 @@ export default async function DashboardPage() {
             {pendingReviewCount ? (
               <DashboardActionRow
                 icon={<Shuffle size={17} />}
-                title={`${pendingReviewCount} songs need a decision`}
+                title={`${pendingReviewCount} ${pendingReviewCount === 1 ? "song needs" : "songs need"} a decision`}
                 detail="Choose the right version so future syncs can reuse it."
                 href="/manual-match"
                 action="Review"
@@ -319,7 +319,7 @@ export default async function DashboardPage() {
             {connectionIssues.length ? (
               <DashboardActionRow
                 icon={<PlugZap size={17} />}
-                title={`${connectionIssues.length} connections need attention`}
+                title={`${connectionIssues.length} ${connectionIssues.length === 1 ? "connection needs" : "connections need"} attention`}
                 detail={connectionIssues.map(connectionIssueLabel).join(" · ")}
                 href="/connections"
                 action="Manage"
@@ -364,7 +364,11 @@ export default async function DashboardPage() {
               <StatTile value={pendingReviewCount} label="Review" tone="warning" />
             </div>
             <div className="flex items-center justify-between border-t border-line-soft px-4 py-3 sm:px-5">
-              <span className="text-xs text-muted-fg">{bySourceEntries.length ? `${bySourceEntries.length} match sources` : "No source breakdown"}</span>
+              <span className="text-xs text-muted-fg">
+                {bySourceEntries.length
+                  ? `${bySourceEntries.length} match ${bySourceEntries.length === 1 ? "source" : "sources"}`
+                  : "No source breakdown"}
+              </span>
               <Link
                 href={lastJob ? `/history?run=${encodeURIComponent(lastJob.id)}#run-${encodeURIComponent(lastJob.id)}` : "/history"}
                 className="inline-flex min-h-8 items-center gap-1 text-xs font-semibold text-[var(--accent)]"
@@ -375,8 +379,8 @@ export default async function DashboardPage() {
           </section>
         </div>
 
-        <div className="grid gap-5">
-          <section className="workbench" aria-labelledby="automation-heading">
+        <div className="grid min-w-0 gap-5">
+          <section className="workbench min-w-0" aria-labelledby="automation-heading">
             <div className="workbench-header">
               <div>
                 <div className="eyebrow flex items-center gap-1.5 text-muted-fg">
@@ -420,7 +424,7 @@ export default async function DashboardPage() {
                 <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
               </summary>
               <div className="border-t border-line-soft px-4 py-4 text-xs sm:px-5">
-                <p className="text-muted-fg">
+                <p className="break-words text-muted-fg">
                   {lastWorkerRun
                     ? `Last ${lastWorkerRun.status.toLowerCase().replaceAll("_", " ")} run ${DATE_TIME.format(lastWorkerRun.startedAt)} · ${lastWorkerRun.ran} ran · ${lastWorkerRun.failed} failed · ${lastWorkerRun.skipped} skipped`
                     : "No sync-worker runs recorded yet."}
@@ -436,7 +440,7 @@ export default async function DashboardPage() {
                 {workerSkippedReasons.length ? (
                   <div className="rows mt-3 border-t border-line-soft">
                     {workerSkippedReasons.slice(0, 3).map((item, index) => (
-                      <div key={`${item.ruleId || item.reason}:${index}`} className="py-2 text-muted-fg">
+                      <div key={`${item.ruleId || item.reason}:${index}`} className="break-words py-2 text-muted-fg">
                         <span className="font-semibold text-[var(--text)]">{item.name || item.reason}</span> · {item.reason}
                       </div>
                     ))}

@@ -144,6 +144,20 @@ describe("browser action job queue", () => {
     expect(mocks.update).not.toHaveBeenCalled();
   });
 
+  test("concurrent identical starts share one find/create operation", async () => {
+    mocks.findFirst.mockResolvedValue(null);
+    mocks.create.mockResolvedValue(row());
+
+    const [first, second] = await Promise.all([
+      startBrowserActionJob("user-1", "sync.run", { syncRuleId: "rule-1" }),
+      startBrowserActionJob("user-1", "sync.run", { syncRuleId: "rule-1" }),
+    ]);
+
+    expect(first.id).toBe(second.id);
+    expect(mocks.findFirst).toHaveBeenCalledTimes(1);
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+
   test("claimQueuedBrowserActionJob atomically claims the oldest queued job", async () => {
     mocks.findFirst.mockResolvedValue(row());
     mocks.updateMany.mockResolvedValue({ count: 1 });

@@ -100,7 +100,7 @@ export function ServicePill({ service, className }: { service: string; className
   );
 }
 
-export function SpotifyGlyph({ size }: { size: number }) {
+function SpotifyGlyph({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
       <path d="M6.4 9.3c3.9-1.1 7.8-.7 11.5 1.2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />

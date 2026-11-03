@@ -27,7 +27,7 @@ export type SyncRuleJobSummary = {
   errorMessage?: string | null;
 };
 
-export type SyncRuleGroupMember = {
+type SyncRuleGroupMember = {
   id: string;
   service: string;
   name: string;
@@ -79,7 +79,11 @@ export function SyncRuleGroupCard({
     : pendingReview > 0
       ? { icon: <AlertTriangle size={14} />, label: `${pendingReview} review`, className: "text-warning-fg" }
       : latestFailed
-        ? { icon: <AlertTriangle size={14} />, label: latestFailed.status === "PARTIAL_SUCCESS" ? "Partial" : "Failed", className: "text-danger-fg" }
+        ? {
+            icon: <AlertTriangle size={14} />,
+            label: latestFailed.status === "PARTIAL_SUCCESS" ? "Partial" : "Failed",
+            className: latestFailed.status === "PARTIAL_SUCCESS" ? "text-warning-fg" : "text-danger-fg",
+          }
         : enabled
           ? { icon: <CheckCircle2 size={14} />, label: "Listening", className: "text-success-fg" }
           : { icon: <AlertTriangle size={14} />, label: "Off", className: "text-muted-fg" };
@@ -99,7 +103,7 @@ export function SyncRuleGroupCard({
             </span>
           </div>
           <div className="mt-1 text-xs text-muted-fg">
-            Linked playlist group · {enabled} of {rules.length} platforms listening
+            Linked playlist group · {enabled} of {rules.length} {rules.length === 1 ? "platform" : "platforms"} listening
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {members.map((member) => (
@@ -118,13 +122,13 @@ export function SyncRuleGroupCard({
 
       {progressRows.length || latestFailed ? (
         <div className="mt-4 flex flex-wrap gap-x-9 gap-y-4">
-          <GroupMetric label="Progress" value={expectedCopies ? `${completion}%` : "-"} detail={`${syncedTotal}/${expectedCopies || 0} copies`} />
-          <GroupMetric label="Sources" value={String(enabled)} detail={`${members.length} linked playlists`} />
-          <GroupMetric label="Targets" value={String(destinationSlots)} detail="write destinations" />
+          <GroupMetric label="Progress" value={expectedCopies ? `${completion}%` : "-"} detail={`${syncedTotal}/${expectedCopies || 0} ${expectedCopies === 1 ? "copy" : "copies"}`} />
+          <GroupMetric label="Sources" value={String(enabled)} detail={`${members.length} linked ${members.length === 1 ? "playlist" : "playlists"}`} />
+          <GroupMetric label="Targets" value={String(destinationSlots)} detail={`write ${destinationSlots === 1 ? "destination" : "destinations"}`} />
           <GroupMetric
             label={latestFailed ? "Last issue" : "Review"}
-            value={latestFailed ? latestFailed.status.replace("_", " ") : String(pendingReview)}
-            detail={latestFailed?.errorMessage ? latestFailed.errorMessage : pendingReview ? "needs your choice" : "clear"}
+            value={latestFailed ? (latestFailed.status === "PARTIAL_SUCCESS" ? "Partial success" : "Failed") : String(pendingReview)}
+            detail={latestFailed?.errorMessage || (latestFailed ? "Open activity for run details" : pendingReview ? "needs your choice" : "clear")}
             tone={latestFailed || pendingReview ? "warn" : "ok"}
           />
         </div>
